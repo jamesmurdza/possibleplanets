@@ -6,10 +6,14 @@ dashboard on top. It reflects findings from manually testing the models in a san
 (see guides in `guides/`), where install friction and environment mismatches were the
 main barrier to accessibility — not the models themselves.
 
-Status: **in progress.** HECTOR and FAIR sandbox images are built and tested
-against real Daytona sandboxes; a minimal gateway and dashboard are implemented
-over those two models. OSCAR, DICE, and MAGICC are not yet built. See the repo
-layout below and the Build plan section for what's next.
+Status: **in progress.** HECTOR, FAIR, and OSCAR sandbox images are built and
+tested against real Daytona sandboxes; a minimal gateway and dashboard are
+implemented over those three models. OSCAR needed an explicit larger sandbox
+size (confirmed by testing: it gets OOM-killed at the default size while
+loading its parameter files) and a real progress signal intercepted from its
+own `"year = ..."` prints, same mechanism as FAIR's tqdm bar. DICE and MAGICC
+are not yet built. See the repo layout below and the Build plan section for
+what's next.
 
 ## Repo layout (monorepo)
 

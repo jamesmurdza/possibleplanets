@@ -54,7 +54,41 @@ MODELS = {
         # live progress.
         "supports_progress": True,
     },
-    # "oscar": not yet built/tested -- see PLATFORM.md build plan.
+    "oscar": {
+        "family": "RCM",
+        "dockerfile": str(SANDBOXES_DIR / "oscar" / "Dockerfile"),
+        # Confirmed native scenario names from sandboxes/oscar/run.py's
+        # SUPPORTED_SCENARIOS -- AR6-style marker SSPs, NOT the "ssp245"-style
+        # names HECTOR/FAIR use. No cross-model taxonomy mapping (PLATFORM.md).
+        "scenarios": [
+            "SSP1-1.9",
+            "SSP1-2.6",
+            "SSP2-4.5",
+            "SSP3-7.0",
+            "SSP3-7.0-LowNTCF",
+            "SSP4-3.4",
+            "SSP4-6.0",
+            "SSP5-3.4-OS",
+            "SSP5-8.5",
+        ],
+        # run.py expects a single scenario string under "scenario".
+        "params_shape": "scenario",
+        # Measured end-to-end against a real Daytona sandbox (see
+        # sandboxes/oscar/Dockerfile): ~477s total at nMC=1, the smallest
+        # possible sample. Generous buffer above that measured total.
+        "exec_timeout_seconds": 700,
+        # Confirmed by reading OSCAR's own source (core_fct/cls_main.py):
+        # its main loop prints a real "year = <N>" line once per simulated
+        # year. sandboxes/oscar/run.py intercepts those specific writes (not
+        # a synthetic estimate) and reports progress against a real total
+        # step count computed from the actual forcing data -- same
+        # file-polling mechanism as fair's tqdm-based signal.
+        "supports_progress": True,
+        # Confirmed by testing: OSCAR gets OOM-killed (exit code 137) while
+        # loading its parameter files on the default sandbox size. 8GiB/4CPU
+        # was confirmed sufficient for a full run.
+        "resources": {"cpu": 4, "memory": 8, "disk": 10},
+    },
     # "dice": not yet built/tested.
     # "magicc": not yet built/tested.
 }

@@ -223,6 +223,14 @@ const CHART_ADAPTERS = {
       label: `FAIR mean temperature anomaly across configs (${scenario})`,
     };
   },
+  oscar(result) {
+    const native = result.result; // { year, mean_D_Tg, std_D_Tg }
+    return {
+      labels: native.year,
+      values: native.mean_D_Tg,
+      label: `OSCAR mean temperature anomaly (${result.scenario}, nMC=${result.nMC})`,
+    };
+  },
 };
 
 // Chart.js's `aspectRatio` is a fixed number, not something CSS media

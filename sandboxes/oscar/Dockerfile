@@ -19,6 +19,15 @@
 #
 # Build:  docker build -t oscar-sandbox:v2024.1 .
 # Run:    docker run --rm oscar-sandbox:v2024.1 python3 run.py
+#
+# IMPORTANT (confirmed by testing a real run in a Daytona sandbox): OSCAR's
+# own code (e.g. core_fct/fct_loadP.py) loads its data files with bare
+# relative paths like 'input_data/parameters/...', relative to the process's
+# CWD, not to __file__ -- so the OSCAR repo's checkout dir must be the CWD
+# when it runs. The gateway (apps/gateway/jobs.py) always invokes
+# `python3 /app/run.py`, the same path convention HECTOR/FAIR's images use,
+# so run.py itself os.chdir()s into the cloned repo before importing
+# anything from it, rather than this image deviating from that convention.
 
 FROM python:3.10-slim
 
@@ -27,8 +36,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
 
 WORKDIR /app
 RUN git clone --depth 1 https://github.com/jamesmurdza/OSCAR.git oscar
-
-WORKDIR /app/oscar
 
 RUN pip install --no-cache-dir \
     xarray==2024.3.0 \

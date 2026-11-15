@@ -24,7 +24,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 
-from daytona import CreateSandboxFromImageParams, Image, SessionExecuteRequest
+from daytona import CreateSandboxFromImageParams, Image, Resources, SessionExecuteRequest
 
 import cache
 from models import get_model_or_none
@@ -130,6 +130,13 @@ def _execute_run(daytona_client, run_id, model_name, model, params, force_refres
             name=f"{model_name}-run-{run_id[:8]}",
             auto_delete_interval=SANDBOX_AUTO_DELETE_MINUTES,
         )
+        # Per-model override, e.g. {"cpu": 4, "memory": 8} -- confirmed by
+        # testing that OSCAR gets OOM-killed (exit code 137) on the default
+        # sandbox size while loading its parameter files; hector/fair have no
+        # "resources" entry in models.py and keep using the default size.
+        resources = model.get("resources")
+        if resources:
+            create_params.resources = Resources(**resources)
         sandbox = daytona_client.create(create_params, timeout=600)
 
         if model.get("supports_progress"):
