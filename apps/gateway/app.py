@@ -82,6 +82,11 @@ class RunRequest(BaseModel):
     # (see PLATFORM.md's output-shape decision, applied here to input too).
     # e.g. hector: {"scenario": "ssp126"}, fair: {"scenarios": ["ssp126"]}
     params: dict = {}
+    # True to force a real sandbox run even if a cached result exists for
+    # these exact (model, params) -- used by the dashboard's "Refresh" action.
+    # The new result is still appended to the cache log (cache.py), it just
+    # isn't served FROM the cache for this particular request.
+    refresh: bool = False
 
 
 @app.get("/v1/models")
@@ -116,7 +121,7 @@ def create_run(model: str, body: RunRequest):
     if get_model_or_none(model) is None:
         raise HTTPException(status_code=404, detail=f"unknown model '{model}'")
 
-    run_id, error = jobs.submit_run(get_daytona_client(), model, body.params)
+    run_id, error = jobs.submit_run(get_daytona_client(), model, body.params, force_refresh=body.refresh)
     if error:
         raise HTTPException(status_code=400, detail=error)
     return {"run_id": run_id, "status": jobs.Status.QUEUED}

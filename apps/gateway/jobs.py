@@ -72,13 +72,19 @@ def get_job(run_id):
         return dict(job) if job is not None else None
 
 
-def submit_run(daytona_client, model_name, params):
+def submit_run(daytona_client, model_name, params, force_refresh=False):
     """
     Validate the request, create a job record in "queued" state, and hand off
     execution to the thread pool. Returns the run_id immediately -- callers
     poll GET /v1/runs/{run_id} for status/result, per the async-by-default API
     design in PLATFORM.md (every model goes through submit -> poll, regardless
     of how fast that particular model actually runs).
+
+    force_refresh=True skips the cache lookup and always runs a real sandbox,
+    for the dashboard's "Refresh" action on an already-cached result. The run
+    still writes through to the cache afterward (cache.py is an append-only
+    log) -- a refresh doesn't replace the old entry, it adds a newer one that
+    future normal (non-refresh) reads then prefer.
     """
     model = get_model_or_none(model_name)
     if model is None:
@@ -100,17 +106,18 @@ def submit_run(daytona_client, model_name, params):
             "submitted_at": time.time(),
         }
 
-    _executor.submit(_execute_run, daytona_client, run_id, model_name, model, params)
+    _executor.submit(_execute_run, daytona_client, run_id, model_name, model, params, force_refresh)
     return run_id, None
 
 
-def _execute_run(daytona_client, run_id, model_name, model, params):
+def _execute_run(daytona_client, run_id, model_name, model, params, force_refresh=False):
     _set_job(run_id, status=Status.RUNNING)
 
-    cached_result = cache.get_cached(model_name, params)
-    if cached_result is not None:
-        _set_job(run_id, status=Status.SUCCEEDED, result=cached_result, cached=True, progress={"percent": 100})
-        return
+    if not force_refresh:
+        cached_result = cache.get_cached(model_name, params)
+        if cached_result is not None:
+            _set_job(run_id, status=Status.SUCCEEDED, result=cached_result, cached=True, progress={"percent": 100})
+            return
 
     sandbox = None
     try:

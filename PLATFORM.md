@@ -134,6 +134,20 @@ it just stops being cached. The API surfaces a `cached: true/false` field on
 `GET /v1/runs/{run_id}` so consumers (including the dashboard) aren't misled about
 whether a result came from a real run.
 
+`run_cache` is an **append-only log**, not a single row per key: every successful
+run (including forced refreshes, below) inserts a new row, nothing is ever
+overwritten or deleted, and a read always serves the most recent row for that
+(model, params) key. `POST /v1/models/{model}/runs` accepts `"refresh": true` to
+force a real sandbox run even when a cached result exists -- used by the
+dashboard's **Refresh** button in the toolbar, which only appears when the result
+currently on screen came from the cache (`cached: true`). A refresh doesn't
+invalidate or replace the old entry; it appends a newer one, which subsequent
+normal (non-refresh) reads then prefer -- the full history of past results for a
+given input stays in the table. A gateway that started against the older
+single-row-per-key schema migrates it automatically on startup (see
+`cache.py`'s `_MIGRATION`), idempotently, so this is safe to deploy without a
+separate migration step.
+
 ### Progress reporting (implemented for fair; hector correctly has none)
 
 Real, not synthetic: progress is only ever reported when a model has a genuine

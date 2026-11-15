@@ -7,6 +7,14 @@ are expensive -- OSCAR's smallest possible run takes ~6 minutes (confirmed by
 testing). Caching means the Nth request for the same (model, params) returns
 instantly instead of spinning up another sandbox and re-running the model.
 
+This is an append-only log, not a single-row-per-key cache: every successful
+run is inserted as a new row, nothing is ever overwritten or deleted, and a
+read always returns the most recent row for that (model, params) key. This is
+what makes "refresh" meaningful -- a forced re-run (see jobs.py's
+force_refresh) doesn't invalidate/replace the old entry, it just appends a
+newer one that normal reads then prefer, so the full history of past results
+for a given input is preserved in the table.
+
 Caching is best-effort and fails open: if DATABASE_URL isn't set, or the DB is
 unreachable, caching is silently disabled and the gateway behaves exactly as
 it did before this existed -- every run goes through the sandbox, same as
@@ -29,22 +37,49 @@ _pool = None
 _pool_lock = threading.Lock()
 _enabled = False
 
+# Fresh-install schema: id is the real primary key, cache_key is just an
+# indexed lookup column (deliberately NOT unique -- this is a log, multiple
+# rows can and will share the same cache_key over time).
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS run_cache (
-    cache_key TEXT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
+    cache_key TEXT NOT NULL,
     model TEXT NOT NULL,
     params JSONB NOT NULL,
     result JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS run_cache_cache_key_idx ON run_cache (cache_key);
+"""
+
+# Migrates a table created by an earlier version of this module, where
+# cache_key was the PRIMARY KEY (one row per key, overwritten via
+# ON CONFLICT DO NOTHING) into the append-only log shape above. All
+# statements are idempotent / guarded so this is safe to run on every
+# startup, whether the table is fresh, already migrated, or still old-shaped.
+_MIGRATION = """
+ALTER TABLE run_cache DROP CONSTRAINT IF EXISTS run_cache_pkey;
+ALTER TABLE run_cache ADD COLUMN IF NOT EXISTS id BIGSERIAL;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'run_cache' AND constraint_type = 'PRIMARY KEY'
+    ) THEN
+        ALTER TABLE run_cache ADD PRIMARY KEY (id);
+    END IF;
+END$$;
+CREATE INDEX IF NOT EXISTS run_cache_cache_key_idx ON run_cache (cache_key);
 """
 
 
 def init_cache(max_connections: int = 8):
     """
     Call once at gateway startup. Sets up a connection pool and ensures the
-    cache table exists. Safe to call even if DATABASE_URL isn't set or the DB
-    is unreachable -- caching just stays disabled in that case, logged once.
+    cache table exists (and migrates it to the append-only log shape if an
+    earlier version of this module already created it). Safe to call even if
+    DATABASE_URL isn't set or the DB is unreachable -- caching just stays
+    disabled in that case, logged once.
     """
     global _pool, _enabled
 
@@ -66,11 +101,12 @@ def init_cache(max_connections: int = 8):
         try:
             with conn.cursor() as cur:
                 cur.execute(_SCHEMA)
+                cur.execute(_MIGRATION)
             conn.commit()
         finally:
             _pool.putconn(conn)
         _enabled = True
-        print("[cache] connected, run_cache table ready -- caching enabled")
+        print("[cache] connected, run_cache table ready (append-only log) -- caching enabled")
     except Exception as exc:  # noqa: BLE001 -- fail open, never block startup
         print(f"[cache] failed to initialize ({exc}) -- caching disabled")
         _pool = None
@@ -90,9 +126,14 @@ def cache_key_for(model: str, params: dict) -> str:
 
 
 def get_cached(model: str, params: dict):
-    """Returns the cached native result dict, or None on a miss or if caching
-    is disabled/unreachable. Never raises -- a cache lookup failure should
-    just behave like a miss, not break the run."""
+    """Returns the MOST RECENT cached native result dict for (model, params),
+    or None on a miss or if caching is disabled/unreachable. Never raises --
+    a cache lookup failure should just behave like a miss, not break the run.
+
+    Since run_cache is an append-only log, this is deliberately "most recent
+    row wins", not "the only row" -- a force_refresh writes a new row rather
+    than replacing the old one, and this is what picks that newer one up on
+    the next normal (non-refresh) read."""
     if not _enabled or _pool is None:
         return None
 
@@ -101,7 +142,11 @@ def get_cached(model: str, params: dict):
     try:
         conn = _pool.getconn()
         with conn.cursor() as cur:
-            cur.execute("SELECT result FROM run_cache WHERE cache_key = %s", (key,))
+            cur.execute(
+                "SELECT result FROM run_cache WHERE cache_key = %s "
+                "ORDER BY created_at DESC LIMIT 1",
+                (key,),
+            )
             row = cur.fetchone()
         return row[0] if row else None
     except Exception as exc:  # noqa: BLE001
@@ -114,7 +159,12 @@ def get_cached(model: str, params: dict):
 
 def put_cached(model: str, params: dict, result: dict):
     """Best-effort write-through; failures are logged and swallowed -- a
-    cache-write failure should never fail an otherwise-successful run."""
+    cache-write failure should never fail an otherwise-successful run.
+
+    Always inserts a new row (no upsert/ON CONFLICT) -- this is a log, not a
+    single slot per key, so every successful run (including forced refreshes)
+    adds a new entry rather than overwriting the previous one. get_cached
+    always serves the newest row for a given key."""
     if not _enabled or _pool is None:
         return
 
@@ -127,7 +177,6 @@ def put_cached(model: str, params: dict, result: dict):
                 """
                 INSERT INTO run_cache (cache_key, model, params, result)
                 VALUES (%s, %s, %s, %s)
-                ON CONFLICT (cache_key) DO NOTHING
                 """,
                 (key, model, json.dumps(params), json.dumps(result)),
             )

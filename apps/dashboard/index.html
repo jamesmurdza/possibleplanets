@@ -18,6 +18,12 @@
       <select id="model-select" aria-label="Model"></select>
       <select id="scenario-select" aria-label="Scenario"></select>
       <button id="run-button">Run</button>
+      <!-- Only shown when the displayed result came from the cache (see
+           apps/gateway/cache.py) -- forces a real re-run, appended to the
+           cache log as a newer entry rather than replacing the old one. -->
+      <button id="refresh-button" class="secondary" title="Re-run without using the cached result" hidden>
+        Refresh
+      </button>
     </div>
   </header>
 

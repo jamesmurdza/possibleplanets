@@ -28,6 +28,7 @@ function guessGatewayUrl() {
 const modelSelect = document.getElementById("model-select");
 const scenarioSelect = document.getElementById("scenario-select");
 const runButton = document.getElementById("run-button");
+const refreshButton = document.getElementById("refresh-button");
 const statusText = document.getElementById("status-text");
 const rawLink = document.getElementById("raw-download-link");
 const progressBar = document.getElementById("progress-bar");
@@ -207,16 +208,22 @@ async function pollRun(runId, modelName) {
     setStatus(`${modelName}: succeeded${job.cached ? " (cached)" : ""}`);
     renderChart(modelName, job.result);
     setRawDownload(job);
+    // Only offer "Refresh" when the thing currently on screen actually came
+    // from the cache -- see apps/gateway/cache.py's append-only log design:
+    // this forces a real run that gets appended as a newer entry.
+    refreshButton.hidden = !job.cached;
   } else {
     setStatus(`${modelName}: failed - ${job.error?.message || "unknown error"}`, true);
   }
 }
 
-async function runModel() {
+async function runModel(forceRefresh = false) {
   if (pollTimer) {
     clearTimeout(pollTimer);
   }
   runButton.disabled = true;
+  refreshButton.disabled = true;
+  refreshButton.hidden = true;
   rawLink.hidden = true;
 
   const modelName = modelSelect.value;
@@ -228,21 +235,32 @@ async function runModel() {
     const submitted = await fetchJson(`/v1/models/${modelName}/runs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ params }),
+      body: JSON.stringify({ params, refresh: forceRefresh }),
     });
     pollRun(submitted.run_id, modelName);
   } catch (err) {
     runButton.disabled = false;
     setStatus(`${modelName}: ${err.message}`, true);
+  } finally {
+    refreshButton.disabled = false;
   }
 }
 
 modelSelect.addEventListener("change", () => {
+  refreshButton.hidden = true; // selection changed, no longer matches what's displayed
   loadSchema(modelSelect.value).catch((err) => setStatus(err.message, true));
 });
 
+scenarioSelect.addEventListener("change", () => {
+  refreshButton.hidden = true; // same reasoning as the model-select handler above
+});
+
 runButton.addEventListener("click", () => {
-  runModel();
+  runModel(false);
+});
+
+refreshButton.addEventListener("click", () => {
+  runModel(true);
 });
 
 loadModels().catch((err) => {

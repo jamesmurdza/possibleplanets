@@ -92,6 +92,16 @@ button:disabled {
   cursor: not-allowed;
 }
 
+button.secondary {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+button.secondary:hover:not(:disabled) {
+  background: var(--color-bg);
+}
+
 /* --- Status row --- */
 
 .status-row {
