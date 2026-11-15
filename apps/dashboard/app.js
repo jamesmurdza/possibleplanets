@@ -32,24 +32,30 @@ const refreshButton = document.getElementById("refresh-button");
 const statusText = document.getElementById("status-text");
 const rawLink = document.getElementById("raw-download-link");
 const progressBar = document.getElementById("progress-bar");
+const loadingOverlay = document.getElementById("loading-overlay");
+const loadingText = document.getElementById("loading-text");
 
-// `progress` is only ever real data from the model itself (e.g. fair's own
-// tqdm bar, read via the gateway -- see apps/gateway/jobs.py), never a
-// synthetic/estimated value. When a model has nothing real to report (e.g.
-// hector -- confirmed by testing there's no intermediate signal), `progress`
-// stays null and the bar shows as indeterminate rather than faking a percent.
-function setProgress(progress) {
+// The loading state renders as an overlay ON TOP of the chart area (not a
+// strip above it), so a previous chart stays visible, dimmed, underneath
+// while a new run is in flight instead of the layout shifting around it.
+function showLoading(text, progress) {
+  loadingOverlay.removeAttribute("hidden");
+  loadingText.textContent = text;
+
+  // `progress` is only ever real data from the model itself (e.g. fair's own
+  // tqdm bar, read via the gateway -- see apps/gateway/jobs.py), never a
+  // synthetic/estimated value. When a model has nothing real to report (e.g.
+  // hector -- confirmed by testing there's no intermediate signal), `progress`
+  // stays null and the bar shows as indeterminate rather than faking a percent.
   if (progress && typeof progress.percent === "number") {
-    progressBar.removeAttribute("hidden");
     progressBar.value = progress.percent;
   } else {
-    progressBar.removeAttribute("hidden");
     progressBar.removeAttribute("value"); // indeterminate style
   }
 }
 
-function hideProgress() {
-  progressBar.hidden = true;
+function hideLoading() {
+  loadingOverlay.hidden = true;
 }
 
 let currentModelMeta = null; // { model, family, scenarios, params_shape }
@@ -197,14 +203,19 @@ async function pollRun(runId, modelName) {
 
   if (job.status === "queued" || job.status === "running") {
     const pct = job.progress && typeof job.progress.percent === "number" ? ` (${job.progress.percent}%)` : "";
-    setStatus(`${modelName}: ${job.status}${pct}...`);
-    setProgress(job.progress);
-    pollTimer = setTimeout(() => pollRun(runId, modelName), 500);
+    const text = `${job.status}${pct}...`;
+    setStatus(`${modelName}: ${text}`);
+    showLoading(text, job.progress);
+    // Tightened from 500ms: confirmed by testing that fast models like fair
+    // can complete a progress phase in ~1-2s, so a slower poll could visibly
+    // skip from 0% straight to 100%. Matches the gateway's own tightened
+    // internal poll interval (apps/gateway/jobs.py).
+    pollTimer = setTimeout(() => pollRun(runId, modelName), 150);
     return;
   }
 
   runButton.disabled = false;
-  hideProgress();
+  hideLoading();
 
   if (job.status === "succeeded") {
     setStatus(`${modelName}: succeeded${job.cached ? " (cached)" : ""}`);
@@ -233,6 +244,7 @@ async function runModel(forceRefresh = false) {
 
   try {
     setStatus(`${modelName}: submitting...`);
+    showLoading("submitting...", null);
     const params = buildParams(scenario);
     const submitted = await fetchJson(`/v1/models/${modelName}/runs`, {
       method: "POST",
@@ -242,6 +254,7 @@ async function runModel(forceRefresh = false) {
     pollRun(submitted.run_id, modelName);
   } catch (err) {
     runButton.disabled = false;
+    hideLoading();
     setStatus(`${modelName}: ${err.message}`, true);
   } finally {
     refreshButton.disabled = false;

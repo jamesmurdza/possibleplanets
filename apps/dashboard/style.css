@@ -214,6 +214,36 @@ button.secondary:hover:not(:disabled) {
   display: none;
 }
 
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(1px);
+  z-index: 1;
+}
+
+/* Same equal-specificity issue as .chart-placeholder[hidden] above -- this
+   override is required or the overlay stays visible when `hidden` is set. */
+.loading-overlay[hidden] {
+  display: none;
+}
+
+.loading-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  width: 220px;
+}
+
+.loading-text {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
 .panel-footer {
   padding: 0.6rem 1.25rem;
   border-top: 1px solid var(--color-border);

@@ -30,8 +30,11 @@ import cache
 from models import get_model_or_none
 
 # How often to poll a running sandbox for progress (file read) and completion
-# (session command status), for models with supports_progress=True.
-PROGRESS_POLL_INTERVAL_SECONDS = 0.5
+# (session command status), for models with supports_progress=True. Tightened
+# from 0.5s: confirmed by testing that FAIR's real computation window is only
+# ~1-2s per phase, so a 0.5s poll could land on just two samples (e.g. 0% then
+# already 100%) and visibly skip the real intermediate values in between.
+PROGRESS_POLL_INTERVAL_SECONDS = 0.15
 
 PROGRESS_FILE_PATH = "/tmp/progress.json"
 
