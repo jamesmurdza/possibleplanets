@@ -25,6 +25,82 @@ function guessGatewayUrl() {
   return "http://localhost:8000";
 }
 
+// --- Custom dropdown UI ------------------------------------------------
+// Wraps a real (visually hidden) <select> -- app.js's model/schema-loading
+// code above still just populates/reads that <select> with plain <option>
+// elements and .value, unchanged. This only adds a styled button+listbox on
+// top, kept in sync via MutationObserver so no population logic had to move.
+function initCustomDropdown(container) {
+  const select = container.querySelector("select");
+  const toggle = container.querySelector(".dropdown-toggle");
+  const valueEl = container.querySelector(".dropdown-value");
+  const menu = container.querySelector(".dropdown-menu");
+
+  function renderOptions() {
+    menu.innerHTML = "";
+    for (const opt of select.options) {
+      const li = document.createElement("li");
+      li.className = "dropdown-option" + (opt.value === select.value ? " selected" : "");
+      li.textContent = opt.textContent;
+      li.setAttribute("role", "option");
+      li.dataset.value = opt.value;
+      li.addEventListener("click", () => {
+        if (select.value !== opt.value) {
+          select.value = opt.value;
+          select.dispatchEvent(new Event("change"));
+        }
+        close();
+      });
+      menu.appendChild(li);
+    }
+    const selectedOption = select.options[select.selectedIndex];
+    valueEl.textContent = selectedOption ? selectedOption.textContent : "";
+  }
+
+  function open() {
+    menu.removeAttribute("hidden");
+    container.classList.add("open");
+    toggle.setAttribute("aria-expanded", "true");
+    document.addEventListener("click", onOutsideClick);
+  }
+
+  function close() {
+    menu.setAttribute("hidden", "");
+    container.classList.remove("open");
+    toggle.setAttribute("aria-expanded", "false");
+    document.removeEventListener("click", onOutsideClick);
+  }
+
+  function onOutsideClick(e) {
+    if (!container.contains(e.target)) {
+      close();
+    }
+  }
+
+  toggle.addEventListener("click", () => {
+    if (menu.hasAttribute("hidden")) {
+      renderOptions();
+      open();
+    } else {
+      close();
+    }
+  });
+
+  // The <select>'s options/value are owned by app.js's existing
+  // loadModels()/loadSchema() logic -- observe it rather than duplicating
+  // that logic here, so this stays a pure presentation layer on top.
+  new MutationObserver(renderOptions).observe(select, {
+    childList: true,
+    attributes: true,
+    attributeFilter: ["value"],
+  });
+  select.addEventListener("change", renderOptions);
+
+  renderOptions();
+}
+
+document.querySelectorAll("[data-dropdown-for]").forEach(initCustomDropdown);
+
 const modelSelect = document.getElementById("model-select");
 const scenarioSelect = document.getElementById("scenario-select");
 const runButton = document.getElementById("run-button");
@@ -177,6 +253,11 @@ function renderChart(modelName, result) {
     },
     options: {
       animation: false,
+      // Explicit wide aspect ratio (default is 2:1) -- the canvas's height
+      // attribute alone doesn't control final rendered size, since Chart.js's
+      // maintainAspectRatio:true (the default) recomputes height from width
+      // using this ratio on every resize.
+      aspectRatio: 3.4,
       scales: {
         x: { title: { display: true, text: "year" } },
         y: { title: { display: true, text: "temperature anomaly" } },
