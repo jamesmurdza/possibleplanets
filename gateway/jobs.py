@@ -28,6 +28,15 @@ from models import get_model_or_none
 # note that the queue's job is to rate-limit concurrent sandbox creation.
 MAX_CONCURRENT_RUNS = 4
 
+# Backstop auto-delete, in minutes, applied to every sandbox we create.
+# Confirmed by testing that Daytona's own default is auto_delete_interval=-1
+# (disabled) -- meaning a sandbox we fail to explicitly delete (e.g. the
+# gateway process crashes between create() and the finally-block delete())
+# would otherwise sit around indefinitely in STARTED state. Explicitly setting
+# this means an orphaned sandbox still gets cleaned up on its own well within
+# an hour, even if our own cleanup code never runs.
+SANDBOX_AUTO_DELETE_MINUTES = 15
+
 _executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_RUNS)
 _jobs_lock = threading.Lock()
 _jobs = {}  # run_id -> dict
@@ -87,6 +96,7 @@ def _execute_run(daytona_client, run_id, model_name, model, params):
         create_params = CreateSandboxFromImageParams(
             image=image,
             name=f"{model_name}-run-{run_id[:8]}",
+            auto_delete_interval=SANDBOX_AUTO_DELETE_MINUTES,
         )
         sandbox = daytona_client.create(create_params, timeout=600)
 
