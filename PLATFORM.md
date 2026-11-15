@@ -134,6 +134,42 @@ it just stops being cached. The API surfaces a `cached: true/false` field on
 `GET /v1/runs/{run_id}` so consumers (including the dashboard) aren't misled about
 whether a result came from a real run.
 
+### Progress reporting (implemented for fair; hector correctly has none)
+
+Real, not synthetic: progress is only ever reported when a model has a genuine
+intermediate signal, confirmed per model by testing rather than assumed:
+
+- **hector** -- confirmed by testing there's no real signal at all: `pyhector.run()`
+  has no progress hook, writes no log file, and finishes in well under a second.
+  Runs via a plain blocking `sandbox.process.exec()`; `progress` stays `null` the
+  whole time, correctly, not faked.
+- **fair** -- has a real signal: FAIR's own library imports `tqdm` and iterates its
+  main loop with it (confirmed by reading the installed library's source).
+  `sandboxes/fair/run.py` monkey-patches that `tqdm` name to also write
+  `{"percent": N}` to `/tmp/progress.json` (flushed + fsynced) on every real update
+  from FAIR's own bar.
+- **oscar** (not yet wired in) -- also has a real signal (it prints `year = ...`
+  live as it runs, confirmed by testing) and would use the same mechanism; left
+  out of this round deliberately.
+
+How the gateway reads it, and why it's shaped this way: Daytona's session log APIs
+(`get_session_command_logs`, and the async-callback `get_session_command_logs_async`)
+were confirmed by direct testing to buffer ALL output until the command finishes --
+polled every second for 22s during a real fair run, stdout stayed empty the whole
+time, then all output arrived at once at the very end. Neither can be used to
+observe progress mid-run, for any model. A direct filesystem read instead
+(`sandbox.fs.download_file`) does reflect live state, confirmed by testing: polling
+it while a background write loop ran caught real intermediate values as they were
+written.
+
+So for models with `supports_progress: True` (`apps/gateway/models.py`), `jobs.py`
+starts the run via a session with `run_async=True` instead of a blocking `exec()`,
+and polls the progress file directly every ~0.5s while also checking the session
+command's exit code for completion. `GET /v1/runs/{run_id}` exposes this as a
+`progress` field (e.g. `{"percent": 34}`), `null` when the model has nothing real to
+report. The dashboard renders a real `<progress>` bar when a percent is present and
+an indeterminate one otherwise -- never an estimated/fake value.
+
 ### Per-tenant isolation checklist
 
 - Every run = new sandbox, no reuse, no shared temp dirs, no shared Wine prefix.

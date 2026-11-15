@@ -22,6 +22,11 @@ MODELS = {
         "params_shape": "scenario",
         # Measured: warm sandbox start ~1.3s, run ~2s (see timing notes).
         "exec_timeout_seconds": 60,
+        # Confirmed by testing: pyhector's run() has no progress hook, writes
+        # no log file, and completes in well under a second -- there is no
+        # real intermediate signal to report. Runs via plain blocking exec();
+        # progress stays null rather than faking an estimate (see jobs.py).
+        "supports_progress": False,
     },
     "fair": {
         "family": "RCM",
@@ -41,6 +46,13 @@ MODELS = {
         "params_shape": "scenarios",
         # Measured: warm sandbox start ~1.2s, run ~21s (66 parallel configs).
         "exec_timeout_seconds": 180,
+        # run.py monkey-patches FAIR's own tqdm progress bar (confirmed real,
+        # by reading FAIR's source) to write /tmp/progress.json as it runs.
+        # jobs.py reads that file directly via the sandbox filesystem API,
+        # since Daytona's session log APIs were confirmed (by testing) to
+        # buffer all output until the command finishes and can't be used for
+        # live progress.
+        "supports_progress": True,
     },
     # "oscar": not yet built/tested -- see PLATFORM.md build plan.
     # "dice": not yet built/tested.

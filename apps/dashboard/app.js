@@ -30,6 +30,26 @@ const scenarioSelect = document.getElementById("scenario-select");
 const runButton = document.getElementById("run-button");
 const statusText = document.getElementById("status-text");
 const rawLink = document.getElementById("raw-download-link");
+const progressBar = document.getElementById("progress-bar");
+
+// `progress` is only ever real data from the model itself (e.g. fair's own
+// tqdm bar, read via the gateway -- see apps/gateway/jobs.py), never a
+// synthetic/estimated value. When a model has nothing real to report (e.g.
+// hector -- confirmed by testing there's no intermediate signal), `progress`
+// stays null and the bar shows as indeterminate rather than faking a percent.
+function setProgress(progress) {
+  if (progress && typeof progress.percent === "number") {
+    progressBar.removeAttribute("hidden");
+    progressBar.value = progress.percent;
+  } else {
+    progressBar.removeAttribute("hidden");
+    progressBar.removeAttribute("value"); // indeterminate style
+  }
+}
+
+function hideProgress() {
+  progressBar.hidden = true;
+}
 
 let currentModelMeta = null; // { model, family, scenarios, params_shape }
 let chart = null;
@@ -173,12 +193,15 @@ async function pollRun(runId, modelName) {
   const job = await fetchJson(`/v1/runs/${runId}`);
 
   if (job.status === "queued" || job.status === "running") {
-    setStatus(`${modelName}: ${job.status}...`);
-    pollTimer = setTimeout(() => pollRun(runId, modelName), 1000);
+    const pct = job.progress && typeof job.progress.percent === "number" ? ` (${job.progress.percent}%)` : "";
+    setStatus(`${modelName}: ${job.status}${pct}...`);
+    setProgress(job.progress);
+    pollTimer = setTimeout(() => pollRun(runId, modelName), 500);
     return;
   }
 
   runButton.disabled = false;
+  hideProgress();
 
   if (job.status === "succeeded") {
     setStatus(`${modelName}: succeeded${job.cached ? " (cached)" : ""}`);

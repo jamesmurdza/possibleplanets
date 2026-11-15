@@ -22,6 +22,46 @@ from fair.interface import fill, initialise
 
 DEFAULT_PARAMS = {"scenarios": ["ssp126"]}
 
+PROGRESS_FILE = "/tmp/progress.json"
+
+
+def _write_progress(percent):
+    """
+    Best-effort progress write, read back by the gateway via a separate
+    filesystem read (not stdout/exec logs -- confirmed by testing that
+    Daytona's session log APIs buffer everything until the command finishes,
+    so they can't report progress mid-run; a direct file read can).
+    """
+    try:
+        with open(PROGRESS_FILE, "w") as f:
+            json.dump({"percent": percent}, f)
+            f.flush()
+            os.fsync(f.fileno())
+    except Exception:
+        pass
+
+
+def _patch_fair_progress_bar():
+    """
+    FAIR's own fair.py does `from tqdm.auto import tqdm` at module level and
+    iterates its main loop with `for i_timepoint in tqdm(range(...))`
+    (confirmed by reading the installed library's source). Since that `tqdm`
+    name is looked up from the module's globals at call time, re-assigning
+    `fair.fair.tqdm` to a subclass before calling f.run() intercepts every
+    real update from FAIR's own progress bar -- this is FAIR's actual
+    per-timestep progress, not a synthetic estimate.
+    """
+    import fair.fair as fair_internal
+    from tqdm.auto import tqdm as _tqdm
+
+    class _ProgressWritingTqdm(_tqdm):
+        def update(self, n=1):
+            super().update(n)
+            if self.total:
+                _write_progress(int(100 * self.n / self.total))
+
+    fair_internal.tqdm = _ProgressWritingTqdm
+
 
 def load_params():
     raw = os.environ.get("SCENARIO_PARAMS")
@@ -129,7 +169,10 @@ def main():
         fill(f.climate_configs["seed"], seed, config=config)
         seed += 399
 
+    _write_progress(0)
+    _patch_fair_progress_bar()
     f.run()
+    _write_progress(100)
 
     result = {
         "status": "succeeded",

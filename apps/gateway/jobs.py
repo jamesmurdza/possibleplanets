@@ -24,10 +24,16 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 
-from daytona import CreateSandboxFromImageParams, Image
+from daytona import CreateSandboxFromImageParams, Image, SessionExecuteRequest
 
 import cache
 from models import get_model_or_none
+
+# How often to poll a running sandbox for progress (file read) and completion
+# (session command status), for models with supports_progress=True.
+PROGRESS_POLL_INTERVAL_SECONDS = 0.5
+
+PROGRESS_FILE_PATH = "/tmp/progress.json"
 
 # Bounds how many sandbox creations can be in flight at once. This is the
 # gateway's only concurrency control in the minimal version -- see PLATFORM.md's
@@ -87,6 +93,10 @@ def submit_run(daytona_client, model_name, params):
             "result": None,
             "error": None,
             "cached": False,
+            # None when the model has no real intermediate signal (e.g.
+            # hector -- confirmed by testing there's nothing to report, see
+            # models.py). Only populated for models with supports_progress=True.
+            "progress": None,
             "submitted_at": time.time(),
         }
 
@@ -99,7 +109,7 @@ def _execute_run(daytona_client, run_id, model_name, model, params):
 
     cached_result = cache.get_cached(model_name, params)
     if cached_result is not None:
-        _set_job(run_id, status=Status.SUCCEEDED, result=cached_result, cached=True)
+        _set_job(run_id, status=Status.SUCCEEDED, result=cached_result, cached=True, progress={"percent": 100})
         return
 
     sandbox = None
@@ -112,22 +122,20 @@ def _execute_run(daytona_client, run_id, model_name, model, params):
         )
         sandbox = daytona_client.create(create_params, timeout=600)
 
-        exec_result = sandbox.process.exec(
-            "python3 /app/run.py",
-            env={"SCENARIO_PARAMS": json.dumps(params)},
-            timeout=model["exec_timeout_seconds"],
-        )
+        if model.get("supports_progress"):
+            exit_code, stdout = _run_with_progress(sandbox, run_id, model, params)
+        else:
+            exit_code, stdout = _run_blocking(sandbox, model, params)
 
-        stdout = exec_result.result or ""
         json_line = _last_json_line(stdout)
 
-        if exec_result.exit_code != 0 or json_line is None:
+        if exit_code != 0 or json_line is None:
             _set_job(
                 run_id,
                 status=Status.FAILED,
                 error={
                     "code": "model_run_failed",
-                    "message": f"exit_code={exec_result.exit_code}",
+                    "message": f"exit_code={exit_code}",
                     "stdout_tail": stdout[-2000:],
                 },
             )
@@ -143,7 +151,7 @@ def _execute_run(daytona_client, run_id, model_name, model, params):
             return
 
         cache.put_cached(model_name, params, parsed)
-        _set_job(run_id, status=Status.SUCCEEDED, result=parsed, cached=False)
+        _set_job(run_id, status=Status.SUCCEEDED, result=parsed, cached=False, progress={"percent": 100})
 
     except Exception as exc:  # noqa: BLE001 -- surface any failure as a job error, not a crashed worker
         _set_job(
@@ -159,6 +167,78 @@ def _execute_run(daytona_client, run_id, model_name, model, params):
                 daytona_client.delete(sandbox)
             except Exception:
                 pass
+
+
+def _run_blocking(sandbox, model, params):
+    """
+    Plain blocking exec, used for models with no real progress signal (e.g.
+    hector -- confirmed by testing there's nothing to report mid-run, and it
+    finishes in well under a second anyway, so the simpler path is also the
+    correct one here).
+    """
+    exec_result = sandbox.process.exec(
+        "python3 /app/run.py",
+        env={"SCENARIO_PARAMS": json.dumps(params)},
+        timeout=model["exec_timeout_seconds"],
+    )
+    return exec_result.exit_code, exec_result.result or ""
+
+
+def _run_with_progress(sandbox, run_id, model, params):
+    """
+    Session-based async execution + polling, for models whose run.py writes
+    real progress to PROGRESS_FILE_PATH (see sandboxes/fair/run.py).
+
+    Confirmed by direct testing that Daytona's session log APIs (both the
+    polling `get_session_command_logs` and the async-callback
+    `get_session_command_logs_async`) buffer ALL output until the command
+    finishes -- they cannot be used to observe progress mid-run, no matter
+    what the model prints. A direct filesystem read of a file the running
+    process writes to (flushed + fsynced) does reflect live state, confirmed
+    by testing: polling caught real intermediate values (e.g. 0% -> 21% ->
+    84% -> 100%) while the process was still running.
+    """
+    session_id = f"run-{run_id[:8]}"
+    sandbox.process.create_session(session_id)
+    try:
+        # No `env` param on session commands (confirmed via the SDK's
+        # SessionExecuteRequest fields) -- pass it inline as a shell prefix
+        # instead. Safe here: params are gateway-controlled JSON (scenario
+        # names/lists), not arbitrary user shell input.
+        command = f"SCENARIO_PARAMS='{json.dumps(params)}' python3 -u /app/run.py"
+        resp = sandbox.process.execute_session_command(
+            session_id, SessionExecuteRequest(command=command, run_async=True)
+        )
+        cmd_id = resp.cmd_id
+
+        deadline = time.time() + model["exec_timeout_seconds"]
+        exit_code = None
+        while time.time() < deadline:
+            try:
+                raw = sandbox.fs.download_file(PROGRESS_FILE_PATH)
+                if raw:
+                    progress = json.loads(raw.decode())
+                    _set_job(run_id, progress=progress)
+            except Exception:
+                pass  # file not written yet, or a transient read error -- not fatal
+
+            cmd_info = sandbox.process.get_session_command(session_id, cmd_id)
+            if cmd_info.exit_code is not None:
+                exit_code = cmd_info.exit_code
+                break
+
+            time.sleep(PROGRESS_POLL_INTERVAL_SECONDS)
+
+        if exit_code is None:
+            raise TimeoutError(f"run.py did not finish within {model['exec_timeout_seconds']}s")
+
+        logs = sandbox.process.get_session_command_logs(session_id, cmd_id)
+        return exit_code, logs.stdout or ""
+    finally:
+        try:
+            sandbox.process.delete_session(session_id)
+        except Exception:
+            pass
 
 
 def _last_json_line(stdout: str):

@@ -138,4 +138,11 @@ def get_run(run_id: str):
         # about whether a run actually executed, per PLATFORM.md's preference
         # for being explicit about what happened rather than hiding mechanics.
         "cached": job.get("cached", False),
+        # Real progress (e.g. {"percent": 34}) for models that expose a real
+        # intermediate signal (confirmed working for fair, via its own tqdm
+        # bar -- see jobs.py/sandboxes/fair/run.py), null for models with
+        # nothing real to report (e.g. hector -- confirmed there's no signal
+        # to observe, not just unimplemented). Never a synthetic/estimated
+        # value -- see PLATFORM.md's stance against faking progress.
+        "progress": job.get("progress"),
     }
