@@ -11,6 +11,11 @@ Minimal version (see PLATFORM.md):
   - Job state lives in memory only. That's a known limitation of the minimal
     version: state is lost on gateway restart, and this does not scale past one
     gateway process. A real deployment would move this to a database/queue.
+  - Results ARE cached across restarts, separately from the in-memory job
+    state -- see cache.py. Before creating a sandbox, a run is looked up by
+    (model, params) in Postgres; a hit skips the sandbox entirely and returns
+    instantly. Caching is best-effort and fails open (see cache.py) so a DB
+    outage never blocks a run, it just stops being cached.
 """
 import json
 import threading
@@ -21,6 +26,7 @@ from enum import Enum
 
 from daytona import CreateSandboxFromImageParams, Image
 
+import cache
 from models import get_model_or_none
 
 # Bounds how many sandbox creations can be in flight at once. This is the
@@ -80,6 +86,7 @@ def submit_run(daytona_client, model_name, params):
             "status": Status.QUEUED,
             "result": None,
             "error": None,
+            "cached": False,
             "submitted_at": time.time(),
         }
 
@@ -89,6 +96,11 @@ def submit_run(daytona_client, model_name, params):
 
 def _execute_run(daytona_client, run_id, model_name, model, params):
     _set_job(run_id, status=Status.RUNNING)
+
+    cached_result = cache.get_cached(model_name, params)
+    if cached_result is not None:
+        _set_job(run_id, status=Status.SUCCEEDED, result=cached_result, cached=True)
+        return
 
     sandbox = None
     try:
@@ -130,7 +142,8 @@ def _execute_run(daytona_client, run_id, model_name, model, params):
             )
             return
 
-        _set_job(run_id, status=Status.SUCCEEDED, result=parsed)
+        cache.put_cached(model_name, params, parsed)
+        _set_job(run_id, status=Status.SUCCEEDED, result=parsed, cached=False)
 
     except Exception as exc:  # noqa: BLE001 -- surface any failure as a job error, not a crashed worker
         _set_job(

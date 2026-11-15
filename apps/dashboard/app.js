@@ -181,7 +181,7 @@ async function pollRun(runId, modelName) {
   runButton.disabled = false;
 
   if (job.status === "succeeded") {
-    setStatus(`${modelName}: succeeded`);
+    setStatus(`${modelName}: succeeded${job.cached ? " (cached)" : ""}`);
     renderChart(modelName, job.result);
     setRawDownload(job);
   } else {

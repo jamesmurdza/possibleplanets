@@ -115,6 +115,25 @@ result, untouched:
 No "canonical" normalized layer in this version — see Future Ideas for why that's
 deferred rather than cut outright.
 
+### Result caching (implemented)
+
+Results are cached by (model, params) in Postgres (`apps/gateway/cache.py`), using
+a Supabase Postgres instance accessed via its **connection pooler** -- confirmed by
+testing that Supabase's *direct* connection host is IPv6-only, which this sandbox
+environment (and many others) can't reach; the pooler host is IPv4-reachable.
+Connection string lives in `apps/gateway/.env`'s (gitignored) `DATABASE_URL`, never
+committed.
+
+Before creating a sandbox, a run is looked up by an exact (model, params) match; a
+hit skips the sandbox entirely and returns the cached native result instantly. This
+matters most for the slower models (OSCAR's smallest possible run takes ~6 minutes,
+confirmed by testing) but applies uniformly to all models. Caching is best-effort
+and fails open: if `DATABASE_URL` is unset or the DB is unreachable, the gateway
+runs exactly as it would without caching -- a DB outage never blocks a model run,
+it just stops being cached. The API surfaces a `cached: true/false` field on
+`GET /v1/runs/{run_id}` so consumers (including the dashboard) aren't misled about
+whether a result came from a real run.
+
 ### Per-tenant isolation checklist
 
 - Every run = new sandbox, no reuse, no shared temp dirs, no shared Wine prefix.
@@ -170,9 +189,6 @@ taxonomy translation, advanced/raw parameter editing in the UI, run history, sha
   above.
 - **Scenario taxonomy translation** — an explicit, visible mapping between SSP and
   RCP scenario families (e.g. "SSP2-4.5 ≈ RCP4.5") rather than assuming equivalence.
-- **Result caching** — cache by (model, version, input params) since these models are
-  deterministic and many users will request common scenarios repeatedly; would cut
-  cost/latency for the heavier models (MAGICC, DICE) significantly.
 - **Advanced/raw parameter editor in the UI** — expose each model's full native
   parameter surface (e.g. FAIR's many `fill()`-able config fields) for power users.
 - **Run history and shareable result links**, keyed off `run_id`.

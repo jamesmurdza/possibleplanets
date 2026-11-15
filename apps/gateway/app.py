@@ -12,9 +12,15 @@ Daytona sandbox that is destroyed after use -- see jobs.py and PLATFORM.md for
 why. This is the minimal version: only hector and fair are registered in
 models.py so far (OSCAR/DICE/MAGICC come later, per the build plan).
 
+Results are cached by (model, params) in Postgres (see cache.py) -- a repeat
+request for the same model+params returns instantly instead of spinning up
+another sandbox. Caching is optional: if DATABASE_URL isn't set, the gateway
+runs exactly as before, just without caching.
+
 Run with:
   uvicorn app:app --host 0.0.0.0 --port 8000
-Requires `daytona_api_key` in the environment.
+Requires `daytona_api_key` (or `DAYTONA_API_KEY`) in the environment.
+Optional: `DATABASE_URL` (a Postgres connection string) to enable caching.
 """
 import os
 
@@ -24,10 +30,18 @@ from pydantic import BaseModel
 
 from daytona import Daytona, DaytonaConfig
 
+import cache
 import jobs
 from models import MODELS, get_model_or_none
 
 app = FastAPI(title="Climate Models Gateway", version="0.1.0")
+
+
+@app.on_event("startup")
+def _startup():
+    # Best-effort: if DATABASE_URL isn't set or the DB is unreachable, caching
+    # just stays disabled -- see cache.py. Never blocks the gateway starting.
+    cache.init_cache()
 
 # CORS is opt-in, off by default. When this runs behind the Daytona sandbox's
 # proxy (the default way this is accessed -- see apps/dashboard), the proxy
@@ -119,4 +133,9 @@ def get_run(run_id: str):
         "status": job["status"],
         "result": job["result"],
         "error": job["error"],
+        # True if this result came from the cache instead of a real sandbox
+        # run -- surfaced so API consumers (and the dashboard) aren't misled
+        # about whether a run actually executed, per PLATFORM.md's preference
+        # for being explicit about what happened rather than hiding mechanics.
+        "cached": job.get("cached", False),
     }
