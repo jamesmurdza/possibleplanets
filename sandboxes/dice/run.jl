@@ -15,13 +15,19 @@
 using DICE
 using JSON
 
+# IMPORTANT (confirmed by testing a real run against a Daytona sandbox, after
+# a user hit this as a real failure): DICE.jl's own Scenarios2016.jl only
+# implements BasePrice/OptimalPrice for v2016R/v2016R2 (the version this
+# script hardcodes below) -- every other scenario (Limit2Degrees, Stern,
+# SternCalibrated, Copenhagen) errors with "<scenario> is not a valid
+# scenario for v2016R2". Those are only implemented for the older v2013R
+# RockyRoad variant (see ScenariosRockyRoad.jl), which also uses a different
+# Results struct/field set -- not wired up here. Only list scenarios that
+# are actually confirmed working against the version actually in use, rather
+# than ones that look plausible from DICE.jl's exported Scenarios.jl list.
 const SCENARIO_MAP = Dict(
     "base" => BasePrice,
     "optimal" => OptimalPrice,
-    "limit2degrees" => Limit2Degrees,
-    "stern" => Stern,
-    "sterncalibrated" => SternCalibrated,
-    "copenhagen" => Copenhagen,
 )
 
 function load_params()

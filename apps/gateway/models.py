@@ -95,7 +95,13 @@ MODELS = {
         # run.jl's SCENARIO_MAP keys -- DICE.jl's own named policy scenarios
         # (Scenarios.jl), not an emissions-pathway taxonomy like the RCMs'
         # SSP names. No cross-model mapping (PLATFORM.md).
-        "scenarios": ["base", "optimal", "limit2degrees", "stern", "sterncalibrated", "copenhagen"],
+        #
+        # Only base/optimal, NOT the full Scenarios.jl list -- confirmed by
+        # testing (a real failed run) that DICE.jl only implements these two
+        # for the v2016R2 version run.jl uses; the others (Limit2Degrees,
+        # Stern, SternCalibrated, Copenhagen) are v2013R-RockyRoad-only and
+        # error out against v2016R2. See run.jl's SCENARIO_MAP comment.
+        "scenarios": ["base", "optimal"],
         # run.jl expects a single scenario string under "scenario".
         "params_shape": "scenario",
         # Non-Python runtime -- the gateway's default "python3 /app/run.py"
