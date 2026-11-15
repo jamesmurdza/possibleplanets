@@ -225,6 +225,15 @@ const CHART_ADAPTERS = {
   },
 };
 
+// Chart.js's `aspectRatio` is a fixed number, not something CSS media
+// queries can touch -- on a narrow (phone-width) screen, the same wide
+// desktop ratio (3.4) would squash the chart down to a sliver. Pick a
+// shorter/taller ratio under a phone-ish breakpoint instead, matching the
+// `.statusbar`/`.toolbar` CSS breakpoint at 640px.
+function chartAspectRatio() {
+  return window.innerWidth <= 640 ? 1.4 : 3.4;
+}
+
 function renderChart(modelName, result) {
   const adapter = CHART_ADAPTERS[modelName];
   if (!adapter) {
@@ -256,8 +265,9 @@ function renderChart(modelName, result) {
       // Explicit wide aspect ratio (default is 2:1) -- the canvas's height
       // attribute alone doesn't control final rendered size, since Chart.js's
       // maintainAspectRatio:true (the default) recomputes height from width
-      // using this ratio on every resize.
-      aspectRatio: 3.4,
+      // using this ratio on every resize. Re-picked on window resize below so
+      // rotating a phone or resizing the window adapts it live.
+      aspectRatio: chartAspectRatio(),
       scales: {
         x: { title: { display: true, text: "year" } },
         y: { title: { display: true, text: "temperature anomaly" } },
@@ -265,6 +275,22 @@ function renderChart(modelName, result) {
     },
   });
 }
+
+// Debounced resize handler: update the live chart's aspect ratio when
+// crossing the phone/desktop breakpoint, rather than leaving it fixed at
+// whatever ratio was active when the chart was first drawn.
+let resizeTimer = null;
+window.addEventListener("resize", () => {
+  if (!chart) return;
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const ratio = chartAspectRatio();
+    if (chart.options.aspectRatio !== ratio) {
+      chart.options.aspectRatio = ratio;
+      chart.resize();
+    }
+  }, 150);
+});
 
 function setRawDownload(fullJobResponse) {
   if (rawObjectUrl) {
