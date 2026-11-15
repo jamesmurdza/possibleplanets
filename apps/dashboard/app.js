@@ -333,7 +333,11 @@ async function pollRun(runId, modelName) {
   hideLoading();
 
   if (job.status === "succeeded") {
-    setStatus(`${modelName}: succeeded${job.cached ? " (cached)" : ""}`);
+    // duration_seconds is a real measured wall-clock time for this specific
+    // run (see apps/gateway/jobs.py), not an estimate -- shown whenever the
+    // gateway reports one, cached or not.
+    const duration = typeof job.duration_seconds === "number" ? ` in ${job.duration_seconds.toFixed(1)}s` : "";
+    setStatus(`${modelName}: succeeded${job.cached ? " (cached)" : ""}${duration}`);
     renderChart(modelName, job.result);
     setRawDownload(job);
     // Only offer "Refresh" when the thing currently on screen actually came

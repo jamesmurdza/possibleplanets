@@ -18,6 +18,7 @@ Minimal version (see PLATFORM.md):
     outage never blocks a run, it just stops being cached.
 """
 import json
+import logging
 import threading
 import time
 import uuid
@@ -28,6 +29,11 @@ from daytona import CreateSandboxFromImageParams, Image, Resources, SessionExecu
 
 import cache
 from models import get_model_or_none
+
+# no-op if a handler is already configured (e.g. by uvicorn) -- this just
+# makes sure run-timing logs below are visible even when run standalone.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("gateway.jobs")
 
 # How often to poll a running sandbox for progress (file read) and completion
 # (session command status), for models with supports_progress=True. Tightened
@@ -107,6 +113,9 @@ def submit_run(daytona_client, model_name, params, force_refresh=False):
             # models.py). Only populated for models with supports_progress=True.
             "progress": None,
             "submitted_at": time.time(),
+            # Real measured wall-clock seconds for this run, set once it
+            # reaches a terminal state -- None while queued/running.
+            "duration_seconds": None,
         }
 
     _executor.submit(_execute_run, daytona_client, run_id, model_name, model, params, force_refresh)
@@ -115,11 +124,24 @@ def submit_run(daytona_client, model_name, params, force_refresh=False):
 
 def _execute_run(daytona_client, run_id, model_name, model, params, force_refresh=False):
     _set_job(run_id, status=Status.RUNNING)
+    run_start = time.time()
 
     if not force_refresh:
         cached_result = cache.get_cached(model_name, params)
         if cached_result is not None:
-            _set_job(run_id, status=Status.SUCCEEDED, result=cached_result, cached=True, progress={"percent": 100})
+            lookup_seconds = round(time.time() - run_start, 3)
+            logger.info(
+                "run %s (%s, params=%s) served from cache in %.3fs",
+                run_id, model_name, params, lookup_seconds,
+            )
+            _set_job(
+                run_id,
+                status=Status.SUCCEEDED,
+                result=cached_result,
+                cached=True,
+                progress={"percent": 100},
+                duration_seconds=lookup_seconds,
+            )
             return
 
     sandbox = None
@@ -147,6 +169,11 @@ def _execute_run(daytona_client, run_id, model_name, model, params, force_refres
         json_line = _last_json_line(stdout)
 
         if exit_code != 0 or json_line is None:
+            run_seconds = round(time.time() - run_start, 3)
+            logger.info(
+                "run %s (%s, params=%s) FAILED after %.3fs: exit_code=%s",
+                run_id, model_name, params, run_seconds, exit_code,
+            )
             _set_job(
                 run_id,
                 status=Status.FAILED,
@@ -155,26 +182,54 @@ def _execute_run(daytona_client, run_id, model_name, model, params, force_refres
                     "message": f"exit_code={exit_code}",
                     "stdout_tail": stdout[-2000:],
                 },
+                duration_seconds=run_seconds,
             )
             return
 
         parsed = json.loads(json_line)
         if parsed.get("status") != "succeeded":
+            run_seconds = round(time.time() - run_start, 3)
+            logger.info(
+                "run %s (%s, params=%s) FAILED after %.3fs: %s",
+                run_id, model_name, params, run_seconds, parsed.get("error", "unknown error"),
+            )
             _set_job(
                 run_id,
                 status=Status.FAILED,
                 error={"code": "model_run_failed", "message": parsed.get("error", "unknown error")},
+                duration_seconds=run_seconds,
             )
             return
 
         cache.put_cached(model_name, params, parsed)
-        _set_job(run_id, status=Status.SUCCEEDED, result=parsed, cached=False, progress={"percent": 100})
+        run_seconds = round(time.time() - run_start, 3)
+        # Real measured wall-clock time for this specific run (sandbox create
+        # + execute), not a typical/estimated duration -- same "never fake a
+        # number" standard as the progress reporting elsewhere in this file.
+        logger.info(
+            "run %s (%s, params=%s) succeeded in %.3fs",
+            run_id, model_name, params, run_seconds,
+        )
+        _set_job(
+            run_id,
+            status=Status.SUCCEEDED,
+            result=parsed,
+            cached=False,
+            progress={"percent": 100},
+            duration_seconds=run_seconds,
+        )
 
     except Exception as exc:  # noqa: BLE001 -- surface any failure as a job error, not a crashed worker
+        run_seconds = round(time.time() - run_start, 3)
+        logger.info(
+            "run %s (%s, params=%s) FAILED after %.3fs: %s",
+            run_id, model_name, params, run_seconds, exc,
+        )
         _set_job(
             run_id,
             status=Status.FAILED,
             error={"code": "gateway_error", "message": str(exc)},
+            duration_seconds=run_seconds,
         )
     finally:
         # Always destroy the sandbox, success or failure -- never reused across

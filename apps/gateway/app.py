@@ -150,4 +150,8 @@ def get_run(run_id: str):
         # to observe, not just unimplemented). Never a synthetic/estimated
         # value -- see PLATFORM.md's stance against faking progress.
         "progress": job.get("progress"),
+        # Real measured wall-clock seconds for this specific run (sandbox
+        # create + execute, or cache lookup time if `cached` is true) -- null
+        # until the run reaches a terminal state. See jobs.py's run-timing log.
+        "duration_seconds": job.get("duration_seconds"),
     }
