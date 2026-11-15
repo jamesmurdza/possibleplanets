@@ -12,7 +12,10 @@
 </head>
 <body>
   <header class="toolbar">
-    <h1 class="toolbar-title">Climate Models</h1>
+    <div class="toolbar-brand">
+      <span class="toolbar-dot" aria-hidden="true"></span>
+      <h1 class="toolbar-title">Climate Models</h1>
+    </div>
 
     <div class="toolbar-controls">
       <select id="model-select" aria-label="Model"></select>
@@ -27,19 +30,24 @@
     </div>
   </header>
 
-  <div class="status-row">
-    <span id="status-text"></span>
-    <progress id="progress-bar" class="progress-bar" max="100" value="0" hidden></progress>
-  </div>
-
   <main class="content">
-    <section class="chart-card">
-      <canvas id="result-chart" height="320"></canvas>
-    </section>
+    <section class="panel">
+      <div class="panel-header">
+        <span id="status-text" class="status-text">Select a model and scenario, then click Run.</span>
+        <progress id="progress-bar" class="progress-bar" max="100" value="0" hidden></progress>
+      </div>
 
-    <a id="raw-download-link" class="raw-link" href="#" download="result.json" hidden>
-      Download raw output (JSON)
-    </a>
+      <div class="panel-body">
+        <canvas id="result-chart" height="320"></canvas>
+        <div id="chart-placeholder" class="chart-placeholder">No result yet</div>
+      </div>
+
+      <div class="panel-footer">
+        <a id="raw-download-link" class="raw-link" href="#" download="result.json" hidden>
+          Download raw output (JSON)
+        </a>
+      </div>
+    </section>
   </main>
 
   <script src="app.js"></script>

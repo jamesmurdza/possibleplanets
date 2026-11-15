@@ -82,7 +82,7 @@ async function loadModels() {
     modelSelect.appendChild(opt);
   }
   await loadSchema(modelSelect.value);
-  setStatus("");
+  setStatus("Select a model and scenario, then click Run.");
 }
 
 async function loadSchema(modelName) {
@@ -150,6 +150,8 @@ function renderChart(modelName, result) {
     return;
   }
   const { labels, values, label } = adapter(result);
+
+  document.getElementById("chart-placeholder").hidden = true;
 
   if (chart) {
     chart.destroy();
