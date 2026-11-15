@@ -11,38 +11,29 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
-  <main>
-    <h1>Climate Models Dashboard</h1>
+  <header class="toolbar">
+    <h1 class="toolbar-title">Climate Models</h1>
 
-    <section class="controls">
-      <label>
-        Model
-        <select id="model-select"></select>
-      </label>
-
-      <label>
-        Scenario
-        <select id="scenario-select"></select>
-      </label>
-
+    <div class="toolbar-controls">
+      <select id="model-select" aria-label="Model"></select>
+      <select id="scenario-select" aria-label="Scenario"></select>
       <button id="run-button">Run</button>
+    </div>
+  </header>
 
-      <span id="status-text"></span>
-    </section>
+  <div class="status-row">
+    <span id="status-text"></span>
+    <progress id="progress-bar" class="progress-bar" max="100" value="0" hidden></progress>
+  </div>
 
-    <section class="progress-section">
-      <progress id="progress-bar" max="100" value="0" hidden></progress>
-    </section>
-
-    <section class="chart-section">
+  <main class="content">
+    <section class="chart-card">
       <canvas id="result-chart" height="320"></canvas>
     </section>
 
-    <section class="raw-output">
-      <a id="raw-download-link" href="#" download="result.json" hidden>
-        Download raw output (JSON)
-      </a>
-    </section>
+    <a id="raw-download-link" class="raw-link" href="#" download="result.json" hidden>
+      Download raw output (JSON)
+    </a>
   </main>
 
   <script src="app.js"></script>
