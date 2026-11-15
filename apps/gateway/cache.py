@@ -168,10 +168,12 @@ def get_cached(model: str, params: dict):
 def get_duration_stats():
     """
     Per-model real-run duration stats, aggregated from run_cache's
-    duration_seconds column -- count/min/avg/max over every real execution
-    ever logged for that model (rows with duration_seconds IS NULL, i.e.
-    written before that column existed, are excluded). Returns [] if caching
-    is disabled/unreachable or there's nothing to report yet -- never raises.
+    duration_seconds column -- count/min/median/avg/max over every real
+    execution ever logged for that model (rows with duration_seconds IS
+    NULL, i.e. written before that column existed, are excluded). Median
+    uses Postgres's PERCENTILE_CONT, a real computed statistic over the
+    actual rows, not an estimate. Returns [] if caching is disabled/
+    unreachable or there's nothing to report yet -- never raises.
     """
     if not _enabled or _pool is None:
         return []
@@ -185,6 +187,7 @@ def get_duration_stats():
                 SELECT model,
                        COUNT(*),
                        MIN(duration_seconds),
+                       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_seconds),
                        AVG(duration_seconds),
                        MAX(duration_seconds)
                 FROM run_cache
@@ -199,10 +202,11 @@ def get_duration_stats():
                 "model": model,
                 "count": count,
                 "min_seconds": round(min_s, 3),
+                "median_seconds": round(median_s, 3),
                 "avg_seconds": round(avg_s, 3),
                 "max_seconds": round(max_s, 3),
             }
-            for model, count, min_s, avg_s, max_s in rows
+            for model, count, min_s, median_s, avg_s, max_s in rows
         ]
     except Exception as exc:  # noqa: BLE001
         print(f"[cache] duration stats query failed ({exc})")
