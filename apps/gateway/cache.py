@@ -47,6 +47,13 @@ CREATE TABLE IF NOT EXISTS run_cache (
     model TEXT NOT NULL,
     params JSONB NOT NULL,
     result JSONB NOT NULL,
+    -- Real measured wall-clock seconds for the sandbox run that produced
+    -- this row (sandbox create + execute) -- NULL for rows written before
+    -- this column existed. Never an estimate, same standard as the
+    -- progress reporting elsewhere in this project. This is what makes a
+    -- per-model run-duration history queryable, since run_cache is already
+    -- an append-only log of every real execution (see module docstring).
+    duration_seconds DOUBLE PRECISION,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS run_cache_cache_key_idx ON run_cache (cache_key);
@@ -69,6 +76,7 @@ BEGIN
         ALTER TABLE run_cache ADD PRIMARY KEY (id);
     END IF;
 END$$;
+ALTER TABLE run_cache ADD COLUMN IF NOT EXISTS duration_seconds DOUBLE PRECISION;
 CREATE INDEX IF NOT EXISTS run_cache_cache_key_idx ON run_cache (cache_key);
 """
 
@@ -157,14 +165,65 @@ def get_cached(model: str, params: dict):
             _pool.putconn(conn)
 
 
-def put_cached(model: str, params: dict, result: dict):
+def get_duration_stats():
+    """
+    Per-model real-run duration stats, aggregated from run_cache's
+    duration_seconds column -- count/min/avg/max over every real execution
+    ever logged for that model (rows with duration_seconds IS NULL, i.e.
+    written before that column existed, are excluded). Returns [] if caching
+    is disabled/unreachable or there's nothing to report yet -- never raises.
+    """
+    if not _enabled or _pool is None:
+        return []
+
+    conn = None
+    try:
+        conn = _pool.getconn()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT model,
+                       COUNT(*),
+                       MIN(duration_seconds),
+                       AVG(duration_seconds),
+                       MAX(duration_seconds)
+                FROM run_cache
+                WHERE duration_seconds IS NOT NULL
+                GROUP BY model
+                ORDER BY model
+                """
+            )
+            rows = cur.fetchall()
+        return [
+            {
+                "model": model,
+                "count": count,
+                "min_seconds": round(min_s, 3),
+                "avg_seconds": round(avg_s, 3),
+                "max_seconds": round(max_s, 3),
+            }
+            for model, count, min_s, avg_s, max_s in rows
+        ]
+    except Exception as exc:  # noqa: BLE001
+        print(f"[cache] duration stats query failed ({exc})")
+        return []
+    finally:
+        if conn is not None:
+            _pool.putconn(conn)
+
+
+def put_cached(model: str, params: dict, result: dict, duration_seconds: float = None):
     """Best-effort write-through; failures are logged and swallowed -- a
     cache-write failure should never fail an otherwise-successful run.
 
     Always inserts a new row (no upsert/ON CONFLICT) -- this is a log, not a
     single slot per key, so every successful run (including forced refreshes)
     adds a new entry rather than overwriting the previous one. get_cached
-    always serves the newest row for a given key."""
+    always serves the newest row for a given key.
+
+    duration_seconds is the real measured wall-clock time for the sandbox run
+    that produced this result (see jobs.py) -- pass None if unknown, never an
+    estimate."""
     if not _enabled or _pool is None:
         return
 
@@ -175,10 +234,10 @@ def put_cached(model: str, params: dict, result: dict):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO run_cache (cache_key, model, params, result)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO run_cache (cache_key, model, params, result, duration_seconds)
+                VALUES (%s, %s, %s, %s, %s)
                 """,
-                (key, model, json.dumps(params), json.dumps(result)),
+                (key, model, json.dumps(params), json.dumps(result), duration_seconds),
             )
         conn.commit()
     except Exception as exc:  # noqa: BLE001

@@ -89,6 +89,17 @@ class RunRequest(BaseModel):
     refresh: bool = False
 
 
+@app.get("/v1/stats")
+def run_duration_stats():
+    """
+    Per-model real-run duration stats (count/min/avg/max seconds), aggregated
+    from every real execution ever logged into run_cache -- see
+    cache.py's get_duration_stats(). Returns an empty list if caching is
+    disabled/unreachable or there's no history yet; never errors.
+    """
+    return {"stats": cache.get_duration_stats()}
+
+
 @app.get("/v1/models")
 def list_models():
     return {

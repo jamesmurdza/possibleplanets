@@ -206,11 +206,14 @@ def _execute_run(daytona_client, run_id, model_name, model, params, force_refres
             )
             return
 
-        cache.put_cached(model_name, params, parsed)
         run_seconds = round(time.time() - run_start, 3)
         # Real measured wall-clock time for this specific run (sandbox create
         # + execute), not a typical/estimated duration -- same "never fake a
         # number" standard as the progress reporting elsewhere in this file.
+        # Persisted into run_cache too, not just logged/returned in this
+        # response, so duration has a durable history across gateway
+        # restarts -- see cache.py's get_duration_stats().
+        cache.put_cached(model_name, params, parsed, duration_seconds=run_seconds)
         logger.info(
             "run %s (%s, params=%s) succeeded in %.3fs",
             run_id, model_name, params, run_seconds,
