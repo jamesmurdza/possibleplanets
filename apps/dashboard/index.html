@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Climate Models Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <!-- Minimal version (PLATFORM.md): one screen, three controls, one chart.
+       No build tooling -- plain HTML/JS/CSS, Chart.js pulled from a CDN,
+       so this app has zero install step beyond serving static files. -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+  <main>
+    <h1>Climate Models Dashboard</h1>
+
+    <section class="controls">
+      <label>
+        Model
+        <select id="model-select"></select>
+      </label>
+
+      <label>
+        Scenario
+        <select id="scenario-select"></select>
+      </label>
+
+      <button id="run-button">Run</button>
+
+      <span id="status-text"></span>
+    </section>
+
+    <section class="chart-section">
+      <canvas id="result-chart" height="320"></canvas>
+    </section>
+
+    <section class="raw-output">
+      <a id="raw-download-link" href="#" download="result.json" hidden>
+        Download raw output (JSON)
+      </a>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

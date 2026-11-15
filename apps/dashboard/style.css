@@ -1,0 +1,59 @@
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  color: #222;
+}
+
+h1 {
+  font-size: 1.4rem;
+  margin-bottom: 1.5rem;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.controls label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+  color: #555;
+  gap: 0.25rem;
+}
+
+select, button {
+  font-size: 0.95rem;
+  padding: 0.4rem 0.6rem;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+#status-text {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+#status-text.error {
+  color: #b00020;
+}
+
+.chart-section {
+  margin-bottom: 1rem;
+}
+
+.raw-output a {
+  font-size: 0.9rem;
+}

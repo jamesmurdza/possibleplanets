@@ -6,7 +6,21 @@ dashboard on top. It reflects findings from manually testing the models in a san
 (see guides in `guides/`), where install friction and environment mismatches were the
 main barrier to accessibility — not the models themselves.
 
-Status: **spec only, not implemented.**
+Status: **in progress.** HECTOR and FAIR sandbox images are built and tested
+against real Daytona sandboxes; a minimal gateway and dashboard are implemented
+over those two models. OSCAR, DICE, and MAGICC are not yet built. See the repo
+layout below and the Build plan section for what's next.
+
+## Repo layout (monorepo)
+
+```
+sandboxes/        model sandbox images (Dockerfile + run.py), shared build
+                   artifacts used by apps/gateway -- one subdir per model
+apps/
+  gateway/         the API gateway (FastAPI) -- see Architecture below
+  dashboard/       the minimal frontend -- see Minimal dashboard below
+guides/            the site's existing per-model how-to guides
+```
 
 ## Background
 

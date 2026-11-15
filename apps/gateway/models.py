@@ -10,7 +10,7 @@ tested the same way.
 """
 from pathlib import Path
 
-SANDBOXES_DIR = Path(__file__).resolve().parent.parent / "sandboxes"
+SANDBOXES_DIR = Path(__file__).resolve().parent.parent.parent / "sandboxes"
 
 MODELS = {
     "hector": {

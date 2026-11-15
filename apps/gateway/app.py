@@ -19,6 +19,7 @@ Requires `daytona_api_key` in the environment.
 import os
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from daytona import Daytona, DaytonaConfig
@@ -27,6 +28,16 @@ import jobs
 from models import MODELS, get_model_or_none
 
 app = FastAPI(title="Climate Models Gateway", version="0.1.0")
+
+# Minimal version: wide open so the dashboard app (a separate app, likely on a
+# different origin/port during local dev) can call this API directly from the
+# browser. Tighten this to the dashboard's real origin before any real deploy.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 _daytona_client = None
 
