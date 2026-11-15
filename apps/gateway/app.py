@@ -29,15 +29,25 @@ from models import MODELS, get_model_or_none
 
 app = FastAPI(title="Climate Models Gateway", version="0.1.0")
 
-# Minimal version: wide open so the dashboard app (a separate app, likely on a
-# different origin/port during local dev) can call this API directly from the
-# browser. Tighten this to the dashboard's real origin before any real deploy.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS is opt-in, off by default. When this runs behind the Daytona sandbox's
+# proxy (the default way this is accessed -- see apps/dashboard), the proxy
+# itself already injects a correct, origin-specific Access-Control-Allow-Origin
+# header. Adding our own on top (even with the same value) makes the response
+# carry the header twice, which browsers reject outright as an invalid CORS
+# response -- confirmed by testing: a wildcard "*" from this middleware plus
+# the proxy's echoed origin produced two values and every browser fetch from
+# the dashboard failed with "Failed to fetch" / a CORS policy error.
+#
+# Set ENABLE_CORS=1 only when running the gateway directly (not through the
+# Daytona proxy) with the dashboard on a different origin/port, e.g. plain
+# local dev with `python -m http.server` and `uvicorn` on different ports.
+if os.environ.get("ENABLE_CORS") == "1":
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 _daytona_client = None
 

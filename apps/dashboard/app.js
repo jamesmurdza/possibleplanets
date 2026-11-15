@@ -10,7 +10,20 @@
 
 // Override by loading this page as index.html?gateway=http://host:port
 const params = new URLSearchParams(window.location.search);
-const GATEWAY_URL = params.get("gateway") || "http://localhost:8000";
+const GATEWAY_URL = params.get("gateway") || guessGatewayUrl();
+
+// This app is commonly accessed through a Daytona sandbox's proxy URL --
+// https://{port}-{sandboxId}.daytonaproxy01.net -- rather than localhost.
+// In that case, derive the gateway's URL by swapping the dashboard's port
+// prefix (e.g. 8080) for the gateway's port (8000), same host/protocol.
+// Falls back to localhost:8000 for plain local dev (python -m http.server).
+function guessGatewayUrl() {
+  const match = window.location.hostname.match(/^\d+-(.+\.daytonaproxy\d*\.net)$/);
+  if (match) {
+    return `${window.location.protocol}//8000-${match[1]}`;
+  }
+  return "http://localhost:8000";
+}
 
 const modelSelect = document.getElementById("model-select");
 const scenarioSelect = document.getElementById("scenario-select");
