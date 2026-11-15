@@ -44,6 +44,11 @@ PROGRESS_POLL_INTERVAL_SECONDS = 0.15
 
 PROGRESS_FILE_PATH = "/tmp/progress.json"
 
+# Default entry point convention used by hector/fair/oscar's images; a model
+# can override this via a "run_command" key in models.py for non-Python
+# runtimes (e.g. DICE's Julia image uses "julia /app/run.jl").
+DEFAULT_RUN_COMMAND = "python3 /app/run.py"
+
 # Bounds how many sandbox creations can be in flight at once. This is the
 # gateway's only concurrency control in the minimal version -- see PLATFORM.md's
 # note that the queue's job is to rate-limit concurrent sandbox creation.
@@ -249,7 +254,7 @@ def _run_blocking(sandbox, model, params):
     correct one here).
     """
     exec_result = sandbox.process.exec(
-        "python3 /app/run.py",
+        model.get("run_command", DEFAULT_RUN_COMMAND),
         env={"SCENARIO_PARAMS": json.dumps(params)},
         timeout=model["exec_timeout_seconds"],
     )

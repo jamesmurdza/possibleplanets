@@ -89,7 +89,30 @@ MODELS = {
         # was confirmed sufficient for a full run.
         "resources": {"cpu": 4, "memory": 8, "disk": 10},
     },
-    # "dice": not yet built/tested.
+    "dice": {
+        "family": "IAM",
+        "dockerfile": str(SANDBOXES_DIR / "dice" / "Dockerfile"),
+        # run.jl's SCENARIO_MAP keys -- DICE.jl's own named policy scenarios
+        # (Scenarios.jl), not an emissions-pathway taxonomy like the RCMs'
+        # SSP names. No cross-model mapping (PLATFORM.md).
+        "scenarios": ["base", "optimal", "limit2degrees", "stern", "sterncalibrated", "copenhagen"],
+        # run.jl expects a single scenario string under "scenario".
+        "params_shape": "scenario",
+        # Non-Python runtime -- the gateway's default "python3 /app/run.py"
+        # doesn't apply here. See jobs.py's DEFAULT_RUN_COMMAND.
+        "run_command": "julia /app/run.jl",
+        # Measured against a real Daytona sandbox: ~31s (mostly Julia/JuMP
+        # JIT warmup; the actual Ipopt solve is ~2-3s, confirmed by the
+        # solver's own "Total seconds in IPOPT" report). Generous buffer.
+        "exec_timeout_seconds": 120,
+        # Confirmed by reading DICE.jl's solve(): no progress hook exposed to
+        # callers (Ipopt's own iteration log goes straight to stdout, not a
+        # file, and Daytona's session log APIs buffer stdout until the
+        # command finishes -- same limitation already confirmed for hector/
+        # fair). Nothing real to report mid-run via the file-polling
+        # mechanism used elsewhere, so this stays False.
+        "supports_progress": False,
+    },
     # "magicc": not yet built/tested.
 }
 

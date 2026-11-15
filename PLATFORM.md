@@ -6,14 +6,21 @@ dashboard on top. It reflects findings from manually testing the models in a san
 (see guides in `guides/`), where install friction and environment mismatches were the
 main barrier to accessibility — not the models themselves.
 
-Status: **in progress.** HECTOR, FAIR, and OSCAR sandbox images are built and
-tested against real Daytona sandboxes; a minimal gateway and dashboard are
-implemented over those three models. OSCAR needed an explicit larger sandbox
-size (confirmed by testing: it gets OOM-killed at the default size while
-loading its parameter files) and a real progress signal intercepted from its
-own `"year = ..."` prints, same mechanism as FAIR's tqdm bar. DICE and MAGICC
-are not yet built. See the repo layout below and the Build plan section for
-what's next.
+Status: **in progress.** HECTOR, FAIR, OSCAR, and DICE sandbox images are
+built and tested against real Daytona sandboxes; a minimal gateway and
+dashboard are implemented over those four models. OSCAR needed an explicit
+larger sandbox size (confirmed by testing: it gets OOM-killed at the default
+size while loading its parameter files) and a real progress signal
+intercepted from its own `"year = ..."` prints, same mechanism as FAIR's
+tqdm bar. DICE has no headless entry point upstream (its guide only documents
+a Jupyter notebook) -- the gateway instead calls the underlying DICE.jl
+package directly via a plain Julia script, pinning Ipopt.jl to a specific
+version after confirming by testing that the latest release segfaults inside
+DICE.jl's own linear-solver probe. DICE also needed the gateway's first
+non-Python run command (`julia run.jl` instead of `python3 run.py`). MAGICC
+is not yet built -- see its guide's Wine/i386 + closed-source binary
+requirements, the heaviest/most fragile of the five. See the repo layout
+below and the Build plan section for what's next.
 
 ## Repo layout (monorepo)
 

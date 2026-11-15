@@ -231,6 +231,14 @@ const CHART_ADAPTERS = {
       label: `OSCAR mean temperature anomaly (${result.scenario}, nMC=${result.nMC})`,
     };
   },
+  dice(result) {
+    const native = result.result; // { years, T_atmos, scc, forcing, utility }
+    return {
+      labels: native.years,
+      values: native.T_atmos,
+      label: `DICE atmospheric temperature anomaly (${result.scenario})`,
+    };
+  },
 };
 
 // Chart.js's `aspectRatio` is a fixed number, not something CSS media
