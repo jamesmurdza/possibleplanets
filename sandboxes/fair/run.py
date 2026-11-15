@@ -68,9 +68,16 @@ def main():
     f.fill_from_rcmip()
 
     volcanic_forcing = np.zeros(351)
+    # NOTE: guides/FAIR.markdown uses plain bracket slicing (`df_volcanic[1749:]`),
+    # which is POSITIONAL here, not label-based, because the index is a float
+    # (fractional-year) index that doesn't exactly match the integer 1749. That
+    # silently selects the wrong 1491 rows (confirmed by testing: the sliced data
+    # starts at year ~1895.75, not 1749) and produces only 125 groups instead of
+    # the 271 the next line assumes, crashing with a broadcast error. `.loc[1749:]`
+    # is the correct label-based slice and yields the expected 3240/271 shapes.
     volcanic_forcing[:271] = (
-        df_volcanic[1749:]
-        .groupby(np.ceil(df_volcanic[1749:].index) // 1)
+        df_volcanic.loc[1749:]
+        .groupby(np.ceil(df_volcanic.loc[1749:].index) // 1)
         .mean()
         .squeeze()
         .values
