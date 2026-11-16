@@ -21,6 +21,11 @@ interface ParameterSpec {
   min: number;
   max: number;
   step?: number;
+  // Overrides the generic "default: {default}" placeholder -- see
+  // lib/models.ts's docstring on NumberParameterSpec for why that generic
+  // text would be actively wrong for a field like oscar's "seed" (blank
+  // means "no seed," not "seed = 0", and 0 is itself a valid real seed).
+  placeholderHint?: string;
 }
 
 interface ModelMeta {
@@ -511,7 +516,7 @@ export default function Page() {
                   <span className="advanced-field-label">{spec.label}</span>
                   <input
                     type="number"
-                    placeholder={`default: ${spec.default}`}
+                    placeholder={spec.placeholderHint ?? `default: ${spec.default}`}
                     min={spec.min}
                     max={spec.max}
                     step={spec.step ?? "any"}

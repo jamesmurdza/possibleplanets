@@ -42,10 +42,20 @@ export interface NumberParameterSpec {
   key: string;
   label: string;
   type: "number";
+  // Shown in the UI as "default: {default}" when a field is left blank --
+  // true for most parameters, where leaving it blank really does behave
+  // like passing this value (see the per-model comments confirming that by
+  // testing). NOT true for a model's `nonDeterministicUnless` key (e.g.
+  // oscar's "seed"): there, leaving it blank means "no seed at all, run is
+  // non-deterministic," which is a different thing from "seed = 0" -- 0 is
+  // itself a perfectly valid, real seed, not a placeholder for "none." Set
+  // `placeholderHint` to override the displayed text for cases like that,
+  // so the UI doesn't claim an equivalence that isn't true.
   default: number;
   min: number;
   max: number;
   step?: number;
+  placeholderHint?: string;
 }
 
 export type ParameterSpec = NumberParameterSpec;
@@ -182,7 +192,14 @@ export const MODELS: Record<string, ModelMeta> = {
         key: "seed",
         label: "Random seed (for reproducibility)",
         type: "number",
+        // There is no real "default seed" -- leaving this blank means
+        // oscar runs genuinely unseeded (a fresh random draw every time,
+        // never cached), NOT "seed = 0". 0 is just this field's min bound
+        // for display/validation purposes, and is itself a perfectly valid
+        // seed to actually use. placeholderHint overrides the generic
+        // "default: 0" text below so the UI doesn't imply blank == 0.
         default: 0,
+        placeholderHint: "none (random, uncached)",
         min: 0,
         max: 2 ** 31 - 1,
         step: 1,

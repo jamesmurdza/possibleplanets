@@ -360,7 +360,7 @@ a.icon-button {
   background: var(--color-surface);
   color: var(--color-text);
   padding: 0.35rem 0.5rem;
-  width: 9rem;
+  width: 11rem;
 }
 
 .advanced-field input:focus-visible {
