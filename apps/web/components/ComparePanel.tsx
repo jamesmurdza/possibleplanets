@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Chart from "chart.js/auto";
 import Dropdown from "./Dropdown";
-import { fetchJson, CHART_ADAPTERS, chartAspectRatio, nativeScenarioOf, canonicalScenario } from "../lib/clientApi";
+import { fetchJson, CHART_ADAPTERS, chartAspectRatio, nativeScenarioOf, canonicalScenario, alignSeriesByYear } from "../lib/clientApi";
 import type { ModelMeta, ModelListItem, RunJob, RunListItem } from "../lib/clientTypes";
 
 type Axis = "model" | "scenario" | "parameter";
@@ -197,24 +197,27 @@ export default function ComparePanel() {
     setLoading(true);
     try {
       const jobs: RunJob[] = await Promise.all(groups.map((g) => fetchJson(`/v1/runs/${g.run.run_id}`)));
-      const series = jobs.map((job) => {
+      const series = jobs.map((job, i) => {
         const adapter = CHART_ADAPTERS[job.model];
         if (!adapter) throw new Error(`No chart adapter for model '${job.model}' yet.`);
-        return adapter(job.result);
+        const s = adapter(job.result);
+        return { ...s, label: labelFor(groups[i]) };
       });
-      // Every group is assumed to share a consistent timeline (fixed
-      // start/end year regardless of scenario/parameters) -- true for every
-      // model in this project so far, including across models when
-      // comparing by model (each uses its own adapter, but all plot a
-      // yearly temperature anomaly).
+      // Aligned by actual year value, not array index/position -- series
+      // can differ in length/range (e.g. comparing by model: hector's
+      // 1745-2300 vs oscar's 1750-2100), so naively zipping arrays by
+      // index would plot one series under the wrong years entirely. See
+      // alignSeriesByYear's comment for the real bug this fixes.
+      const aligned = alignSeriesByYear(series);
       setHasChart(true);
       setChartData({
-        labels: series[0].labels,
-        datasets: series.map((s, i) => ({
-          label: labelFor(groups[i]),
-          data: s.values,
+        labels: aligned.labels,
+        datasets: aligned.datasets.map((d) => ({
+          label: d.label,
+          data: d.data,
           borderWidth: 1.5,
           pointRadius: 0,
+          spanGaps: false,
         })),
       });
     } catch (err: any) {

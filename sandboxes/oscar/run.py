@@ -11,6 +11,17 @@ marker SSPs (e.g. "SSP2-4.5"), NOT the "ssp245"-style names HECTOR/FAIR use --
 these are not the same taxonomy and this script does not translate between
 them (see PLATFORM.md's decision not to force a cross-model scenario mapping).
 
+OUTPUT RANGE: the result's year/mean_D_Tg/std_D_Tg series covers the FULL
+run -- OSCAR's own historical leg (1750-ish to the scenario's start year,
+run with Ini=None so D_Tg starts at 0, same anomaly-from-1750 convention
+HECTOR/FAIR use) concatenated with the scenario leg. An earlier version of
+this script returned only the scenario leg (2014-2100), which made OSCAR's
+series look both x-shifted (starting in 2014 instead of ~1750) and
+y-shifted (starting already elevated instead of near 0) compared to the
+other models on the dashboard -- not because OSCAR itself disagrees, but
+because this script was discarding the zeroing period it had already
+computed as Out_scen's own initial condition.
+
 nMC (Monte Carlo sample size) defaults to 1, the smallest possible, because
 even at nMC=1 the full run takes ~6 minutes (confirmed by testing: ~210s for
 the historical run, ~145s for the scenario run to 2100). Increasing nMC
@@ -202,9 +213,37 @@ def main():
     sys.stdout = sys.stdout._real
     _write_progress(100)
 
-    years = [int(y) for y in Out_scen.year.values]
-    mean_temp = _nan_to_none(Out_scen.D_Tg.mean("config").values.tolist())
-    std_temp = _nan_to_none(Out_scen.D_Tg.std("config").values.tolist())
+    # Confirmed by reading OSCAR's own official example
+    # (run_scripts/basic_example_1.py): Out_hist is run with `Ini=None`,
+    # explicitly commented "ask the model to create a zero-valued initial
+    # state" -- i.e. OSCAR's own D_Tg convention is an anomaly from the
+    # START of Out_hist (this run's forcing data begins at 1750), same as
+    # hector/fair's anomaly-from-1750 convention. Previously this script
+    # discarded Out_hist entirely and returned only Out_scen (2014-2100),
+    # so the exposed series started already at +2.6-ish degC in 2014
+    # instead of near 0 in 1750 -- not because OSCAR disagrees with the
+    # other models, but because this script was throwing away the "zeroing"
+    # leg of its own two-stage run. Concatenating both legs here fixes
+    # both the apparent y-axis offset (now starts near 0) and the apparent
+    # x-axis offset (now starts at Out_hist's first year, not 2014).
+    hist_years = [int(y) for y in Out_hist.year.values]
+    hist_mean = _nan_to_none(Out_hist.D_Tg.mean("config").values.tolist())
+    hist_std = _nan_to_none(Out_hist.D_Tg.std("config").values.tolist())
+
+    scen_years = [int(y) for y in Out_scen.year.values]
+    scen_mean = _nan_to_none(Out_scen.D_Tg.mean("config").values.tolist())
+    scen_std = _nan_to_none(Out_scen.D_Tg.std("config").values.tolist())
+
+    # Out_scen's Ini comes from Out_hist's own last year, and the two
+    # datasets' year axes may overlap at that handoff point -- keep only
+    # the historical years strictly before Out_scen's first year so the
+    # combined series has no duplicate/out-of-order year, regardless of
+    # the exact boundary convention (not assumed, checked directly here).
+    first_scen_year = scen_years[0]
+    keep = [i for i, y in enumerate(hist_years) if y < first_scen_year]
+    years = [hist_years[i] for i in keep] + scen_years
+    mean_temp = [hist_mean[i] for i in keep] + scen_mean
+    std_temp = [hist_std[i] for i in keep] + scen_std
 
     result = {
         "status": "succeeded",

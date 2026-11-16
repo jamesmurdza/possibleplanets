@@ -135,6 +135,51 @@ export function scenarioDescription(scenario: string): string | null {
   return SCENARIO_DESCRIPTIONS[canonicalScenario(scenario)] ?? null;
 }
 
+/**
+ * Aligns multiple chart series onto one shared x-axis by actual year value,
+ * not by array index.
+ *
+ * Bug this fixes: Chart.js's default category scale just lines up
+ * `dataset[i]` under `labels[i]` -- it has no idea the labels are years.
+ * The Compare tab used to build its overlay chart as `labels:
+ * series[0].labels, datasets: series.map(s => s.values)`, which only
+ * happens to be correct when every series has the EXACT same year array.
+ * That's false whenever series differ in length/range -- e.g. before this
+ * was fixed, overlaying hector (556 points, 1745-2300) against oscar (87
+ * points, 2014-2100) silently plotted oscar's 87 values under the FIRST 87
+ * x-axis labels (~1745-1831) instead of under 2014-2100, visually
+ * "shifting" oscar's curve to the wrong place on both axes -- confirmed by
+ * inspecting real cached run data, not assumed.
+ *
+ * Each returned dataset is the same length as the merged, sorted label
+ * array, with `null` at any year that series didn't report -- an honest
+ * gap (Chart.js breaks the line there), never an interpolated/fabricated
+ * value.
+ */
+export function alignSeriesByYear(
+  series: { labels: any[]; values: any[]; label: string }[],
+): { labels: number[]; datasets: { label: string; data: (number | null)[] }[] } {
+  const yearSet = new Set<number>();
+  for (const s of series) {
+    for (const y of s.labels) yearSet.add(Number(y));
+  }
+  const years = Array.from(yearSet).sort((a, b) => a - b);
+
+  const datasets = series.map((s) => {
+    const byYear = new Map<number, number>();
+    s.labels.forEach((y: any, i: number) => {
+      const v = s.values[i];
+      if (v !== null && v !== undefined) byYear.set(Number(y), v);
+    });
+    return {
+      label: s.label,
+      data: years.map((y) => (byYear.has(y) ? byYear.get(y)! : null)),
+    };
+  });
+
+  return { labels: years, datasets };
+}
+
 export function chartAspectRatio() {
   return typeof window !== "undefined" && window.innerWidth <= 640 ? 1.4 : 3.4;
 }
