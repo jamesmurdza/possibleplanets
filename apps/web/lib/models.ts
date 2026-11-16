@@ -94,7 +94,7 @@ export interface ModelMeta {
 export const MODELS: Record<string, ModelMeta> = {
   hector: {
     family: "RCM",
-    description: "A simple, fast carbon-cycle/climate model, built for quick scenario runs.",
+    description: "A simple, fast climate model.",
     website: "https://jgcri.github.io/hector/",
     dockerfile: path.join(SANDBOXES_DIR, "hector", "Dockerfile"),
     scenarios: ["ssp119", "ssp126", "ssp245", "ssp370", "ssp585"],
@@ -142,7 +142,7 @@ export const MODELS: Record<string, ModelMeta> = {
   },
   fair: {
     family: "RCM",
-    description: "An emissions-based climate model used in IPCC reports, run as a CMIP6 ensemble.",
+    description: "A climate model used in IPCC reports.",
     website: "https://docs.fairmodel.net/",
     dockerfile: path.join(SANDBOXES_DIR, "fair", "Dockerfile"),
     scenarios: [
@@ -167,7 +167,7 @@ export const MODELS: Record<string, ModelMeta> = {
   },
   oscar: {
     family: "RCM",
-    description: "A compact Earth system model, run as a Monte Carlo ensemble.",
+    description: "A compact Earth system model.",
     website: "https://github.com/tgasser/OSCAR",
     dockerfile: path.join(SANDBOXES_DIR, "oscar", "Dockerfile"),
     scenarios: [
@@ -229,7 +229,7 @@ export const MODELS: Record<string, ModelMeta> = {
   },
   dice: {
     family: "IAM",
-    description: "Nordhaus's integrated climate-economy model, optimizing emissions vs. growth.",
+    description: "A climate-economy model.",
     website: "https://williamnordhaus.com/dicerice-models",
     dockerfile: path.join(SANDBOXES_DIR, "dice", "Dockerfile"),
     // Only base/optimal -- confirmed by testing that DICE.jl only implements
@@ -245,7 +245,7 @@ export const MODELS: Record<string, ModelMeta> = {
   },
   magicc: {
     family: "RCM",
-    description: "A reduced-complexity climate model widely used in IPCC assessments.",
+    description: "A simple climate model used in IPCC assessments.",
     website: "https://magicc.org/",
     dockerfile: path.join(SANDBOXES_DIR, "magicc", "Dockerfile"),
     // pymagicc's own four RCP scenarios -- confirmed via
