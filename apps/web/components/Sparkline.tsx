@@ -19,9 +19,18 @@ export default function Sparkline({
   const max = Math.max(...values);
   const range = max - min || 1;
 
+  // The path's highest/lowest points would otherwise land exactly on y=0
+  // and y=height -- with a non-zero strokeWidth, half the stroke extends
+  // past those coordinates and gets clipped by the viewBox edge (confirmed
+  // visually: the line's peaks/troughs were flattened off at the top and
+  // bottom of the card). Reserving a small vertical margin and plotting
+  // within [PAD, height - PAD] keeps the full stroke inside the viewBox.
+  const PAD = 2;
+  const plotHeight = height - PAD * 2;
+
   const points = values.map((v, i) => {
     const x = (i / (values.length - 1)) * width;
-    const y = height - ((v - min) / range) * height;
+    const y = PAD + (plotHeight - ((v - min) / range) * plotHeight);
     return [x, y];
   });
 
@@ -31,7 +40,7 @@ export default function Sparkline({
   // drawn when the series actually spans zero -- real reference point for
   // scenarios that go net-negative, not shown for ones that never do.
   const showZeroLine = min < 0 && max > 0;
-  const zeroY = height - ((0 - min) / range) * height;
+  const zeroY = PAD + (plotHeight - ((0 - min) / range) * plotHeight);
 
   return (
     <svg
