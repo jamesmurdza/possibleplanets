@@ -87,12 +87,17 @@ export function validateParams(model: ModelMeta, params: Record<string, unknown>
 }
 
 /**
- * False when the model declares `nonDeterministicUnless` (see models.ts --
- * currently just oscar's unseeded Monte Carlo draw) and the request doesn't
- * supply that key. A non-cacheable run is never read from or written to
- * run_cache: caching one arbitrary random draw and serving it forever as
- * "the" answer for that (model, params) would misrepresent something that
- * is genuinely different every time it's run.
+ * False when the model declares `nonDeterministicUnless` (see models.ts)
+ * and the request doesn't supply that key. A non-cacheable run is never
+ * read from or written to run_cache: caching one arbitrary random draw and
+ * serving it forever as "the" answer for that (model, params) would
+ * misrepresent something that is genuinely different every time it's run.
+ *
+ * No model currently sets this -- oscar used to (its Monte Carlo draw was
+ * opt-in-seeded), but sandboxes/oscar/run.py now always applies a seed
+ * (explicit, or a fixed DEFAULT_SEED when omitted), so it's reproducible/
+ * cacheable by default like every other model. Kept as general machinery
+ * for any future model that's genuinely unseedable.
  */
 export function isCacheable(model: ModelMeta, params: Record<string, unknown>): boolean {
   if (!model.nonDeterministicUnless) return true;

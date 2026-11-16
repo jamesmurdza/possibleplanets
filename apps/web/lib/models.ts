@@ -43,14 +43,14 @@ export interface NumberParameterSpec {
   label: string;
   type: "number";
   // Shown in the UI as "default: {default}" when a field is left blank --
-  // true for most parameters, where leaving it blank really does behave
-  // like passing this value (see the per-model comments confirming that by
-  // testing). NOT true for a model's `nonDeterministicUnless` key (e.g.
-  // oscar's "seed"): there, leaving it blank means "no seed at all, run is
-  // non-deterministic," which is a different thing from "seed = 0" -- 0 is
-  // itself a perfectly valid, real seed, not a placeholder for "none." Set
-  // `placeholderHint` to override the displayed text for cases like that,
-  // so the UI doesn't claim an equivalence that isn't true.
+  // true for every parameter currently defined, where leaving it blank
+  // really does behave like passing this value (confirmed per-model: see
+  // hector/magicc's comments for the library-default case, and oscar's
+  // run.py for the "we apply this ourselves" case). If a future parameter
+  // is ever added where that's NOT true -- e.g. a would-be
+  // `nonDeterministicUnless` key where omitted and "= default" genuinely
+  // differ -- set `placeholderHint` to override the displayed text rather
+  // than letting the UI claim an equivalence that isn't real.
   default: number;
   min: number;
   max: number;
@@ -192,25 +192,29 @@ export const MODELS: Record<string, ModelMeta> = {
         key: "seed",
         label: "Random seed (for reproducibility)",
         type: "number",
-        // There is no real "default seed" -- leaving this blank means
-        // oscar runs genuinely unseeded (a fresh random draw every time,
-        // never cached), NOT "seed = 0". 0 is just this field's min bound
-        // for display/validation purposes, and is itself a perfectly valid
-        // seed to actually use. placeholderHint overrides the generic
-        // "default: 0" text below so the UI doesn't imply blank == 0.
+        // Unlike most models' parameters, this one isn't really about
+        // tuning a physical knob -- it's about which of OSCAR's Monte
+        // Carlo parameter draws gets used. run.py always applies a seed
+        // (DEFAULT_SEED when this is omitted), so leaving it blank really
+        // does behave identically to passing 0 explicitly -- confirmed by
+        // construction: run.py uses `params.get("seed", DEFAULT_SEED)`,
+        // the exact same fallback either way. No placeholderHint override
+        // needed here (contrast with the comment that used to be here, from
+        // before oscar always seeded by default).
         default: 0,
-        placeholderHint: "none (random, uncached)",
         min: 0,
         max: 2 ** 31 - 1,
         step: 1,
       },
     ],
-    // Confirmed by reading core_fct/fct_genMC.py: OSCAR's Monte Carlo
-    // parameter draw uses Python's stdlib `random.choice`, unseeded
-    // anywhere in OSCAR or sandboxes/oscar/run.py. Without an explicit
-    // seed, two requests with identical scenario/nMC can legitimately
-    // produce different results -- see lib/runs.ts.
-    nonDeterministicUnless: "seed",
+    // Previously had `nonDeterministicUnless: "seed"` here: OSCAR's Monte
+    // Carlo parameter draw (core_fct/fct_genMC.py's `random.choice`) isn't
+    // seeded by OSCAR itself, so without run.py taking care of it, two
+    // requests with identical scenario/nMC could legitimately produce
+    // different results. Fixed at the run.py level instead (see
+    // DEFAULT_SEED there) -- oscar always seeds now, explicit seed or a
+    // fixed default, so it's reproducible/cacheable by default like every
+    // other model, rather than needing a gateway-level opt-in.
   },
   dice: {
     family: "IAM",

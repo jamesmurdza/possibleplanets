@@ -18,15 +18,16 @@ increases run time further.
 
 SEED: confirmed by reading core_fct/fct_genMC.py that generate_config()
 picks each Monte Carlo parameter configuration via plain `random.choice`
-(Python's stdlib `random` module), unseeded anywhere in OSCAR or this
-script -- so two runs with identical scenario/nMC can and do produce
-different results. An optional `seed` param, when given, is applied via
-`random.seed(seed)` immediately before calling generate_config(), which
-makes the draw reproducible (confirmed: same seed -> same sequence of
-random.choice results; different seed -> a different sequence). When no
-seed is given, this script makes no attempt to fake determinism -- the
-gateway (apps/web/lib/models.ts's `nonDeterministicUnless`) knows to never
-cache a seedless run.
+(Python's stdlib `random` module), unseeded anywhere in OSCAR itself -- so
+without this script taking care of it, two runs with identical
+scenario/nMC could produce different results. Rather than leaving that as
+an opt-in ("pass a seed if you want reproducibility"), this script always
+seeds: an explicit `seed` param is used if given, otherwise DEFAULT_SEED
+is applied. Either way `random.seed(...)` runs immediately before
+generate_config(), making every oscar run reproducible and cacheable by
+default -- matching every other model in this project, rather than being
+the one exception. A caller who actually wants a different Monte Carlo
+draw just passes a different `seed` explicitly.
 
 PROGRESS: confirmed by reading core_fct/cls_main.py (the OSCAR class this
 image clones) that its main simulation loop does
@@ -44,6 +45,13 @@ import random
 import sys
 
 DEFAULT_PARAMS = {"scenario": "SSP2-4.5", "nMC": 1}
+
+# Arbitrary but fixed -- applied whenever a request omits `seed` entirely,
+# so every oscar run is reproducible/cacheable by default (see the SEED
+# note in this file's module docstring). Not special in any other way: a
+# caller who passes `seed=0` explicitly gets the exact same run as one who
+# omits `seed` altogether, and both are just as valid a seed as any other.
+DEFAULT_SEED = 0
 
 SUPPORTED_SCENARIOS = [
     "SSP1-1.9",
@@ -116,7 +124,7 @@ def main():
     params = load_params()
     scenario = params.get("scenario", DEFAULT_PARAMS["scenario"])
     nMC = int(params.get("nMC", DEFAULT_PARAMS["nMC"]))
-    seed = params.get("seed")
+    seed = params.get("seed", DEFAULT_SEED)
 
     if scenario not in SUPPORTED_SCENARIOS:
         print(
@@ -149,12 +157,9 @@ def main():
     # Seed immediately before the only call that consumes randomness (see
     # the module docstring's SEED note) -- generate_config()'s Monte Carlo
     # draw is plain stdlib `random.choice`, so seeding here makes it
-    # reproducible. No seeding at all when `seed` is omitted -- this script
-    # doesn't invent a fallback seed, since that would make "no seed given"
-    # silently deterministic too, which is exactly the thing the gateway's
-    # caching logic needs to NOT assume (see apps/web/lib/models.ts).
-    if seed is not None:
-        random.seed(int(seed))
+    # reproducible. Always seeded now (explicit seed, or DEFAULT_SEED when
+    # omitted) -- see DEFAULT_SEED's comment above for why.
+    random.seed(int(seed))
     Par = generate_config(Par0, nMC=nMC)
 
     Par = xr.merge(
