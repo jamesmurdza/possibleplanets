@@ -1,9 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Chart from "chart.js/auto";
+import Dropdown from "./Dropdown";
 import { fetchJson, CHART_ADAPTERS, summarizeParams, chartAspectRatio } from "../lib/clientApi";
 import type { RunJob, RunListItem } from "../lib/clientTypes";
+
+const ALL = "__all__";
+const STATUS_OPTIONS = [
+  { value: ALL, label: "Any status" },
+  { value: "queued", label: "Queued" },
+  { value: "running", label: "Running" },
+  { value: "succeeded", label: "Succeeded" },
+  { value: "failed", label: "Failed" },
+];
+
+function scenarioOf(params: Record<string, unknown>): string | undefined {
+  if (typeof params?.scenario === "string") return params.scenario;
+  if (Array.isArray(params?.scenarios)) return params.scenarios[0];
+  return undefined;
+}
 
 function formatWhen(iso: string): string {
   const d = new Date(iso);
@@ -20,6 +36,9 @@ export default function RunsPanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedJob, setSelectedJob] = useState<RunJob | null>(null);
   const [detailErr, setDetailErr] = useState<string | null>(null);
+  const [filterModel, setFilterModel] = useState(ALL);
+  const [filterScenario, setFilterScenario] = useState(ALL);
+  const [filterStatus, setFilterStatus] = useState(ALL);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -59,6 +78,32 @@ export default function RunsPanel() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runs]);
+
+  // Filtering is purely client-side over the already-fetched list -- the
+  // list is already a lightweight, capped-size projection (GET /v1/runs),
+  // so there's no need for the server to know about filters.
+  const modelOptions = useMemo(() => {
+    const names = Array.from(new Set(runs.map((r) => r.model))).sort();
+    return [{ value: ALL, label: "All models" }, ...names.map((m) => ({ value: m, label: m }))];
+  }, [runs]);
+
+  const scenarioOptions = useMemo(() => {
+    const scoped = filterModel === ALL ? runs : runs.filter((r) => r.model === filterModel);
+    const scenarios = Array.from(new Set(scoped.map((r) => scenarioOf(r.params)).filter(Boolean))).sort() as string[];
+    return [{ value: ALL, label: "All scenarios" }, ...scenarios.map((s) => ({ value: s, label: s }))];
+  }, [runs, filterModel]);
+
+  function onFilterModelChange(value: string) {
+    setFilterModel(value);
+    setFilterScenario(ALL);
+  }
+
+  const filteredRuns = runs.filter((r) => {
+    if (filterModel !== ALL && r.model !== filterModel) return false;
+    if (filterScenario !== ALL && scenarioOf(r.params) !== filterScenario) return false;
+    if (filterStatus !== ALL && r.status !== filterStatus) return false;
+    return true;
+  });
 
   async function selectRun(id: string) {
     setSelectedId(id);
@@ -125,6 +170,24 @@ export default function RunsPanel() {
 
       {loadErr && <p className="panel-error">{loadErr}</p>}
 
+      <div className="run-controls" style={{ marginBottom: "0.75rem" }}>
+        <Dropdown options={modelOptions} value={filterModel} onChange={onFilterModelChange} ariaLabel="Filter by model" />
+        <Dropdown options={scenarioOptions} value={filterScenario} onChange={setFilterScenario} ariaLabel="Filter by scenario" />
+        <Dropdown options={STATUS_OPTIONS} value={filterStatus} onChange={setFilterStatus} ariaLabel="Filter by status" />
+        {(filterModel !== ALL || filterScenario !== ALL || filterStatus !== ALL) && (
+          <button
+            className="text-button"
+            onClick={() => {
+              setFilterModel(ALL);
+              setFilterScenario(ALL);
+              setFilterStatus(ALL);
+            }}
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
       <section className="panel">
         <div className="table-scroll">
           <table className="runs-table">
@@ -138,14 +201,14 @@ export default function RunsPanel() {
               </tr>
             </thead>
             <tbody>
-              {runs.length === 0 && (
+              {filteredRuns.length === 0 && (
                 <tr>
                   <td colSpan={5} className="runs-table-empty">
-                    No runs yet -- start one from "New Run".
+                    {runs.length === 0 ? 'No runs yet -- start one from "New Run".' : "No runs match these filters."}
                   </td>
                 </tr>
               )}
-              {runs.map((r) => (
+              {filteredRuns.map((r) => (
                 <tr
                   key={r.run_id}
                   className={r.run_id === selectedId ? "selected" : ""}
