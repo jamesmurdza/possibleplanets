@@ -696,7 +696,11 @@ a.icon-button {
 }
 
 .model-card.selected {
+  /* 1px thicker than the default border -- padding shrinks by that same
+     1px so the card's outer box size doesn't shift when selected. */
+  border-width: 2px;
   border-color: var(--color-accent);
+  padding: calc(0.55rem - 1px) calc(0.7rem - 1px);
 }
 
 .model-card-header {
@@ -773,7 +777,11 @@ a.icon-button {
 }
 
 .scenario-card.selected {
+  /* 1px thicker than the default border -- padding shrinks by that same
+     1px so the card's outer box size doesn't shift when selected. */
+  border-width: 2px;
   border-color: var(--color-accent);
+  padding: calc(0.55rem - 1px) calc(0.7rem - 1px);
 }
 
 .scenario-card-header {
