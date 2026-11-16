@@ -65,6 +65,21 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 `;
 
+// Migrates a `runs` table created by an earlier version of this schema --
+// confirmed necessary by testing: this Supabase database already had a
+// `runs` table from an earlier session's work, created before
+// `supports_progress`/`deadline_at` existed in this file's CREATE TABLE
+// statement above. `CREATE TABLE IF NOT EXISTS` is a no-op against an
+// existing table regardless of its column set, so without this, those two
+// columns would silently never get added and every real run would fail
+// with "column ... does not exist". Safe to run on every startup, whether
+// the table is fresh (both ADD COLUMNs are no-ops) or still missing these
+// columns.
+const MIGRATION = `
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS supports_progress BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMPTZ;
+`;
+
 // ensureDb() is called at the top of every exported function below rather
 // than from a single "startup" hook -- serverless cold-starts can route the
 // very first request to any route handler, so there's no equivalent of
@@ -75,6 +90,7 @@ async function ensureDb(): Promise<void> {
   _initPromise = (async () => {
     const pool = getPool();
     await pool.query(SCHEMA);
+    await pool.query(MIGRATION);
   })();
   return _initPromise;
 }
