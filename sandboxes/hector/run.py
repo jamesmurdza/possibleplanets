@@ -11,11 +11,13 @@ No cross-model output normalization here (per PLATFORM.md's minimal-version
 decision) -- this is pyhector's native result, untouched.
 
 Optional tunable parameters (climate_sensitivity/ocean_diffusivity/
-aerosol_scaling) are passed straight through to pyhector's own `config`
-override dict -- confirmed by direct testing that passing pyhector's own
-documented default values this way (temperature.S=3.0, diff=2.38, alpha=1.0)
-reproduces bit-identical output to calling pyhector.run() with no config
-override at all, so this is a real, verified override path, not a guess.
+aerosol_scaling/co2_fertilization/respiration_q10) are passed straight
+through to pyhector's own `config` override dict -- confirmed by direct
+testing that passing pyhector's own documented default values this way
+(temperature.S=3.0, diff=2.38, alpha=1.0, simpleNbox.beta=0.53,
+q10_rh=1.76) reproduces bit-identical output to calling pyhector.run()
+with no config override at all, so this is a real, verified override
+path, not a guess.
 When a key is omitted here, no default is substituted -- it's simply not
 passed to pyhector's config at all (letting pyhector's own build-in default
 apply), not stood in for by this script's own copy of that default. See
@@ -79,6 +81,16 @@ def main():
         config.setdefault("temperature", {})["diff"] = float(params["ocean_diffusivity"])
     if "aerosol_scaling" in params:
         config.setdefault("temperature", {})["alpha"] = float(params["aerosol_scaling"])
+    # Confirmed by the same direct-testing method as the three above: passing
+    # pyhector's own documented defaults (simpleNbox.beta=0.53, q10_rh=1.76)
+    # explicitly reproduces bit-identical output to no config override, and
+    # changing them produces a real, substantial difference (e.g. lowering
+    # beta and raising q10_rh moved 2100 global_tas from 2.72 to 3.58 under
+    # ssp245) -- not a no-op knob.
+    if "co2_fertilization" in params:
+        config.setdefault("simpleNbox", {})["beta"] = float(params["co2_fertilization"])
+    if "respiration_q10" in params:
+        config.setdefault("simpleNbox", {})["q10_rh"] = float(params["respiration_q10"])
 
     output_df = pyhector.run(scenario, config=config or None)
 

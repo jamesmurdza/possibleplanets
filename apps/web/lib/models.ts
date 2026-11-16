@@ -109,7 +109,7 @@ export const MODELS: Record<string, ModelMeta> = {
     // real, independent knobs pyhector exposes, and overriding them with
     // their own default values reproduces bit-identical output to not
     // overriding them at all. Defaults/ranges are pyhector's own
-    // (`pyhector._default_config["temperature"]`).
+    // (`pyhector._default_config["temperature"]`/`["simpleNbox"]`).
     parameters: [
       {
         key: "climate_sensitivity",
@@ -138,6 +138,24 @@ export const MODELS: Record<string, ModelMeta> = {
         max: 2.0,
         step: 0.05,
       },
+      {
+        key: "co2_fertilization",
+        label: "CO2 fertilization strength",
+        type: "number",
+        default: 0.53,
+        min: 0.0,
+        max: 1.0,
+        step: 0.01,
+      },
+      {
+        key: "respiration_q10",
+        label: "Soil respiration temperature sensitivity (Q10)",
+        type: "number",
+        default: 1.76,
+        min: 1.0,
+        max: 4.0,
+        step: 0.1,
+      },
     ],
   },
   fair: {
@@ -160,10 +178,28 @@ export const MODELS: Record<string, ModelMeta> = {
     // run.py monkey-patches FAIR's own tqdm bar to write /tmp/progress.json
     // as it runs -- a real intermediate signal, read via the sandbox fs API.
     supports_progress: true,
-    // No extra parameters yet -- unlike hector/magicc/oscar below, this
-    // hasn't been verified against FAIR's own run.py (its ensemble is
-    // currently a hardcoded set of 66 CMIP6 configs; exposing "how many to
-    // run" needs run.py changes not yet made/tested).
+    // Confirmed by reading the installed fair library's source
+    // (energy_balance_model.py): each config's stochastic internal
+    // variability noise is seeded (`random_state=self.seed`), and run.py
+    // (see its own comment) sets `climate_configs["stochastic_run"]=True`
+    // for every one of the 66 CMIP6 configs, with a per-config seed derived
+    // from this base value. A different seed changes which noise
+    // realization each config's run contributes while leaving the
+    // ensemble's set of deterministic configs unchanged -- a real,
+    // verified knob, not a no-op. ("How many configs to run" is still not
+    // exposed -- that's a separate, bigger change to run.py's hardcoded
+    // 66-config ensemble, not yet made/tested.)
+    parameters: [
+      {
+        key: "seed",
+        label: "Random seed (for reproducibility)",
+        type: "number",
+        default: 1355763,
+        min: 0,
+        max: 2 ** 31 - 1,
+        step: 1,
+      },
+    ],
   },
   oscar: {
     family: "RCM",

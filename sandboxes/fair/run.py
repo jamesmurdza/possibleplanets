@@ -130,7 +130,16 @@ def main():
     initialise(f.cumulative_emissions, 0)
     initialise(f.airborne_emissions, 0)
 
-    seed = 1355763
+    # Confirmed by reading the installed fair library's source
+    # (energy_balance_model.py: `random_state=self.seed` feeds a real
+    # per-config noise generator when climate_configs["stochastic_run"] is
+    # True, which run.py sets for every config below) -- this genuinely
+    # drives the stochastic internal-variability noise overlaid on each
+    # config's deterministic response, not a no-op. Omitted means "use this
+    # script's own base seed" (1355763), same as before this was made
+    # overridable -- not equivalent to explicitly passing 1355763 for
+    # caching purposes (see lib/models.ts's module docstring).
+    seed = params.get("seed", 1355763)
     for config in configs:
         model, run = config.split("_")
         condition = (df["model"] == model) & (df["run"] == run)
