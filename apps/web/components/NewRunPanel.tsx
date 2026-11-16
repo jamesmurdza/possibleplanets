@@ -355,7 +355,6 @@ export default function NewRunPanel() {
           runModel(false);
         }}
       >
-        <div className="form-columns">
         <div className="form-field-block">
           <span className="form-field-label">Model</span>
           <div className="model-card-grid" role="radiogroup" aria-label="Model">
@@ -433,18 +432,17 @@ export default function NewRunPanel() {
             })}
           </div>
         </div>
-        </div>
 
         {parameters.length > 0 && (
           <div className="form-field-block">
             <span className="form-field-label">Parameters (optional)</span>
-            <div className="form-row">
+            <div className="param-fields-grid">
               {parameters.map((spec) => (
                 <label key={spec.key} className="form-field">
                   <span className="form-field-label">{spec.label}</span>
                   <input
                     type="number"
-                    placeholder={spec.placeholderHint ?? `default: ${spec.default}`}
+                    placeholder={spec.placeholderHint ?? `${spec.default}`}
                     min={spec.min}
                     max={spec.max}
                     step={spec.step ?? "any"}
