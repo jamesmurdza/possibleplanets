@@ -24,6 +24,17 @@ export interface ModelMeta {
   non_deterministic_unless?: string;
 }
 
+// Shape returned by GET /v1/models -- used for the model-picker cards on
+// the New Run form (description + website aren't in the per-model schema
+// response, just the list).
+export interface ModelListItem {
+  model: string;
+  family: string;
+  scenarios: string[];
+  description: string;
+  website: string;
+}
+
 export interface RunJob {
   run_id: string;
   model: string;

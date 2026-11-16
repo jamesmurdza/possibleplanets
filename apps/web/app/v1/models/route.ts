@@ -11,6 +11,8 @@ export async function GET() {
       model: name,
       family: meta.family,
       scenarios: meta.scenarios,
+      description: meta.description,
+      website: meta.website,
     })),
   });
 }

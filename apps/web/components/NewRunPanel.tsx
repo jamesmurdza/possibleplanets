@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import Chart from "chart.js/auto";
 import Dropdown from "./Dropdown";
 import { fetchJson, CHART_ADAPTERS, buildParams, chartAspectRatio } from "../lib/clientApi";
-import type { ModelMeta, RunJob, ModelDurationStats, CheckResult } from "../lib/clientTypes";
+import type { ModelMeta, ModelListItem, RunJob, ModelDurationStats, CheckResult } from "../lib/clientTypes";
 
 export default function NewRunPanel() {
-  const [models, setModels] = useState<{ model: string; family: string }[]>([]);
+  const [models, setModels] = useState<ModelListItem[]>([]);
   const [modelName, setModelName] = useState("");
   const [modelMeta, setModelMeta] = useState<ModelMeta | null>(null);
   const [scenario, setScenario] = useState("");
@@ -253,7 +253,6 @@ export default function NewRunPanel() {
   }
   const eta = etaBadge();
 
-  const modelOptions = models.map((m) => ({ value: m.model, label: `${m.model} (${m.family})` }));
   const scenarioOptions = (modelMeta?.scenarios ?? []).map((s) => ({ value: s, label: s }));
   const parameters = modelMeta?.parameters ?? [];
   const nonDeterministicKey = modelMeta?.non_deterministic_unless;
@@ -273,11 +272,46 @@ export default function NewRunPanel() {
           runModel(false);
         }}
       >
+        <div className="form-field-block">
+          <span className="form-field-label">Model</span>
+          <div className="model-card-grid" role="radiogroup" aria-label="Model">
+            {models.map((m) => (
+              <div
+                key={m.model}
+                className={`model-card${m.model === modelName ? " selected" : ""}`}
+                role="radio"
+                aria-checked={m.model === modelName}
+                tabIndex={0}
+                onClick={() => onModelChange(m.model)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onModelChange(m.model);
+                  }
+                }}
+              >
+                <div className="model-card-header">
+                  <span className="model-card-name">{m.model}</span>
+                  <span className="model-card-family">{m.family}</span>
+                </div>
+                <p className="model-card-description">{m.description}</p>
+                {m.website && (
+                  <a
+                    className="model-card-link"
+                    href={m.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Model website &rarr;
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="form-row">
-          <label className="form-field">
-            <span className="form-field-label">Model</span>
-            <Dropdown options={modelOptions} value={modelName} onChange={onModelChange} ariaLabel="Model" />
-          </label>
           <label className="form-field">
             <span className="form-field-label">Scenario</span>
             <Dropdown options={scenarioOptions} value={scenario} onChange={onScenarioChange} ariaLabel="Scenario" />
