@@ -94,8 +94,7 @@ export interface ModelMeta {
 export const MODELS: Record<string, ModelMeta> = {
   hector: {
     family: "RCM",
-    description:
-      "A simple, fast carbon-cycle/climate model written in C++ (with a Python wrapper, pyhector). Built to run many scenarios quickly for integrated assessment work.",
+    description: "A simple, fast carbon-cycle/climate model, built for quick scenario runs.",
     website: "https://jgcri.github.io/hector/",
     dockerfile: path.join(SANDBOXES_DIR, "hector", "Dockerfile"),
     scenarios: ["ssp119", "ssp126", "ssp245", "ssp370", "ssp585"],
@@ -143,8 +142,7 @@ export const MODELS: Record<string, ModelMeta> = {
   },
   fair: {
     family: "RCM",
-    description:
-      "FaIR (Finite Amplitude Impulse Response), a simple emissions-based climate model used in IPCC assessment reports, run here as an ensemble of CMIP6-calibrated configurations.",
+    description: "An emissions-based climate model used in IPCC reports, run as a CMIP6 ensemble.",
     website: "https://docs.fairmodel.net/",
     dockerfile: path.join(SANDBOXES_DIR, "fair", "Dockerfile"),
     scenarios: [
@@ -169,8 +167,7 @@ export const MODELS: Record<string, ModelMeta> = {
   },
   oscar: {
     family: "RCM",
-    description:
-      "OSCAR, a compact Earth system model that represents the full carbon-climate chain as a Monte Carlo ensemble, letting parameter uncertainty propagate into the output.",
+    description: "A compact Earth system model, run as a Monte Carlo ensemble.",
     website: "https://github.com/tgasser/OSCAR",
     dockerfile: path.join(SANDBOXES_DIR, "oscar", "Dockerfile"),
     scenarios: [
@@ -232,8 +229,7 @@ export const MODELS: Record<string, ModelMeta> = {
   },
   dice: {
     family: "IAM",
-    description:
-      "DICE (Dynamic Integrated Climate-Economy), William Nordhaus's integrated assessment model, coupling a simple climate model to an economic growth/damages model to find an optimal emissions path.",
+    description: "Nordhaus's integrated climate-economy model, optimizing emissions vs. growth.",
     website: "https://williamnordhaus.com/dicerice-models",
     dockerfile: path.join(SANDBOXES_DIR, "dice", "Dockerfile"),
     // Only base/optimal -- confirmed by testing that DICE.jl only implements
@@ -249,8 +245,7 @@ export const MODELS: Record<string, ModelMeta> = {
   },
   magicc: {
     family: "RCM",
-    description:
-      "MAGICC (Model for the Assessment of Greenhouse Gas Induced Climate Change), a reduced-complexity climate model widely used in IPCC assessments to translate emissions scenarios into global temperature outcomes.",
+    description: "A reduced-complexity climate model widely used in IPCC assessments.",
     website: "https://magicc.org/",
     dockerfile: path.join(SANDBOXES_DIR, "magicc", "Dockerfile"),
     // pymagicc's own four RCP scenarios -- confirmed via
