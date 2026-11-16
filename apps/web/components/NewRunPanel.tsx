@@ -258,71 +258,37 @@ export default function NewRunPanel() {
   const parameters = modelMeta?.parameters ?? [];
   const nonDeterministicKey = modelMeta?.non_deterministic_unless;
   const nonDeterministicUnset = !!nonDeterministicKey && !paramValues[nonDeterministicKey];
+  const showResult = loading || hasChart;
 
   return (
     <div>
       <div className="panel-header">
         <h2 className="panel-title">New Run</h2>
-        <div className="run-controls">
-          <Dropdown options={modelOptions} value={modelName} onChange={onModelChange} ariaLabel="Model" />
-          <Dropdown options={scenarioOptions} value={scenario} onChange={onScenarioChange} ariaLabel="Scenario" />
-          {eta && <span className={`eta-badge eta-badge-${eta.kind}`}>{eta.text}</span>}
-          <span className="toolbar-divider" aria-hidden="true"></span>
-          <button className="icon-button" title="Run" aria-label="Run" disabled={runDisabled} onClick={() => runModel(false)}>
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M4 2.5v11l10-5.5-10-5.5z" fill="currentColor" />
-            </svg>
-          </button>
-          {showRefresh && (
-            <button
-              className="icon-button secondary"
-              title="Re-run without using the cached result"
-              aria-label="Refresh"
-              disabled={runDisabled}
-              onClick={() => runModel(true)}
-            >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path
-                  d="M13.5 8a5.5 5.5 0 10-1.64 3.93M13.5 8V4.5M13.5 8H10"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-          )}
-          {rawUrl && (
-            <a
-              className="icon-button secondary"
-              href={rawUrl}
-              download={rawFilename}
-              title="Download raw output (JSON)"
-              aria-label="Download raw output (JSON)"
-            >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path
-                  d="M8 2v7.5M4.5 7l3.5 3.5L11.5 7M3 13.5h10"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </a>
-          )}
-        </div>
       </div>
 
-      {parameters.length > 0 && (
-        <details className="advanced-panel">
-          <summary>Advanced parameters</summary>
-          <div className="advanced-fields">
+      <form
+        className="run-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          runModel(false);
+        }}
+      >
+        <div className="form-row">
+          <label className="form-field">
+            <span className="form-field-label">Model</span>
+            <Dropdown options={modelOptions} value={modelName} onChange={onModelChange} ariaLabel="Model" />
+          </label>
+          <label className="form-field">
+            <span className="form-field-label">Scenario</span>
+            <Dropdown options={scenarioOptions} value={scenario} onChange={onScenarioChange} ariaLabel="Scenario" />
+          </label>
+        </div>
+
+        {parameters.length > 0 && (
+          <div className="form-row">
             {parameters.map((spec) => (
-              <label key={spec.key} className="advanced-field">
-                <span className="advanced-field-label">{spec.label}</span>
+              <label key={spec.key} className="form-field">
+                <span className="form-field-label">{spec.label}</span>
                 <input
                   type="number"
                   placeholder={spec.placeholderHint ?? `default: ${spec.default}`}
@@ -335,30 +301,87 @@ export default function NewRunPanel() {
               </label>
             ))}
           </div>
-          {nonDeterministicKey && (
-            <p className="advanced-note">
-              {nonDeterministicUnset
-                ? `This model's result isn't reproducible without a "${nonDeterministicKey}" value -- this run will not be cached, and a repeat run may give a different answer.`
-                : `A "${nonDeterministicKey}" is set, so this run is reproducible and will be cached.`}
-            </p>
-          )}
-        </details>
-      )}
+        )}
 
-      <section className="panel">
-        <div className="panel-body">
-          <canvas ref={canvasRef} id="result-chart" height={220}></canvas>
-          {!hasChart && <div className="chart-placeholder">No result yet</div>}
-          {loading && (
-            <div className="loading-overlay">
-              <div className="loading-box">
-                <span className="loading-text">{loadingText}</span>
-                <progress className="progress-bar" max={100} value={progressPercent ?? undefined}></progress>
-              </div>
-            </div>
-          )}
+        {nonDeterministicKey && (
+          <p className="advanced-note">
+            {nonDeterministicUnset
+              ? `This model's result isn't reproducible without a "${nonDeterministicKey}" value -- this run will not be cached, and a repeat run may give a different answer.`
+              : `A "${nonDeterministicKey}" is set, so this run is reproducible and will be cached.`}
+          </p>
+        )}
+
+        <div className="form-actions">
+          <button type="submit" className="primary-button" disabled={runDisabled}>
+            Run
+          </button>
+          {eta && <span className={`eta-badge eta-badge-${eta.kind}`}>{eta.text}</span>}
         </div>
-      </section>
+      </form>
+
+      {showResult && (
+        <>
+          <div className="panel-header">
+            <h3 className="panel-title">Result</h3>
+            <div className="run-controls">
+              {showRefresh && (
+                <button
+                  className="icon-button secondary"
+                  title="Re-run without using the cached result"
+                  aria-label="Refresh"
+                  disabled={runDisabled}
+                  onClick={() => runModel(true)}
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path
+                      d="M13.5 8a5.5 5.5 0 10-1.64 3.93M13.5 8V4.5M13.5 8H10"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              )}
+              {rawUrl && (
+                <a
+                  className="icon-button secondary"
+                  href={rawUrl}
+                  download={rawFilename}
+                  title="Download raw output (JSON)"
+                  aria-label="Download raw output (JSON)"
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path
+                      d="M8 2v7.5M4.5 7l3.5 3.5L11.5 7M3 13.5h10"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </a>
+              )}
+            </div>
+          </div>
+
+          <section className="panel">
+            <div className="panel-body">
+              <canvas ref={canvasRef} id="result-chart" height={220}></canvas>
+              {loading && (
+                <div className="loading-overlay">
+                  <div className="loading-box">
+                    <span className="loading-text">{loadingText}</span>
+                    <progress className="progress-bar" max={100} value={progressPercent ?? undefined}></progress>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        </>
+      )}
 
       <div className="panel-footer">
         <span className={`status-text${statusIsError ? " error" : ""}`}>{status}</span>
