@@ -31,6 +31,7 @@ import { getDaytonaClient } from "./daytona";
 import { getModelOrNull, ModelMeta } from "./models";
 import {
   getCached,
+  getCachedMeta,
   putCached,
   insertRun,
   getRun,
@@ -61,7 +62,7 @@ export interface SubmitResult {
  * would also mean future parameter additions could retroactively change
  * what an old, differently-shaped cache entry is considered equivalent to.
  */
-function validateParams(model: ModelMeta, params: Record<string, unknown>): string | null {
+export function validateParams(model: ModelMeta, params: Record<string, unknown>): string | null {
   const allowedKeys = new Set<string>(model.params_shape === "scenario" ? ["scenario"] : ["scenarios"]);
   for (const p of model.parameters ?? []) allowedKeys.add(p.key);
 
@@ -93,9 +94,52 @@ function validateParams(model: ModelMeta, params: Record<string, unknown>): stri
  * "the" answer for that (model, params) would misrepresent something that
  * is genuinely different every time it's run.
  */
-function isCacheable(model: ModelMeta, params: Record<string, unknown>): boolean {
+export function isCacheable(model: ModelMeta, params: Record<string, unknown>): boolean {
   if (!model.nonDeterministicUnless) return true;
   return params[model.nonDeterministicUnless] !== undefined;
+}
+
+export interface CheckResult {
+  error: string | null;
+  // False only when the model declares `nonDeterministicUnless` and the
+  // request is missing that key (see isCacheable) -- a real run would
+  // never be read from or written to the cache. True otherwise, whether or
+  // not a cached result currently exists.
+  cacheable: boolean;
+  // True if a cache hit exists RIGHT NOW for these exact params (see
+  // models.ts's module docstring: no default-filling, so this is exact).
+  cached: boolean;
+  // Real measured duration of that cached run, or null if there isn't one,
+  // or if there is one but it predates this column existing. Never an
+  // estimate -- see lib/db.ts's getCachedMeta.
+  cached_duration_seconds: number | null;
+}
+
+/**
+ * Answers "if I submitted this right now, would it be instant (cached), or
+ * a real run" -- without actually submitting anything. Reuses the exact
+ * same validation and cacheability rules submitRun() uses, so this is a
+ * genuine preview of what submitRun would do, not a separate guess. The
+ * caller (the dashboard, before showing "Run") pairs a `cached: false`
+ * result with /v1/stats's historical median duration for a real estimate.
+ */
+export async function checkRun(modelName: string, params: Record<string, unknown>): Promise<CheckResult> {
+  const model = getModelOrNull(modelName);
+  if (!model) {
+    return { error: `unknown model '${modelName}'`, cacheable: false, cached: false, cached_duration_seconds: null };
+  }
+
+  const validationError = validateParams(model, params);
+  if (validationError) {
+    return { error: validationError, cacheable: false, cached: false, cached_duration_seconds: null };
+  }
+
+  if (!isCacheable(model, params)) {
+    return { error: null, cacheable: false, cached: false, cached_duration_seconds: null };
+  }
+
+  const meta = await getCachedMeta(modelName, params);
+  return { error: null, cacheable: true, cached: meta.exists, cached_duration_seconds: meta.duration_seconds };
 }
 
 export async function submitRun(

@@ -160,6 +160,36 @@ a.icon-button {
   flex-shrink: 0;
 }
 
+/* "Would this be cached, or how long would it take" preview -- see
+   page.tsx's etaBadge(). Color communicates the three real states: a true
+   cache hit, a real historical estimate, or a warning that this exact
+   selection can't be cached at all (e.g. oscar without a seed). */
+.eta-badge {
+  font-size: 0.75rem;
+  white-space: nowrap;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.eta-badge-cached {
+  color: #1a7f4b;
+  background: #e8f6ee;
+  border-color: #c3e9d4;
+}
+
+.eta-badge-estimate {
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border-color: var(--color-border-strong);
+}
+
+.eta-badge-warn {
+  color: #9a6400;
+  background: #fdf3df;
+  border-color: #f1ddab;
+}
+
 /* --- Custom dropdowns ---
    The real <select> stays in the DOM (app.js populates/reads it exactly as
    before) but is visually hidden; this renders a styled button + listbox on

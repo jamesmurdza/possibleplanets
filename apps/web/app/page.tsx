@@ -44,6 +44,21 @@ interface RunJob {
   duration_seconds: number | null;
 }
 
+interface ModelDurationStats {
+  model: string;
+  count: number;
+  min_seconds: number;
+  median_seconds: number;
+  avg_seconds: number;
+  max_seconds: number;
+}
+
+interface CheckResult {
+  cacheable: boolean;
+  cached: boolean;
+  cached_duration_seconds: number | null;
+}
+
 async function fetchJson(path: string, options?: RequestInit) {
   const res = await fetch(`${GATEWAY_URL}${path}`, options);
   if (!res.ok) {
@@ -157,17 +172,39 @@ export default function Page() {
   // "set to the default."
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [lastRunParams, setLastRunParams] = useState<Record<string, unknown> | null>(null);
+  // Per-model historical duration stats (see /v1/stats) -- fetched once up
+  // front, since it doesn't depend on the current form selection, unlike
+  // the per-selection cache check below.
+  const [statsByModel, setStatsByModel] = useState<Record<string, ModelDurationStats>>({});
+  // Result of calling /v1/models/{model}/check for whatever's currently
+  // selected -- "would submitting this right now be a cache hit." Debounced
+  // and re-fetched on every scenario/model/param change; null while
+  // checking or before a model has loaded.
+  const [checkResult, setCheckResult] = useState<CheckResult | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rawObjectUrl = useRef<string | null>(null);
+  const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const checkSeq = useRef(0);
 
   useEffect(() => {
     loadModels().catch((err) => {
       setStatus(`Failed to load models: ${err.message}`);
       setStatusIsError(true);
     });
+    fetchJson("/v1/stats")
+      .then((data) => {
+        const byModel: Record<string, ModelDurationStats> = {};
+        for (const s of data.stats ?? []) byModel[s.model] = s;
+        setStatsByModel(byModel);
+      })
+      .catch(() => {
+        // Non-critical -- the "before you run" estimate just stays absent
+        // (never a fabricated number) if this fails. See runModel() etc.'s
+        // general stance against faking data that isn't real.
+      });
     function onResize() {
       if (chartRef.current) {
         const ratio = chartAspectRatio();
@@ -184,6 +221,37 @@ export default function Page() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // "Would this exact selection be a cache hit right now?" -- debounced so
+  // typing in an Advanced field doesn't fire a request per keystroke, and
+  // guarded with a sequence number so a slow, now-stale response can't
+  // overwrite a newer one (e.g. switching models quickly while a check for
+  // the previous model is still in flight).
+  useEffect(() => {
+    if (checkTimer.current) clearTimeout(checkTimer.current);
+    if (!modelMeta || !scenario) {
+      setCheckResult(null);
+      return;
+    }
+    const mySeq = ++checkSeq.current;
+    checkTimer.current = setTimeout(async () => {
+      try {
+        const params = buildParams(modelMeta, scenario, paramValues);
+        const result = await fetchJson(`/v1/models/${modelName}/check`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ params }),
+        });
+        if (mySeq === checkSeq.current) setCheckResult(result);
+      } catch {
+        if (mySeq === checkSeq.current) setCheckResult(null);
+      }
+    }, 300);
+    return () => {
+      if (checkTimer.current) clearTimeout(checkTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelName, modelMeta, scenario, paramValues]);
 
   async function loadModels() {
     const data = await fetchJson("/v1/models");
@@ -314,6 +382,7 @@ export default function Page() {
   async function onModelChange(name: string) {
     setModelName(name);
     setShowRefresh(false);
+    setCheckResult(null); // avoid showing the previous model's badge while the new schema loads
     try {
       await loadSchema(name);
     } catch (err: any) {
@@ -324,11 +393,13 @@ export default function Page() {
   function onScenarioChange(s: string) {
     setScenario(s);
     setShowRefresh(false);
+    setCheckResult(null);
   }
 
   function onParamChange(key: string, raw: string) {
     setParamValues((prev) => ({ ...prev, [key]: raw }));
     setShowRefresh(false);
+    setCheckResult(null);
   }
 
   const parameters = modelMeta?.parameters ?? [];
@@ -337,6 +408,26 @@ export default function Page() {
 
   const modelOptions = models.map((m) => ({ value: m.model, label: `${m.model} (${m.family})` }));
   const scenarioOptions = (modelMeta?.scenarios ?? []).map((s) => ({ value: s, label: s }));
+
+  // What to show BEFORE a run is submitted -- "cached" (real, from a prior
+  // run) or "estimated" (real historical median from /v1/stats), never a
+  // guessed number. null while the debounced check is still in flight.
+  function etaBadge(): { text: string; kind: "cached" | "estimate" | "warn" } | null {
+    if (!checkResult) return null;
+    if (!checkResult.cacheable) {
+      return { text: "Won't be cached (see Advanced)", kind: "warn" };
+    }
+    if (checkResult.cached) {
+      const d = checkResult.cached_duration_seconds;
+      return { text: d != null ? `Cached -- ran in ${d.toFixed(1)}s` : "Cached", kind: "cached" };
+    }
+    const stats = statsByModel[modelName];
+    if (stats) {
+      return { text: `Not cached -- usually ~${stats.median_seconds.toFixed(1)}s`, kind: "estimate" };
+    }
+    return { text: "Not cached -- no run history yet", kind: "estimate" };
+  }
+  const eta = etaBadge();
 
   return (
     <>
@@ -349,6 +440,8 @@ export default function Page() {
         <div className="toolbar-controls">
           <Dropdown options={modelOptions} value={modelName} onChange={onModelChange} ariaLabel="Model" />
           <Dropdown options={scenarioOptions} value={scenario} onChange={onScenarioChange} ariaLabel="Scenario" />
+
+          {eta && <span className={`eta-badge eta-badge-${eta.kind}`}>{eta.text}</span>}
 
           <span className="toolbar-divider" aria-hidden="true"></span>
 

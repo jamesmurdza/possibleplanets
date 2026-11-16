@@ -123,6 +123,26 @@ export async function getCached(model: string, params: unknown): Promise<unknown
   return rows.length ? rows[0].result : null;
 }
 
+/**
+ * Lightweight existence/duration check, deliberately not pulling the full
+ * `result` JSON over the wire -- used to answer "would this be a cache hit,
+ * and if so how long did it take last time" (see lib/runs.ts's checkRun)
+ * without paying for the full payload just to check.
+ */
+export async function getCachedMeta(
+  model: string,
+  params: unknown,
+): Promise<{ exists: boolean; duration_seconds: number | null }> {
+  await ensureDb();
+  const key = cacheKeyFor(model, params);
+  const { rows } = await getPool().query(
+    "SELECT duration_seconds FROM run_cache WHERE cache_key = $1 ORDER BY created_at DESC LIMIT 1",
+    [key],
+  );
+  if (!rows.length) return { exists: false, duration_seconds: null };
+  return { exists: true, duration_seconds: rows[0].duration_seconds };
+}
+
 export async function putCached(
   model: string,
   params: unknown,
