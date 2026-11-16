@@ -52,6 +52,14 @@ async function ensureZoomPluginRegistered() {
 }
 
 type HoverFilter = { type: "model" | "scenario"; value: string } | null;
+type IsolateFilter = { type: "model" | "scenario"; value: string } | null;
+
+// Lines default to a neutral gray rather than per-model color -- with 31+
+// runs on screen at once, a fully-colored chart is mostly just visual
+// noise; color is reserved for actually pointing at something (a hovered
+// checkbox's matching lines), so it reads as a real signal instead of
+// decoration.
+const DEFAULT_LINE_COLOR = "#9aa0ab";
 
 // Every model's series goes back to ~1750 (anomaly-from-preindustrial
 // convention, see e.g. oscar/run.py) and some run centuries into the
@@ -78,6 +86,12 @@ export default function OverviewPanel() {
   const [excludedModels, setExcludedModels] = useState<Set<string>>(new Set());
   const [excludedScenarios, setExcludedScenarios] = useState<Set<string>>(new Set());
   const [hovered, setHovered] = useState<HoverFilter>(null);
+  // Clicking a checkbox's label text (not the checkbox itself -- that
+  // still just toggles visibility) isolates the chart to ONLY that one
+  // model/scenario, overriding the checkboxes entirely while set. Clicking
+  // the same one again clears it, going back to whatever the checkboxes
+  // say. Only one isolated value at a time, model or scenario.
+  const [isolate, setIsolate] = useState<IsolateFilter>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -159,6 +173,10 @@ export default function OverviewPanel() {
     setSet(next);
   }
 
+  function toggleIsolate(type: "model" | "scenario", value: string) {
+    setIsolate((prev) => (prev && prev.type === type && prev.value === value ? null : { type, value }));
+  }
+
   const chartData = useMemo(() => {
     if (plottableRuns.length === 0) return null;
 
@@ -170,13 +188,27 @@ export default function OverviewPanel() {
     });
     const aligned = alignSeriesByYear(series);
 
+    function matchesFilter(filter: HoverFilter, model: string, scenario: string): boolean {
+      if (!filter) return false;
+      return (filter.type === "model" && filter.value === model) || (filter.type === "scenario" && filter.value === scenario);
+    }
+
     const perRun = aligned.datasets.map((d, i) => {
       const run = plottableRuns[i];
       const model = run.model;
       const scenario = scenarioOf(run.params) ?? "unknown";
-      const hiddenByFilter = excludedModels.has(model) || excludedScenarios.has(scenario);
-      const isHoverMatch = !!hovered && ((hovered.type === "model" && hovered.value === model) || (hovered.type === "scenario" && hovered.value === scenario));
-      const dimmed = !!hovered && !isHoverMatch;
+      // Isolate (click), when set, overrides the checkboxes entirely --
+      // only lines matching it are visible, full stop.
+      const hiddenByFilter = isolate
+        ? !matchesFilter(isolate, model, scenario)
+        : excludedModels.has(model) || excludedScenarios.has(scenario);
+      const isHoverMatch = matchesFilter(hovered, model, scenario);
+      // While isolated, everything still visible IS the isolated match (by
+      // construction of hiddenByFilter above) -- show it in color rather
+      // than gray, same as a hover match, instead of leaving an isolated
+      // line gray until you also happen to be hovering it.
+      const colored = isHoverMatch || !!isolate;
+      const dimmed = !!hovered && !isHoverMatch && !isolate;
       return {
         run,
         model,
@@ -189,8 +221,11 @@ export default function OverviewPanel() {
           // what lets the zoom plugin zoom/pan to an arbitrary year range
           // instead of just jumping between category-scale label indices.
           data: aligned.labels.map((year, idx) => ({ x: year, y: d.data[idx] })),
-          borderColor: colorWithAlpha(modelColor(model), dimmed ? 0.12 : 0.85),
-          borderWidth: isHoverMatch ? 2.75 : 1.4,
+          // Gray by default -- color only appears on hover, to actually
+          // mean something (see DEFAULT_LINE_COLOR's comment) rather than
+          // being decorative on every line all the time.
+          borderColor: colored ? colorWithAlpha(modelColor(model), 0.9) : colorWithAlpha(DEFAULT_LINE_COLOR, dimmed ? 0.15 : 0.55),
+          borderWidth: colored ? 2.75 : 1.2,
           pointRadius: 0,
           spanGaps: false,
           hidden: hiddenByFilter,
@@ -229,7 +264,7 @@ export default function OverviewPanel() {
       windowMax: windowMin < windowMax ? windowMax : maxYear,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plottableRuns, jobs, excludedModels, excludedScenarios, hovered]);
+  }, [plottableRuns, jobs, excludedModels, excludedScenarios, hovered, isolate]);
 
   useEffect(() => {
     if (!chartData || !canvasRef.current) return;
@@ -318,13 +353,14 @@ export default function OverviewPanel() {
                 Showing {chartData?.visibleCount} of {chartData?.totalCount} runs -- the dashed line is the average
                 across whichever runs are currently visible.
               </p>
+              <p className="chart-hint">Click a name below to isolate just that line; click it again to go back to the checkboxes.</p>
               <div className="overview-filters">
                 <div className="overview-filter-group">
                   <span className="form-field-label">Models</span>
                   {allModels.map((m) => (
                     <label
                       key={m}
-                      className="overview-filter-checkbox"
+                      className={`overview-filter-checkbox${isolate?.type === "model" && isolate.value === m ? " isolated" : ""}`}
                       onMouseEnter={() => setHovered({ type: "model", value: m })}
                       onMouseLeave={() => setHovered(null)}
                     >
@@ -334,16 +370,25 @@ export default function OverviewPanel() {
                         onChange={() => toggle(excludedModels, setExcludedModels, m)}
                       />
                       <span className="overview-filter-swatch" style={{ background: modelColor(m) }} />
-                      {m}
+                      <span
+                        className="overview-filter-text"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleIsolate("model", m);
+                        }}
+                      >
+                        {m}
+                      </span>
                     </label>
                   ))}
                 </div>
-                <div className="overview-filter-group">
+                <div className="overview-filter-group overview-filter-group-columns">
                   <span className="form-field-label">Scenarios</span>
                   {allScenarios.map((s) => (
                     <label
                       key={s}
-                      className="overview-filter-checkbox"
+                      className={`overview-filter-checkbox${isolate?.type === "scenario" && isolate.value === s ? " isolated" : ""}`}
                       onMouseEnter={() => setHovered({ type: "scenario", value: s })}
                       onMouseLeave={() => setHovered(null)}
                     >
@@ -352,7 +397,16 @@ export default function OverviewPanel() {
                         checked={!excludedScenarios.has(s)}
                         onChange={() => toggle(excludedScenarios, setExcludedScenarios, s)}
                       />
-                      {s}
+                      <span
+                        className="overview-filter-text"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleIsolate("scenario", s);
+                        }}
+                      >
+                        {s}
+                      </span>
                     </label>
                   ))}
                 </div>

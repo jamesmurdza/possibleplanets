@@ -975,6 +975,30 @@ a.icon-button {
   min-width: 10rem;
 }
 
+/* Scenarios run to 13-14 entries (vs. Models' 5), which made a single
+   column tower over the Models column and left the panel looking
+   lopsided -- spreading into a few CSS columns balances the two groups'
+   heights instead. column-count (not a grid) so the list still just
+   flows/wraps naturally regardless of how many scenarios exist. */
+.overview-filter-group-columns {
+  /* Override .overview-filter-group's flex layout -- CSS multi-column
+     (column-count) only affects block-level content, not a flex
+     container's children, so this needs to switch back to block first. */
+  display: block;
+  column-count: 2;
+  column-gap: 1.25rem;
+  min-width: 20rem;
+}
+
+.overview-filter-group-columns > .form-field-label {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+
+.overview-filter-group-columns .overview-filter-checkbox {
+  break-inside: avoid;
+}
+
 .overview-filter-checkbox {
   display: flex;
   align-items: center;
@@ -988,10 +1012,26 @@ a.icon-button {
   padding: 0.15rem 0;
 }
 
+.overview-filter-checkbox.isolated {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
 .overview-filter-swatch {
   display: inline-block;
   width: 0.65rem;
   height: 0.65rem;
   border-radius: 2px;
   flex-shrink: 0;
+}
+
+.overview-filter-text {
+  /* Click target for isolating just this one line (see
+     OverviewPanel.tsx's toggleIsolate) -- underline-on-hover signals
+     that the text itself (not just the checkbox) does something. */
+  cursor: pointer;
+}
+
+.overview-filter-text:hover {
+  text-decoration: underline;
 }
