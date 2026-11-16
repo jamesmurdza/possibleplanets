@@ -244,9 +244,11 @@ export default function NewRunPanel() {
     setRawFilename(`${job.model}-${job.run_id}.json`);
   }
 
-  async function pollRun(runId: string, name: string) {
-    const job: RunJob = await fetchJson(`/v1/runs/${runId}`);
-
+  // Shared terminal/in-progress handling for a job, whether it arrived via
+  // a poll (GET /v1/runs/{id}) or inline in the POST response itself (a
+  // cache hit -- see submitRun's module comment: that run_id was never
+  // written to the `runs` table, so there's nothing to poll for).
+  function handleJob(job: RunJob, name: string, runId: string) {
     if (job.status === "queued" || job.status === "running") {
       const pct = job.progress && typeof job.progress.percent === "number" ? ` (${job.progress.percent}%)` : "";
       const text = `${job.status}${pct}...`;
@@ -271,6 +273,11 @@ export default function NewRunPanel() {
     }
   }
 
+  async function pollRun(runId: string, name: string) {
+    const job: RunJob = await fetchJson(`/v1/runs/${runId}`);
+    handleJob(job, name, runId);
+  }
+
   async function runModel(forceRefresh = false) {
     if (pollTimer.current) clearTimeout(pollTimer.current);
     setRunDisabled(true);
@@ -289,7 +296,14 @@ export default function NewRunPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ params, refresh: forceRefresh }),
       });
-      pollRun(submitted.run_id, modelName);
+      // A cache hit comes back as a finished job inline (see submitRun's
+      // module comment) rather than a run_id to poll -- that run_id was
+      // never written to the `runs` table, so polling it would 404.
+      if (submitted.status === "succeeded" || submitted.status === "failed") {
+        handleJob(submitted as RunJob, modelName, submitted.run_id);
+      } else {
+        pollRun(submitted.run_id, modelName);
+      }
     } catch (err: any) {
       setRunDisabled(false);
       hideLoading();

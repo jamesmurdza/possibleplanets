@@ -52,6 +52,15 @@ const SANDBOX_AUTO_DELETE_MINUTES = 15;
 export interface SubmitResult {
   run_id: string;
   error: string | null;
+  // Present only for a cache hit resolved synchronously, without ever
+  // creating a `runs` row -- see submitRun's cache-hit branch. A cache
+  // lookup isn't a new generation; persisting one would just be a
+  // duplicate pointer at a result that's already durably stored in
+  // run_cache; the client can render this directly instead of polling
+  // GET /v1/runs/{run_id} for a row that was never written. `run_id` above
+  // is still populated (a fresh randomUUID, for display/download-filename
+  // purposes only) but is NOT a real, lookup-able run.
+  inline?: RunView;
 }
 
 /**
@@ -193,19 +202,32 @@ export async function submitRun(
   if (!forceRefresh && cacheable) {
     const cached = await getCached(modelName, params);
     if (cached !== null) {
-      await insertRun({
+      // A cache hit isn't a new generation -- nothing here actually ran,
+      // the answer was already sitting in run_cache from some earlier
+      // real run. Previously this still wrote a `runs` row (queued, then
+      // immediately finalized) purely so GET /v1/runs/{run_id} had
+      // something to return -- which meant every repeat "Run" click on an
+      // already-cached (model, params) kept appending a new row to the
+      // `runs` table/history (Overview tab, etc.) that pointed at data
+      // that was already durably stored, once per click, forever. Return
+      // the finished result inline instead -- the client renders it
+      // directly (see NewRunPanel.tsx) without ever polling a run_id that
+      // was never written anywhere.
+      return {
         run_id: runId,
-        model: modelName,
-        params,
-        status: "queued",
-        sandbox_id: null,
-        session_id: null,
-        cmd_id: null,
-        supports_progress: false,
-        deadline_at: new Date(Date.now() + 1000),
-      });
-      await finishRunSucceeded(runId, cached, 0, true);
-      return { run_id: runId, error: null };
+        error: null,
+        inline: {
+          run_id: runId,
+          model: modelName,
+          params,
+          status: "succeeded",
+          result: cached,
+          error: null,
+          cached: true,
+          progress: { percent: 100 },
+          duration_seconds: 0,
+        },
+      };
     }
   }
 
