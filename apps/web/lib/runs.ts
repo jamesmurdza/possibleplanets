@@ -55,6 +55,31 @@ export interface SubmitResult {
 }
 
 /**
+ * Structural deep-equality, order-independent on object keys (JSON.parse
+ * doesn't guarantee two independently-produced objects enumerate keys in
+ * the same order, even when "the same" by value -- a plain
+ * `JSON.stringify(a) === JSON.stringify(b)` could false-negative on that).
+ * Used only to decide whether a just-finished run's result is genuinely new
+ * before writing it to run_cache -- see advanceRun below.
+ */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b || a === null || b === null) return false;
+  if (typeof a !== "object") return false; // primitives already handled by ===
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    return a.every((v, i) => deepEqual(v, b[i]));
+  }
+  const aObj = a as Record<string, unknown>;
+  const bObj = b as Record<string, unknown>;
+  const aKeys = Object.keys(aObj);
+  const bKeys = Object.keys(bObj);
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every((k) => Object.prototype.hasOwnProperty.call(bObj, k) && deepEqual(aObj[k], bObj[k]));
+}
+
+/**
  * Rejects (rather than silently accepting) any param key the model doesn't
  * declare, and range-checks every known numeric parameter. Deliberately
  * does NOT fill in missing keys with their defaults -- see models.ts's
@@ -393,9 +418,23 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
   // Skipped entirely for a non-cacheable run (see isCacheable/
   // nonDeterministicUnless in models.ts) -- never write a single random
   // draw into the cache as if it were "the" answer for these params.
+  //
+  // Also skipped whenever this run's own result is identical to what's
+  // already the latest cached row for this (model, params) -- reached via
+  // the force-refresh path (submitRun's normal cache check is bypassed by
+  // force_refresh, see above), which legitimately re-runs a deterministic
+  // model that's already cached (e.g. to verify a run.py fix actually
+  // changed the output, or just to re-time it). run_cache is an
+  // append-only log by design (see db.ts's module docstring) so refresh
+  // CAN add a new row when the output genuinely differs -- but when it
+  // doesn't, appending an exact duplicate of the row already there buys
+  // nothing and just grows the table forever on repeat no-op refreshes.
   const model = getModelOrNull(row.model);
   if (model && isCacheable(model, row.params as Record<string, unknown>)) {
-    await putCached(row.model, row.params, parsed, runSeconds);
+    const existing = await getCached(row.model, row.params as Record<string, unknown>);
+    if (existing === null || !deepEqual(existing, parsed)) {
+      await putCached(row.model, row.params, parsed, runSeconds);
+    }
   }
   await finishRunSucceeded(runId, parsed, runSeconds, false);
   row = (await getRun(runId))!;
