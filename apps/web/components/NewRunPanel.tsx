@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Chart from "chart.js/auto";
-import Dropdown from "./Dropdown";
-import { fetchJson, CHART_ADAPTERS, buildParams, chartAspectRatio } from "../lib/clientApi";
+import { fetchJson, CHART_ADAPTERS, buildParams, chartAspectRatio, scenarioDescription } from "../lib/clientApi";
 import type { ModelMeta, ModelListItem, RunJob, ModelDurationStats, CheckResult } from "../lib/clientTypes";
 
 export default function NewRunPanel() {
@@ -253,7 +252,7 @@ export default function NewRunPanel() {
   }
   const eta = etaBadge();
 
-  const scenarioOptions = (modelMeta?.scenarios ?? []).map((s) => ({ value: s, label: s }));
+  const scenarios = modelMeta?.scenarios ?? [];
   const parameters = modelMeta?.parameters ?? [];
   const nonDeterministicKey = modelMeta?.non_deterministic_unless;
   const nonDeterministicUnset = !!nonDeterministicKey && !paramValues[nonDeterministicKey];
@@ -311,11 +310,32 @@ export default function NewRunPanel() {
           </div>
         </div>
 
-        <div className="form-row">
-          <label className="form-field">
-            <span className="form-field-label">Scenario</span>
-            <Dropdown options={scenarioOptions} value={scenario} onChange={onScenarioChange} ariaLabel="Scenario" />
-          </label>
+        <div className="form-field-block">
+          <span className="form-field-label">Scenario</span>
+          <div className="scenario-card-grid" role="radiogroup" aria-label="Scenario">
+            {scenarios.map((s) => {
+              const desc = scenarioDescription(s);
+              return (
+                <div
+                  key={s}
+                  className={`scenario-card${s === scenario ? " selected" : ""}`}
+                  role="radio"
+                  aria-checked={s === scenario}
+                  tabIndex={0}
+                  onClick={() => onScenarioChange(s)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onScenarioChange(s);
+                    }
+                  }}
+                >
+                  <span className="scenario-card-name">{s}</span>
+                  {desc && <p className="scenario-card-description">{desc}</p>}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {parameters.length > 0 && (

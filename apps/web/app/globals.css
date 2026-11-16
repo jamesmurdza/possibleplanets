@@ -666,6 +666,52 @@ a.icon-button {
   text-decoration: underline;
 }
 
+/* --- Scenario picker cards --- */
+
+.scenario-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 0.6rem;
+}
+
+.scenario-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.scenario-card:hover {
+  border-color: var(--color-accent);
+}
+
+.scenario-card:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.scenario-card.selected {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.scenario-card-name {
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+.scenario-card-description {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+}
+
 .form-actions {
   display: flex;
   align-items: center;

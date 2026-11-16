@@ -70,6 +70,41 @@ export const CHART_ADAPTERS: Record<string, (result: any) => { labels: any[]; va
   },
 };
 
+// Short, human descriptions for the scenario codes used across models --
+// best-effort documentation of well-known SSP/RCP identifiers (IPCC AR6's
+// own scenario naming), not something the gateway/sandboxes compute. A
+// scenario not in this map (e.g. DICE's "base"/"optimal") just renders its
+// card without a description.
+const SCENARIO_DESCRIPTIONS: Record<string, string> = {
+  ssp119: "Very low emissions -- likely holds warming near 1.5°C.",
+  ssp126: "Low emissions -- strong mitigation, below 2°C.",
+  ssp245: "Intermediate emissions -- middle-of-the-road.",
+  ssp370: "High emissions -- regional rivalry, weak mitigation.",
+  ssp434: "Lower-middle forcing with a gradual, late transition.",
+  ssp460: "Medium-high forcing with a gradual, late transition.",
+  "ssp534-over": "High near-term emissions, then an overshoot drawdown.",
+  ssp585: "Very high emissions -- fossil-fueled development.",
+  "SSP1-1.9": "Very low emissions -- likely holds warming near 1.5°C.",
+  "SSP1-2.6": "Low emissions -- strong mitigation, below 2°C.",
+  "SSP2-4.5": "Intermediate emissions -- middle-of-the-road.",
+  "SSP3-7.0": "High emissions -- regional rivalry, weak mitigation.",
+  "SSP3-7.0-LowNTCF": "SSP3-7.0 with reduced near-term climate forcers.",
+  "SSP4-3.4": "Lower-middle forcing with a gradual, late transition.",
+  "SSP4-6.0": "Medium-high forcing with a gradual, late transition.",
+  "SSP5-3.4-OS": "High near-term emissions, then an overshoot drawdown.",
+  "SSP5-8.5": "Very high emissions -- fossil-fueled development.",
+  RCP26: "Low radiative forcing pathway, peaking around 2.6 W/m².",
+  RCP45: "Intermediate stabilization pathway, around 4.5 W/m².",
+  RCP60: "Higher stabilization pathway, around 6.0 W/m².",
+  RCP85: "High, rising radiative forcing pathway, around 8.5 W/m².",
+  base: "Business-as-usual emissions path (no abatement policy).",
+  optimal: "Economically optimal emissions path under DICE's own model.",
+};
+
+export function scenarioDescription(scenario: string): string | null {
+  return SCENARIO_DESCRIPTIONS[scenario] ?? null;
+}
+
 export function chartAspectRatio() {
   return typeof window !== "undefined" && window.innerWidth <= 640 ? 1.4 : 3.4;
 }
