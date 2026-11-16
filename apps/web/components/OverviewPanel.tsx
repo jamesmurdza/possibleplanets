@@ -350,10 +350,9 @@ export default function OverviewPanel() {
           <section className="panel detail-panel">
             <div className="panel-body">
               <p className="advanced-note">
-                Showing {chartData?.visibleCount} of {chartData?.totalCount} runs -- the dashed line is the average
-                across whichever runs are currently visible.
+                Showing {chartData?.visibleCount} of {chartData?.totalCount} runs (dashed = average). Click a name
+                below to isolate it.
               </p>
-              <p className="chart-hint">Click a name below to isolate just that line; click it again to go back to the checkboxes.</p>
               <div className="overview-filters">
                 <div className="overview-filter-group">
                   <span className="form-field-label">Models</span>
