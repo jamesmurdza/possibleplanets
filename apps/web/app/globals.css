@@ -732,9 +732,26 @@ a.icon-button {
   box-shadow: 0 0 0 1px var(--color-accent);
 }
 
+.scenario-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
 .scenario-card-name {
   font-weight: 600;
   font-size: 0.9375rem;
+}
+
+.scenario-card-sparkline {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.scenario-card.selected .scenario-card-sparkline {
+  color: var(--color-accent);
 }
 
 .scenario-card-description {

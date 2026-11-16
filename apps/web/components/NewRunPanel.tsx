@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Chart from "chart.js/auto";
 import { fetchJson, CHART_ADAPTERS, buildParams, chartAspectRatio, scenarioDescription, canonicalScenario } from "../lib/clientApi";
+import { scenarioDriverSeries } from "../lib/scenarioDrivers";
+import Sparkline from "./Sparkline";
 import type { ModelMeta, ModelListItem, RunJob, ModelDurationStats, CheckResult } from "../lib/clientTypes";
 
 // One simple, distinct glyph per model -- purely decorative wayfinding on
@@ -400,6 +402,7 @@ export default function NewRunPanel() {
             {scenarios.map((s) => {
               const desc = scenarioDescription(s);
               const canonical = canonicalScenario(s);
+              const driver = scenarioDriverSeries(canonical);
               return (
                 <div
                   key={s}
@@ -415,7 +418,14 @@ export default function NewRunPanel() {
                     }
                   }}
                 >
-                  <span className="scenario-card-name">{canonical}</span>
+                  <div className="scenario-card-header">
+                    <span className="scenario-card-name">{canonical}</span>
+                    {driver && (
+                      <span className="scenario-card-sparkline" title="Projected CO2 emissions pathway (GtC/yr, 2014-2100)">
+                        <Sparkline values={driver.values} />
+                      </span>
+                    )}
+                  </div>
                   {desc && <p className="scenario-card-description">{desc}</p>}
                 </div>
               );
