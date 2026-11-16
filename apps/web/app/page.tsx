@@ -417,15 +417,17 @@ export default function Page() {
     if (!checkResult.cacheable) {
       return { text: "Won't be cached (see Advanced)", kind: "warn" };
     }
+    // Cached means instant -- how long the ORIGINAL run took doesn't matter
+    // here, so that number is deliberately not shown (it's still in the raw
+    // download / status-bar params readout for anyone who wants it).
     if (checkResult.cached) {
-      const d = checkResult.cached_duration_seconds;
-      return { text: d != null ? `Cached -- ran in ${d.toFixed(1)}s` : "Cached", kind: "cached" };
+      return { text: "Cached", kind: "cached" };
     }
     const stats = statsByModel[modelName];
     if (stats) {
-      return { text: `Not cached -- usually ~${stats.median_seconds.toFixed(1)}s`, kind: "estimate" };
+      return { text: `~${stats.median_seconds.toFixed(1)}s estimated`, kind: "estimate" };
     }
-    return { text: "Not cached -- no run history yet", kind: "estimate" };
+    return { text: "No run history yet", kind: "estimate" };
   }
   const eta = etaBadge();
 
