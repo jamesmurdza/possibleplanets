@@ -355,6 +355,7 @@ export default function NewRunPanel() {
           runModel(false);
         }}
       >
+        <div className="form-columns">
         <div className="form-field-block">
           <span className="form-field-label">Model</span>
           <div className="model-card-grid" role="radiogroup" aria-label="Model">
@@ -431,6 +432,7 @@ export default function NewRunPanel() {
               );
             })}
           </div>
+        </div>
         </div>
 
         {parameters.length > 0 && (
