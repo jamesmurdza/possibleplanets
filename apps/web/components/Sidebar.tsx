@@ -1,14 +1,29 @@
 "use client";
 
-export type Tab = "new" | "runs" | "compare";
+export type Tab = "overview" | "new" | "runs" | "compare";
 
 const ITEMS: { id: Tab; label: string }[] = [
+  { id: "overview", label: "Overview" },
   { id: "new", label: "New Run" },
   { id: "runs", label: "Runs" },
   { id: "compare", label: "Compare" },
 ];
 
 function TabIcon({ id }: { id: Tab }) {
+  if (id === "overview") {
+    return (
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path
+          d="M2.5 12.5V3M2.5 12.5h11M5 10l2.2-3 2 2L13 5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
   if (id === "new") {
     return (
       <svg viewBox="0 0 16 16" aria-hidden="true">

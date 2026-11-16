@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Sidebar, { Tab } from "../components/Sidebar";
+import OverviewPanel from "../components/OverviewPanel";
 import NewRunPanel from "../components/NewRunPanel";
 import RunsPanel from "../components/RunsPanel";
 import ComparePanel from "../components/ComparePanel";
@@ -11,12 +12,15 @@ import ComparePanel from "../components/ComparePanel";
 // (e.g. a run still in flight in "New Run" keeps polling even while you're
 // looking at "Runs" or "Compare") rather than being torn down and rebuilt.
 export default function Page() {
-  const [tab, setTab] = useState<Tab>("new");
+  const [tab, setTab] = useState<Tab>("overview");
 
   return (
     <div className="app-shell">
       <Sidebar active={tab} onChange={setTab} />
       <main className="main-area">
+        <div style={{ display: tab === "overview" ? "block" : "none" }}>
+          <OverviewPanel />
+        </div>
         <div style={{ display: tab === "new" ? "block" : "none" }}>
           <NewRunPanel />
         </div>

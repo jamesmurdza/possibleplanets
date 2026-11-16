@@ -951,3 +951,40 @@ a.icon-button {
     max-width: none;
   }
 }
+
+/* --- Overview tab's model/scenario filter checkboxes --- */
+
+.overview-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-top: 0.75rem;
+}
+
+.overview-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 10rem;
+}
+
+.overview-filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  /* Hovering a checkbox is what drives the chart's highlight-matching-lines
+     behavior (see OverviewPanel.tsx's `hovered` state) -- padding gives
+     that hit target a little breathing room instead of just the text's own
+     line height. */
+  padding: 0.15rem 0;
+}
+
+.overview-filter-swatch {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 2px;
+  flex-shrink: 0;
+}

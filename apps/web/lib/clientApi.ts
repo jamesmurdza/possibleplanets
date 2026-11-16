@@ -180,6 +180,60 @@ export function alignSeriesByYear(
   return { labels: years, datasets };
 }
 
+// Fixed per-model color, so the same model always reads as the same line
+// color everywhere it's plotted (Overview tab's checkboxes use a matching
+// swatch) -- picked for contrast against each other and against the dark
+// dashed "average" line, not derived from anything about the model itself.
+export const MODEL_COLORS: Record<string, string> = {
+  hector: "#2f6fed",
+  fair: "#1fa37a",
+  oscar: "#e0862f",
+  dice: "#9b51e0",
+  magicc: "#e0415a",
+};
+
+/** Falls back to a neutral gray for any model not in MODEL_COLORS, so a
+ * future model added to lib/models.ts without updating this never breaks
+ * rendering -- same fallback convention as NewRunPanel's ModelIcon. */
+export function modelColor(model: string): string {
+  return MODEL_COLORS[model] ?? "#767a85";
+}
+
+/** `#rrggbb` -> `rgba(r, g, b, alpha)`, for dimming a line on hover
+ * without changing its underlying hue (plain CSS opacity isn't an option
+ * on a Chart.js borderColor, which wants a real color string). */
+export function colorWithAlpha(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/**
+ * Pointwise mean across however many of the given (already year-aligned,
+ * see alignSeriesByYear) series are currently visible, `null` at any index
+ * where NONE of them has a value -- an honest gap, never a fabricated
+ * value, same convention as alignSeriesByYear's own null-filling.
+ */
+export function averageSeries(seriesData: (number | null)[][]): (number | null)[] {
+  if (seriesData.length === 0) return [];
+  const length = seriesData[0].length;
+  const result: (number | null)[] = [];
+  for (let i = 0; i < length; i++) {
+    let sum = 0;
+    let count = 0;
+    for (const data of seriesData) {
+      const v = data[i];
+      if (v !== null && v !== undefined) {
+        sum += v;
+        count++;
+      }
+    }
+    result.push(count > 0 ? sum / count : null);
+  }
+  return result;
+}
+
 export function chartAspectRatio() {
   return typeof window !== "undefined" && window.innerWidth <= 640 ? 1.4 : 3.4;
 }
