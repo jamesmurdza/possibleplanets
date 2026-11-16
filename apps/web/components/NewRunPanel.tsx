@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Chart from "chart.js/auto";
-import { fetchJson, CHART_ADAPTERS, buildParams, chartAspectRatio, scenarioDescription } from "../lib/clientApi";
+import { fetchJson, CHART_ADAPTERS, buildParams, chartAspectRatio, scenarioDescription, canonicalScenario } from "../lib/clientApi";
 import type { ModelMeta, ModelListItem, RunJob, ModelDurationStats, CheckResult } from "../lib/clientTypes";
 
 export default function NewRunPanel() {
@@ -315,6 +315,7 @@ export default function NewRunPanel() {
           <div className="scenario-card-grid" role="radiogroup" aria-label="Scenario">
             {scenarios.map((s) => {
               const desc = scenarioDescription(s);
+              const canonical = canonicalScenario(s);
               return (
                 <div
                   key={s}
@@ -330,7 +331,15 @@ export default function NewRunPanel() {
                     }
                   }}
                 >
-                  <span className="scenario-card-name">{s}</span>
+                  <span className="scenario-card-name">
+                    {canonical}
+                    {/* This model's own native identifier, shown only when it
+                        differs from the canonical label above -- the exact
+                        string actually submitted/cached, so it's worth
+                        surfacing even though the canonical label is what's
+                        used for cross-model comparison. */}
+                    {canonical !== s && <span className="scenario-card-native"> ({s})</span>}
+                  </span>
                   {desc && <p className="scenario-card-description">{desc}</p>}
                 </div>
               );

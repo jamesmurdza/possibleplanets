@@ -70,20 +70,50 @@ export const CHART_ADAPTERS: Record<string, (result: any) => { labels: any[]; va
   },
 };
 
+// --- Cross-model scenario naming -----------------------------------------
+// hector/fair use lowercase short codes ("ssp119"), oscar uses IPCC's own
+// longer form ("SSP1-1.9") -- same scenarios, just different native string
+// formats each model's own run.py/library expects. That native string is
+// still exactly what gets submitted/cached (lib/models.ts's caching note
+// still applies in full -- this is display/grouping only, never sent to a
+// sandbox). This map normalizes every model's native scenario string to one
+// canonical label -- oscar's own format, since it already matches IPCC's
+// naming -- so the same scenario reads identically and groups together
+// across models in the Runs/Compare tabs.
+//
+// MAGICC's RCP26/45/60/85 are deliberately NOT mapped onto an SSP label
+// here: RCPs are a genuinely different scenario framework (radiative
+// forcing pathways from CMIP5, not SSP narratives from CMIP6) -- any
+// "RCP4.5 ~ SSP2-4.5"-style correspondence is an approximation some papers
+// use, not an equivalence this gateway should assert. Same for DICE's
+// base/optimal, which aren't emissions scenario codes at all.
+const SSP_CANONICAL: Record<string, string> = {
+  ssp119: "SSP1-1.9",
+  ssp126: "SSP1-2.6",
+  ssp245: "SSP2-4.5",
+  ssp370: "SSP3-7.0",
+  ssp434: "SSP4-3.4",
+  ssp460: "SSP4-6.0",
+  "ssp534-over": "SSP5-3.4-OS",
+  ssp585: "SSP5-8.5",
+};
+
+/** Normalize a model-native scenario string to one canonical label shared
+ * across models that represent the same SSP (oscar's own strings are
+ * already canonical, so they pass through unchanged; RCPs/DICE's
+ * base/optimal also pass through unchanged -- see the comment above). */
+export function canonicalScenario(nativeScenario: string): string {
+  return SSP_CANONICAL[nativeScenario] ?? nativeScenario;
+}
+
 // Short, human descriptions for the scenario codes used across models --
 // best-effort documentation of well-known SSP/RCP identifiers (IPCC AR6's
-// own scenario naming), not something the gateway/sandboxes compute. A
-// scenario not in this map (e.g. DICE's "base"/"optimal") just renders its
-// card without a description.
+// own scenario naming), not something the gateway/sandboxes compute. Keyed
+// by canonical label (see canonicalScenario above) -- scenarioDescription()
+// canonicalizes before looking up, so it works whether passed a model's
+// native string or the canonical one. A scenario not in this map (e.g.
+// DICE's "base"/"optimal") just renders its card without a description.
 const SCENARIO_DESCRIPTIONS: Record<string, string> = {
-  ssp119: "Very low emissions -- likely holds warming near 1.5°C.",
-  ssp126: "Low emissions -- strong mitigation, below 2°C.",
-  ssp245: "Intermediate emissions -- middle-of-the-road.",
-  ssp370: "High emissions -- regional rivalry, weak mitigation.",
-  ssp434: "Lower-middle forcing with a gradual, late transition.",
-  ssp460: "Medium-high forcing with a gradual, late transition.",
-  "ssp534-over": "High near-term emissions, then an overshoot drawdown.",
-  ssp585: "Very high emissions -- fossil-fueled development.",
   "SSP1-1.9": "Very low emissions -- likely holds warming near 1.5°C.",
   "SSP1-2.6": "Low emissions -- strong mitigation, below 2°C.",
   "SSP2-4.5": "Intermediate emissions -- middle-of-the-road.",
@@ -102,7 +132,7 @@ const SCENARIO_DESCRIPTIONS: Record<string, string> = {
 };
 
 export function scenarioDescription(scenario: string): string | null {
-  return SCENARIO_DESCRIPTIONS[scenario] ?? null;
+  return SCENARIO_DESCRIPTIONS[canonicalScenario(scenario)] ?? null;
 }
 
 export function chartAspectRatio() {
@@ -132,9 +162,18 @@ export function buildParams(
   return params;
 }
 
-/** Short, human label for a run's params -- e.g. "ssp126" or "RCP26 · climate_sensitivity=4.5" -- used in the Runs list and Compare legend. */
+/** Pulls a run's model-native scenario string out of its params, whichever
+ * shape (`scenario` vs `scenarios[0]`) this model uses. */
+export function nativeScenarioOf(params: Record<string, unknown>): string | undefined {
+  if (typeof params?.scenario === "string") return params.scenario;
+  if (Array.isArray(params?.scenarios) && typeof params.scenarios[0] === "string") return params.scenarios[0];
+  return undefined;
+}
+
+/** Short, human label for a run's params -- e.g. "SSP1-2.6" or "RCP26 · climate_sensitivity=4.5" -- used in the Runs list and Compare legend. Scenario is shown in its canonical form (see canonicalScenario) so the same scenario reads identically regardless of which model ran it. */
 export function summarizeParams(params: Record<string, unknown>): string {
-  const scenario = params.scenario ?? (Array.isArray(params.scenarios) ? params.scenarios[0] : undefined);
+  const native = nativeScenarioOf(params);
+  const scenario = native ? canonicalScenario(native) : undefined;
   const extras = Object.entries(params)
     .filter(([k]) => k !== "scenario" && k !== "scenarios")
     .map(([k, v]) => `${k}=${v}`);

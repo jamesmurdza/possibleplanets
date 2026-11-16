@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Chart from "chart.js/auto";
 import Dropdown from "./Dropdown";
-import { fetchJson, CHART_ADAPTERS, summarizeParams, chartAspectRatio } from "../lib/clientApi";
+import { fetchJson, CHART_ADAPTERS, summarizeParams, chartAspectRatio, nativeScenarioOf, canonicalScenario } from "../lib/clientApi";
 import type { RunJob, RunListItem } from "../lib/clientTypes";
 
 const ALL = "__all__";
@@ -15,10 +15,12 @@ const STATUS_OPTIONS = [
   { value: "failed", label: "Failed" },
 ];
 
+// Canonical (not model-native) -- so filtering by "SSP1-2.6" matches both
+// hector's "ssp126" and oscar's "SSP1-2.6" runs. See canonicalScenario's
+// comment in lib/clientApi.ts for why RCP/base/optimal are left alone.
 function scenarioOf(params: Record<string, unknown>): string | undefined {
-  if (typeof params?.scenario === "string") return params.scenario;
-  if (Array.isArray(params?.scenarios)) return params.scenarios[0];
-  return undefined;
+  const native = nativeScenarioOf(params);
+  return native ? canonicalScenario(native) : undefined;
 }
 
 function formatWhen(iso: string): string {

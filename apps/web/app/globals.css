@@ -705,6 +705,12 @@ a.icon-button {
   font-size: 0.8125rem;
 }
 
+.scenario-card-native {
+  font-weight: 400;
+  font-size: 0.7rem;
+  color: var(--color-text-faint);
+}
+
 .scenario-card-description {
   margin: 0;
   font-size: 0.72rem;

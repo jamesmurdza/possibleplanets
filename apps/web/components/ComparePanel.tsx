@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Chart from "chart.js/auto";
 import Dropdown from "./Dropdown";
-import { fetchJson, CHART_ADAPTERS, chartAspectRatio } from "../lib/clientApi";
+import { fetchJson, CHART_ADAPTERS, chartAspectRatio, nativeScenarioOf, canonicalScenario } from "../lib/clientApi";
 import type { ModelMeta, ModelListItem, RunJob, RunListItem } from "../lib/clientTypes";
 
 type Axis = "model" | "scenario" | "parameter";
@@ -14,10 +14,14 @@ const AXIS_OPTIONS = [
   { value: "parameter", label: "Parameter" },
 ];
 
+// Canonical (not model-native) -- this is exactly what makes the "Model"
+// compare axis work at all: hector's "ssp119" and oscar's "SSP1-1.9" need
+// to read as the SAME scenario to find/group runs across models. See
+// canonicalScenario's comment in lib/clientApi.ts for why RCP/base/optimal
+// are deliberately left alone, not force-mapped onto an SSP label.
 function scenarioOf(params: Record<string, unknown>): string | undefined {
-  if (typeof params?.scenario === "string") return params.scenario;
-  if (Array.isArray(params?.scenarios)) return params.scenarios[0];
-  return undefined;
+  const native = nativeScenarioOf(params);
+  return native ? canonicalScenario(native) : undefined;
 }
 
 // One group = every succeeded run matching the fixed dimensions that
@@ -79,7 +83,8 @@ export default function ComparePanel() {
     try {
       const schema = await fetchJson(`/v1/models/${name}/schema`);
       setModelMeta(schema);
-      setScenario(schema.scenarios[0] ?? "");
+      const firstScenario = schema.scenarios[0];
+      setScenario(firstScenario ? canonicalScenario(firstScenario) : "");
       setParameterKey(schema.parameters?.[0]?.key ?? "");
     } catch (err: any) {
       setError(err.message);
