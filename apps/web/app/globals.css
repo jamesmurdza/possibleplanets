@@ -370,6 +370,18 @@ a.icon-button {
   display: none;
 }
 
+/* Portaled into document.body (see Dropdown.tsx) so an ancestor's own
+   `overflow: hidden` (e.g. .panel's rounded-corner clipping) can never cut
+   the menu off -- position is computed in JS from the toggle button's real
+   rect and applied as inline top/left/minWidth, so `position` here is
+   `fixed` (viewport-relative, matching getBoundingClientRect) instead of
+   the in-flow `absolute` above. z-index raised past .panel's own stacking
+   context since this now sits directly under <body>, not under .panel. */
+.dropdown-menu-portal {
+  position: fixed;
+  z-index: 1000;
+}
+
 .dropdown-option {
   padding: 0.4rem 0.6rem;
   border-radius: var(--radius-sm);
