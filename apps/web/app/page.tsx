@@ -85,6 +85,14 @@ const CHART_ADAPTERS: Record<string, (result: any) => { labels: any[]; values: a
       label: `DICE atmospheric temperature anomaly (${result.scenario})`,
     };
   },
+  magicc(result) {
+    const native = result.result; // { years, T_atmos } -- see sandboxes/magicc/run.py
+    return {
+      labels: native.years,
+      values: native.T_atmos,
+      label: `MAGICC surface temperature anomaly (${result.scenario})`,
+    };
+  },
 };
 
 function chartAspectRatio() {

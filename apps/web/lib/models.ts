@@ -96,6 +96,26 @@ export const MODELS: Record<string, ModelMeta> = {
     exec_timeout_seconds: 120,
     supports_progress: false,
   },
+  magicc: {
+    family: "RCM",
+    dockerfile: path.join(SANDBOXES_DIR, "magicc", "Dockerfile"),
+    // pymagicc's own four RCP scenarios -- confirmed via
+    // `pymagicc.rcps["scenario"].unique()`. A different, smaller taxonomy
+    // than the SSP names hector/fair/oscar use; no cross-model mapping
+    // (see PLATFORM.md).
+    scenarios: ["RCP26", "RCP45", "RCP60", "RCP85"],
+    params_shape: "scenario",
+    // Measured directly (pymagicc.run() invoking the bundled MAGICC6.exe
+    // via Wine, confirmed on a real Debian 12 host): ~5-6s per scenario,
+    // including Python/pymagicc import time. Generous buffer above that.
+    exec_timeout_seconds: 90,
+    // Confirmed by reading pymagicc's source: MAGICC6 (run via Wine) writes
+    // its own progress to stdout/output files only after the full run
+    // finishes, same limitation already confirmed for hector/dice -- no
+    // real mid-run signal to report via the file-polling mechanism used
+    // for fair/oscar.
+    supports_progress: false,
+  },
 };
 
 export function getModelOrNull(model: string): ModelMeta | null {
