@@ -5,6 +5,26 @@
  * PLATFORM.md): each model's entry just points at its own Dockerfile and
  * lists its own native scenario identifiers.
  *
+ * `parameters` adds optional, model-native tunable inputs beyond the
+ * scenario (e.g. hector's climate sensitivity, oscar's Monte Carlo sample
+ * size). This is the full set of keys a request is allowed to pass besides
+ * `scenario`/`scenarios` -- lib/runs.ts's submitRun() rejects any other key
+ * (400) before doing anything, both to catch typos early and because these
+ * values get shell-interpolated into the sandbox command.
+ *
+ * Caching note (see lib/db.ts's cache_key_for): the cache key is a hash of
+ * exactly the params object as submitted (after that validation), with no
+ * defaulting applied. A request that omits an optional parameter is NOT
+ * treated as equivalent to one that passes its default explicitly -- they
+ * get different cache entries. This is deliberate: we haven't verified for
+ * every model/parameter that "omitted" and "explicit default" produce
+ * identical output (confirmed true for hector's temperature.S/diff/alpha
+ * and magicc's core_climatesensitivity by direct testing, but that's not a
+ * general guarantee for every future parameter), so the cache doesn't
+ * assume it. It also means adding a new parameter later can't silently
+ * reinterpret old cache rows -- a request shaped around a wider parameter
+ * set just lands in its own, separate cache lane.
+ *
  * Path note: this resolves sandboxes/ relative to process.cwd(), NOT
  * __dirname. In a Next.js production build, server code is bundled and
  * __dirname no longer points at the original source location (it resolves
@@ -18,6 +38,18 @@ const SANDBOXES_DIR = path.resolve(process.cwd(), "..", "..", "sandboxes");
 
 export type ParamsShape = "scenario" | "scenarios";
 
+export interface NumberParameterSpec {
+  key: string;
+  label: string;
+  type: "number";
+  default: number;
+  min: number;
+  max: number;
+  step?: number;
+}
+
+export type ParameterSpec = NumberParameterSpec;
+
 export interface ModelMeta {
   family: string;
   dockerfile: string;
@@ -29,6 +61,19 @@ export interface ModelMeta {
   exec_timeout_seconds: number;
   supports_progress: boolean;
   resources?: { cpu?: number; memory?: number; disk?: number };
+  // Optional model-native tunable inputs beyond scenario. Empty for models
+  // where this hasn't been wired up/verified yet (fair, dice) -- see the
+  // module docstring.
+  parameters?: ParameterSpec[];
+  // If set, this names a parameter key (must appear in `parameters`) whose
+  // ABSENCE makes the run non-deterministic -- e.g. oscar's Monte Carlo
+  // parameter draw is unseeded `random.choice` (confirmed by reading
+  // core_fct/fct_genMC.py) unless a seed is explicitly given. When this key
+  // is missing from a request's params, lib/runs.ts skips the cache
+  // entirely for that run (no read, no write): caching a single random
+  // draw and serving it forever as "the" answer would misrepresent
+  // something that's genuinely different every time.
+  nonDeterministicUnless?: string;
 }
 
 export const MODELS: Record<string, ModelMeta> = {
@@ -42,6 +87,41 @@ export const MODELS: Record<string, ModelMeta> = {
     // log file, and completes in well under a second -- nothing real to
     // report. progress stays null rather than faking an estimate.
     supports_progress: false,
+    // Confirmed by testing (comparing pyhector.run() with no override
+    // against the same values passed explicitly via `config`): these are
+    // real, independent knobs pyhector exposes, and overriding them with
+    // their own default values reproduces bit-identical output to not
+    // overriding them at all. Defaults/ranges are pyhector's own
+    // (`pyhector._default_config["temperature"]`).
+    parameters: [
+      {
+        key: "climate_sensitivity",
+        label: "Climate sensitivity (°C per CO2 doubling)",
+        type: "number",
+        default: 3.0,
+        min: 1.5,
+        max: 6.0,
+        step: 0.1,
+      },
+      {
+        key: "ocean_diffusivity",
+        label: "Ocean heat diffusivity",
+        type: "number",
+        default: 2.38,
+        min: 0.5,
+        max: 5.0,
+        step: 0.01,
+      },
+      {
+        key: "aerosol_scaling",
+        label: "Aerosol forcing scaling",
+        type: "number",
+        default: 1.0,
+        min: 0.0,
+        max: 2.0,
+        step: 0.05,
+      },
+    ],
   },
   fair: {
     family: "RCM",
@@ -61,6 +141,10 @@ export const MODELS: Record<string, ModelMeta> = {
     // run.py monkey-patches FAIR's own tqdm bar to write /tmp/progress.json
     // as it runs -- a real intermediate signal, read via the sandbox fs API.
     supports_progress: true,
+    // No extra parameters yet -- unlike hector/magicc/oscar below, this
+    // hasn't been verified against FAIR's own run.py (its ensemble is
+    // currently a hardcoded set of 66 CMIP6 configs; exposing "how many to
+    // run" needs run.py changes not yet made/tested).
   },
   oscar: {
     family: "RCM",
@@ -84,6 +168,32 @@ export const MODELS: Record<string, ModelMeta> = {
     // Confirmed by testing: OSCAR gets OOM-killed (exit code 137) while
     // loading its parameter files on the default sandbox size.
     resources: { cpu: 4, memory: 8, disk: 10 },
+    parameters: [
+      {
+        key: "nMC",
+        label: "Monte Carlo samples",
+        type: "number",
+        default: 1,
+        min: 1,
+        max: 50,
+        step: 1,
+      },
+      {
+        key: "seed",
+        label: "Random seed (for reproducibility)",
+        type: "number",
+        default: 0,
+        min: 0,
+        max: 2 ** 31 - 1,
+        step: 1,
+      },
+    ],
+    // Confirmed by reading core_fct/fct_genMC.py: OSCAR's Monte Carlo
+    // parameter draw uses Python's stdlib `random.choice`, unseeded
+    // anywhere in OSCAR or sandboxes/oscar/run.py. Without an explicit
+    // seed, two requests with identical scenario/nMC can legitimately
+    // produce different results -- see lib/runs.ts.
+    nonDeterministicUnless: "seed",
   },
   dice: {
     family: "IAM",
@@ -95,6 +205,9 @@ export const MODELS: Record<string, ModelMeta> = {
     run_command: "julia /app/run.jl",
     exec_timeout_seconds: 120,
     supports_progress: false,
+    // No extra parameters: DICE.jl's solve(scenario, version) doesn't
+    // expose a hook for overriding other economic parameters (discount
+    // rate, damage function, etc.) through this wrapper -- see run.jl.
   },
   magicc: {
     family: "RCM",
@@ -115,6 +228,22 @@ export const MODELS: Record<string, ModelMeta> = {
     // real mid-run signal to report via the file-polling mechanism used
     // for fair/oscar.
     supports_progress: false,
+    // Confirmed by testing: `pymagicc.run(scenario, core_climatesensitivity=X)`
+    // really changes the result (2100 warming under RCP26 moved from
+    // 1.56degC at the default 3.0 to 2.26degC at 4.5), and passing the
+    // documented default value explicitly reproduces the no-override run
+    // bit-for-bit.
+    parameters: [
+      {
+        key: "climate_sensitivity",
+        label: "Climate sensitivity (°C per CO2 doubling)",
+        type: "number",
+        default: 3.0,
+        min: 1.5,
+        max: 6.0,
+        step: 0.1,
+      },
+    ],
   },
 };
 

@@ -9,6 +9,18 @@ as JSON to stdout and to /output/result.json.
 
 No cross-model output normalization here (per PLATFORM.md's minimal-version
 decision) -- this is pyhector's native result, untouched.
+
+Optional tunable parameters (climate_sensitivity/ocean_diffusivity/
+aerosol_scaling) are passed straight through to pyhector's own `config`
+override dict -- confirmed by direct testing that passing pyhector's own
+documented default values this way (temperature.S=3.0, diff=2.38, alpha=1.0)
+reproduces bit-identical output to calling pyhector.run() with no config
+override at all, so this is a real, verified override path, not a guess.
+When a key is omitted here, no default is substituted -- it's simply not
+passed to pyhector's config at all (letting pyhector's own build-in default
+apply), not stood in for by this script's own copy of that default. See
+apps/web/lib/models.ts's module docstring for why that distinction matters
+for caching.
 """
 import json
 import os
@@ -56,7 +68,19 @@ def main():
         )
         sys.exit(1)
 
-    output_df = pyhector.run(scenario)
+    # Build the config override from only whatever keys were actually
+    # supplied -- never synthesize a value for an omitted key (see the
+    # module docstring on why "omitted" and "explicit default" are kept
+    # distinct here).
+    config = {}
+    if "climate_sensitivity" in params:
+        config.setdefault("temperature", {})["S"] = float(params["climate_sensitivity"])
+    if "ocean_diffusivity" in params:
+        config.setdefault("temperature", {})["diff"] = float(params["ocean_diffusivity"])
+    if "aerosol_scaling" in params:
+        config.setdefault("temperature", {})["alpha"] = float(params["aerosol_scaling"])
+
+    output_df = pyhector.run(scenario, config=config or None)
 
     result = {
         "status": "succeeded",

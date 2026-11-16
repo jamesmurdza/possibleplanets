@@ -16,6 +16,18 @@ even at nMC=1 the full run takes ~6 minutes (confirmed by testing: ~210s for
 the historical run, ~145s for the scenario run to 2100). Increasing nMC
 increases run time further.
 
+SEED: confirmed by reading core_fct/fct_genMC.py that generate_config()
+picks each Monte Carlo parameter configuration via plain `random.choice`
+(Python's stdlib `random` module), unseeded anywhere in OSCAR or this
+script -- so two runs with identical scenario/nMC can and do produce
+different results. An optional `seed` param, when given, is applied via
+`random.seed(seed)` immediately before calling generate_config(), which
+makes the draw reproducible (confirmed: same seed -> same sequence of
+random.choice results; different seed -> a different sequence). When no
+seed is given, this script makes no attempt to fake determinism -- the
+gateway (apps/web/lib/models.ts's `nonDeterministicUnless`) knows to never
+cache a seedless run.
+
 PROGRESS: confirmed by reading core_fct/cls_main.py (the OSCAR class this
 image clones) that its main simulation loop does
 `print(time_axis + ' = ' + str(int(time[t])), end=' ')` once per simulated
@@ -28,6 +40,7 @@ before running, not guessed.
 """
 import json
 import os
+import random
 import sys
 
 DEFAULT_PARAMS = {"scenario": "SSP2-4.5", "nMC": 1}
@@ -103,6 +116,7 @@ def main():
     params = load_params()
     scenario = params.get("scenario", DEFAULT_PARAMS["scenario"])
     nMC = int(params.get("nMC", DEFAULT_PARAMS["nMC"]))
+    seed = params.get("seed")
 
     if scenario not in SUPPORTED_SCENARIOS:
         print(
@@ -132,6 +146,15 @@ def main():
     import xarray as xr
 
     Par0 = load_all_param(mod_region="RCP_5reg")
+    # Seed immediately before the only call that consumes randomness (see
+    # the module docstring's SEED note) -- generate_config()'s Monte Carlo
+    # draw is plain stdlib `random.choice`, so seeding here makes it
+    # reproducible. No seeding at all when `seed` is omitted -- this script
+    # doesn't invent a fallback seed, since that would make "no seed given"
+    # silently deterministic too, which is exactly the thing the gateway's
+    # caching logic needs to NOT assume (see apps/web/lib/models.ts).
+    if seed is not None:
+        random.seed(int(seed))
     Par = generate_config(Par0, nMC=nMC)
 
     Par = xr.merge(
@@ -167,6 +190,7 @@ def main():
         "model": "oscar",
         "scenario": scenario,
         "nMC": nMC,
+        "seed": seed,
         "result": {
             "year": years,
             "mean_D_Tg": mean_temp,

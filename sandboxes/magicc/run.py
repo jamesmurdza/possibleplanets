@@ -18,6 +18,14 @@ Scenario names are pymagicc's own four RCPs (RCP26/45/60/85), confirmed via
 `pymagicc.rcps["scenario"].unique()` -- a different, smaller taxonomy than
 the SSP names hector/fair/oscar use. No cross-model scenario mapping, same
 as DICE's own named policy scenarios (see PLATFORM.md).
+
+The optional `climate_sensitivity` parameter is passed straight through as
+pymagicc's own `core_climatesensitivity` run kwarg -- confirmed by direct
+testing that this really changes the result (2100 warming under RCP26 moved
+from 1.56K at the default 3.0 to 2.26K at 4.5) and that passing the
+documented default value (3.0) explicitly reproduces the no-override run
+bit-for-bit. When omitted, no default is substituted here -- pymagicc just
+runs with its own built-in default, same reasoning as sandboxes/hector/run.py.
 """
 import json
 import os
@@ -65,7 +73,11 @@ def main():
         )
         sys.exit(1)
 
-    output = pymagicc.run(scenario)
+    run_kwargs = {}
+    if "climate_sensitivity" in params:
+        run_kwargs["core_climatesensitivity"] = float(params["climate_sensitivity"])
+
+    output = pymagicc.run(scenario, **run_kwargs)
 
     # "Surface Temperature" / region "World" -- confirmed by testing to be
     # the global-mean temperature anomaly series (K, relative to MAGICC's

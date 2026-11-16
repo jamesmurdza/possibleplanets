@@ -53,6 +53,51 @@ export interface SubmitResult {
   error: string | null;
 }
 
+/**
+ * Rejects (rather than silently accepting) any param key the model doesn't
+ * declare, and range-checks every known numeric parameter. Deliberately
+ * does NOT fill in missing keys with their defaults -- see models.ts's
+ * module docstring for why: we haven't verified that's always safe, and it
+ * would also mean future parameter additions could retroactively change
+ * what an old, differently-shaped cache entry is considered equivalent to.
+ */
+function validateParams(model: ModelMeta, params: Record<string, unknown>): string | null {
+  const allowedKeys = new Set<string>(model.params_shape === "scenario" ? ["scenario"] : ["scenarios"]);
+  for (const p of model.parameters ?? []) allowedKeys.add(p.key);
+
+  for (const key of Object.keys(params)) {
+    if (!allowedKeys.has(key)) {
+      return `unknown parameter '${key}'. allowed: ${[...allowedKeys].sort().join(", ")}`;
+    }
+  }
+
+  for (const p of model.parameters ?? []) {
+    if (!(p.key in params)) continue; // omitted is fine -- no default is assumed, see above
+    const value = params[p.key];
+    if (typeof value !== "number" || Number.isNaN(value)) {
+      return `parameter '${p.key}' must be a number`;
+    }
+    if (value < p.min || value > p.max) {
+      return `parameter '${p.key}' must be between ${p.min} and ${p.max}`;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * False when the model declares `nonDeterministicUnless` (see models.ts --
+ * currently just oscar's unseeded Monte Carlo draw) and the request doesn't
+ * supply that key. A non-cacheable run is never read from or written to
+ * run_cache: caching one arbitrary random draw and serving it forever as
+ * "the" answer for that (model, params) would misrepresent something that
+ * is genuinely different every time it's run.
+ */
+function isCacheable(model: ModelMeta, params: Record<string, unknown>): boolean {
+  if (!model.nonDeterministicUnless) return true;
+  return params[model.nonDeterministicUnless] !== undefined;
+}
+
 export async function submitRun(
   modelName: string,
   params: Record<string, unknown>,
@@ -63,9 +108,15 @@ export async function submitRun(
     return { run_id: "", error: `unknown model '${modelName}'` };
   }
 
-  const runId = randomUUID();
+  const validationError = validateParams(model, params);
+  if (validationError) {
+    return { run_id: "", error: validationError };
+  }
 
-  if (!forceRefresh) {
+  const runId = randomUUID();
+  const cacheable = isCacheable(model, params);
+
+  if (!forceRefresh && cacheable) {
     const cached = await getCached(modelName, params);
     if (cached !== null) {
       await insertRun({
@@ -127,6 +178,11 @@ export async function submitRun(
 export interface RunView {
   run_id: string;
   model: string;
+  // Exactly the params object this run was submitted with -- no defaults
+  // filled in (see models.ts's module docstring). Surfaced so a caller can
+  // see/record precisely what reproduces this result, e.g. for the
+  // "recent/cached runs" browsing feature.
+  params: unknown;
   status: string;
   result: unknown;
   error: unknown;
@@ -139,6 +195,7 @@ function toView(row: RunRow): RunView {
   return {
     run_id: row.run_id,
     model: row.model,
+    params: row.params,
     // "finalizing" is an internal-only state (see claimRunForFinalize) --
     // surfaced to API consumers as "running" so it isn't a fifth status
     // value they need to handle.
@@ -276,7 +333,13 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
   // Real measured wall-clock time for this specific run (sandbox create +
   // execute), not an estimate -- persisted into run_cache too, same as the
   // Python version, so duration has a durable history across restarts.
-  await putCached(row.model, row.params, parsed, runSeconds);
+  // Skipped entirely for a non-cacheable run (see isCacheable/
+  // nonDeterministicUnless in models.ts) -- never write a single random
+  // draw into the cache as if it were "the" answer for these params.
+  const model = getModelOrNull(row.model);
+  if (model && isCacheable(model, row.params as Record<string, unknown>)) {
+    await putCached(row.model, row.params, parsed, runSeconds);
+  }
   await finishRunSucceeded(runId, parsed, runSeconds, false);
   row = (await getRun(runId))!;
   return toView(row);
