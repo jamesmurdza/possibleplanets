@@ -247,6 +247,39 @@ export async function getRun(runId: string): Promise<RunRow | null> {
   return rows.length ? (rows[0] as RunRow) : null;
 }
 
+export interface RunListItem {
+  run_id: string;
+  model: string;
+  params: unknown;
+  status: string;
+  cached: boolean;
+  progress: { percent: number } | null;
+  duration_seconds: number | null;
+  started_at: string;
+  updated_at: string;
+}
+
+/**
+ * Powers the dashboard's "Runs" and "Compare" tabs -- deliberately a
+ * lighter projection than getRun() (no `result`/`error` payload, which can
+ * be large) since this is meant to be polled/refreshed cheaply for a list
+ * view; a row's full detail is still just a GET /v1/runs/{run_id} away.
+ */
+export async function listRuns(limit = 50): Promise<RunListItem[]> {
+  await ensureDb();
+  const { rows } = await getPool().query(
+    `SELECT run_id, model, params, status, cached, progress, duration_seconds, started_at, updated_at
+     FROM runs ORDER BY started_at DESC LIMIT $1`,
+    [limit],
+  );
+  return rows.map((r: any) => ({
+    ...r,
+    // Same internal-state collapsing as lib/runs.ts's toView -- "finalizing"
+    // isn't a status API consumers should need to handle separately.
+    status: r.status === "finalizing" ? "running" : r.status,
+  }));
+}
+
 export async function updateRunProgress(runId: string, progress: { percent: number }): Promise<void> {
   await ensureDb();
   await getPool().query(
