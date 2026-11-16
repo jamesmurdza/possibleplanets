@@ -13,16 +13,29 @@ import Dropdown from "../components/Dropdown";
 // API itself.
 const GATEWAY_URL = "";
 
+interface ParameterSpec {
+  key: string;
+  label: string;
+  type: "number";
+  default: number;
+  min: number;
+  max: number;
+  step?: number;
+}
+
 interface ModelMeta {
   model: string;
   family: string;
   scenarios: string[];
   params_shape?: "scenario" | "scenarios";
+  parameters?: ParameterSpec[];
+  non_deterministic_unless?: string;
 }
 
 interface RunJob {
   run_id: string;
   model: string;
+  params: Record<string, unknown>;
   status: "queued" | "running" | "succeeded" | "failed";
   result: any;
   error: { message?: string } | null;
@@ -99,10 +112,29 @@ function chartAspectRatio() {
   return typeof window !== "undefined" && window.innerWidth <= 640 ? 1.4 : 3.4;
 }
 
-function buildParams(meta: ModelMeta, scenario: string): Record<string, unknown> {
-  if (meta.params_shape === "scenario") return { scenario };
-  if (meta.params_shape === "scenarios") return { scenarios: [scenario] };
-  throw new Error(`unknown params_shape '${meta.params_shape}'`);
+// `paramValues` holds raw text per parameter key -- "" means the field was
+// left untouched, not "set to its default." Only keys with a non-empty,
+// valid value are included in the submitted params, so leaving every
+// advanced field blank reproduces the exact same request (and the exact
+// same cache key) as a model with no advanced parameters at all. See
+// lib/models.ts's module docstring for why omitted and explicit-default are
+// deliberately never treated as equivalent.
+function buildParams(
+  meta: ModelMeta,
+  scenario: string,
+  paramValues: Record<string, string>,
+): Record<string, unknown> {
+  const params: Record<string, unknown> =
+    meta.params_shape === "scenarios" ? { scenarios: [scenario] } : { scenario };
+
+  for (const spec of meta.parameters ?? []) {
+    const raw = paramValues[spec.key];
+    if (raw === undefined || raw === "") continue;
+    const value = Number(raw);
+    if (!Number.isNaN(value)) params[spec.key] = value;
+  }
+
+  return params;
 }
 
 export default function Page() {
@@ -120,6 +152,11 @@ export default function Page() {
   const [rawFilename, setRawFilename] = useState("result.json");
   const [showRefresh, setShowRefresh] = useState(false);
   const [runDisabled, setRunDisabled] = useState(false);
+  // Raw per-parameter text input, keyed by ParameterSpec.key -- see
+  // buildParams's docstring for why "" (untouched) is never conflated with
+  // "set to the default."
+  const [paramValues, setParamValues] = useState<Record<string, string>>({});
+  const [lastRunParams, setLastRunParams] = useState<Record<string, unknown> | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -163,6 +200,7 @@ export default function Page() {
     const schema = await fetchJson(`/v1/models/${name}/schema`);
     setModelMeta(schema);
     setScenario(schema.scenarios[0] ?? "");
+    setParamValues({}); // fresh model -- every advanced field starts untouched
   }
 
   function setStatusText(text: string, isError = false) {
@@ -240,6 +278,7 @@ export default function Page() {
       setStatusText(`${name}: succeeded${job.cached ? " (cached)" : ""}${duration}`);
       renderChart(name, job.result);
       setRawDownload(job);
+      setLastRunParams(job.params ?? null);
       setShowRefresh(!!job.cached);
     } else {
       setStatusText(`${name}: failed - ${job.error?.message || "unknown error"}`, true);
@@ -251,13 +290,14 @@ export default function Page() {
     setRunDisabled(true);
     setShowRefresh(false);
     setRawUrl(null);
+    setLastRunParams(null);
 
     if (!modelMeta) return;
 
     try {
       setStatusText(`${modelName}: submitting...`);
       showLoading("submitting...", null);
-      const params = buildParams(modelMeta, scenario);
+      const params = buildParams(modelMeta, scenario, paramValues);
       const submitted = await fetchJson(`/v1/models/${modelName}/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -285,6 +325,15 @@ export default function Page() {
     setScenario(s);
     setShowRefresh(false);
   }
+
+  function onParamChange(key: string, raw: string) {
+    setParamValues((prev) => ({ ...prev, [key]: raw }));
+    setShowRefresh(false);
+  }
+
+  const parameters = modelMeta?.parameters ?? [];
+  const nonDeterministicKey = modelMeta?.non_deterministic_unless;
+  const nonDeterministicUnset = !!nonDeterministicKey && !paramValues[nonDeterministicKey];
 
   const modelOptions = models.map((m) => ({ value: m.model, label: `${m.model} (${m.family})` }));
   const scenarioOptions = (modelMeta?.scenarios ?? []).map((s) => ({ value: s, label: s }));
@@ -358,6 +407,35 @@ export default function Page() {
       </header>
 
       <main className="content">
+        {parameters.length > 0 && (
+          <details className="advanced-panel">
+            <summary>Advanced parameters</summary>
+            <div className="advanced-fields">
+              {parameters.map((spec) => (
+                <label key={spec.key} className="advanced-field">
+                  <span className="advanced-field-label">{spec.label}</span>
+                  <input
+                    type="number"
+                    placeholder={`default: ${spec.default}`}
+                    min={spec.min}
+                    max={spec.max}
+                    step={spec.step ?? "any"}
+                    value={paramValues[spec.key] ?? ""}
+                    onChange={(e) => onParamChange(spec.key, e.target.value)}
+                  />
+                </label>
+              ))}
+            </div>
+            {nonDeterministicKey && (
+              <p className="advanced-note">
+                {nonDeterministicUnset
+                  ? `This model's result isn't reproducible without a "${nonDeterministicKey}" value -- this run will not be cached, and a repeat run may give a different answer.`
+                  : `A "${nonDeterministicKey}" is set, so this run is reproducible and will be cached.`}
+              </p>
+            )}
+          </details>
+        )}
+
         <section className="panel">
           <div className="panel-body">
             <canvas ref={canvasRef} id="result-chart" height={220}></canvas>
@@ -381,6 +459,11 @@ export default function Page() {
 
       <footer className="statusbar">
         <span className={`status-text${statusIsError ? " error" : ""}`}>{status}</span>
+        {lastRunParams && (
+          <span className="status-params" title="Exact params this result was run with -- reuse them for a guaranteed cache hit">
+            {JSON.stringify(lastRunParams)}
+          </span>
+        )}
       </footer>
     </>
   );

@@ -284,6 +284,66 @@ a.icon-button {
   overflow: hidden;
 }
 
+/* --- Advanced parameters panel --- */
+
+.advanced-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 1rem;
+  padding: 0.6rem 1rem;
+}
+
+.advanced-panel summary {
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  user-select: none;
+}
+
+.advanced-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-top: 0.75rem;
+}
+
+.advanced-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.advanced-field-label {
+  white-space: nowrap;
+}
+
+.advanced-field input {
+  font-family: inherit;
+  font-size: 0.8125rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0.35rem 0.5rem;
+  width: 9rem;
+}
+
+.advanced-field input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.advanced-note {
+  margin: 0.6rem 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-faint);
+}
+
 .statusbar {
   position: fixed;
   bottom: 0;
@@ -292,6 +352,10 @@ a.icon-button {
   padding: 0.5rem 1.5rem;
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .status-text {
@@ -301,6 +365,17 @@ a.icon-button {
 
 .status-text.error {
   color: var(--color-error);
+}
+
+/* Exact params a just-finished run used -- see page.tsx's lastRunParams.
+   Monospace so a raw JSON object reads cleanly at a glance. */
+.status-params {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  color: var(--color-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .progress-bar {
