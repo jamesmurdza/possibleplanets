@@ -633,11 +633,7 @@ a.icon-button {
   background: var(--color-surface);
   padding: 0.55rem 0.7rem;
   cursor: pointer;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
-}
-
-.model-card:hover {
-  border-color: var(--color-accent);
+  transition: border-color 0.12s ease;
 }
 
 .model-card:focus-visible {
@@ -647,7 +643,6 @@ a.icon-button {
 
 .model-card.selected {
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 1px var(--color-accent);
 }
 
 .model-card-header {
@@ -715,11 +710,7 @@ a.icon-button {
   background: var(--color-surface);
   padding: 0.55rem 0.7rem;
   cursor: pointer;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
-}
-
-.scenario-card:hover {
-  border-color: var(--color-accent);
+  transition: border-color 0.12s ease;
 }
 
 .scenario-card:focus-visible {
@@ -729,7 +720,6 @@ a.icon-button {
 
 .scenario-card.selected {
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 1px var(--color-accent);
 }
 
 .scenario-card-header {
