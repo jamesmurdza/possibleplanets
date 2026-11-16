@@ -54,12 +54,12 @@ async function ensureZoomPluginRegistered() {
 type HoverFilter = { type: "model" | "scenario"; value: string } | null;
 type IsolateFilter = { type: "model" | "scenario"; value: string } | null;
 
-// Lines default to a neutral gray rather than per-model color -- with 31+
-// runs on screen at once, a fully-colored chart is mostly just visual
-// noise; color is reserved for actually pointing at something (a hovered
-// checkbox's matching lines), so it reads as a real signal instead of
-// decoration.
-const DEFAULT_LINE_COLOR = "#9aa0ab";
+// Lines default to a faded version of their own model color, not full
+// opacity -- with 31+ runs on screen at once, full-opacity color on every
+// line is mostly just visual noise; fading them back leaves the model
+// colors identifiable (unlike flattening everything to one neutral gray)
+// while still making a hover/isolate match's full-opacity color read as a
+// real signal instead of decoration.
 
 // Every model's series goes back to ~1750 (anomaly-from-preindustrial
 // convention, see e.g. oscar/run.py) and some run centuries into the
@@ -224,7 +224,7 @@ export default function OverviewPanel() {
           // Gray by default -- color only appears on hover, to actually
           // mean something (see DEFAULT_LINE_COLOR's comment) rather than
           // being decorative on every line all the time.
-          borderColor: colored ? colorWithAlpha(modelColor(model), 0.9) : colorWithAlpha(DEFAULT_LINE_COLOR, dimmed ? 0.15 : 0.55),
+          borderColor: colorWithAlpha(modelColor(model), colored ? 0.9 : dimmed ? 0.1 : 0.4),
           borderWidth: colored ? 2.75 : 1.2,
           pointRadius: 0,
           spanGaps: false,
