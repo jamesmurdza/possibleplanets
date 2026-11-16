@@ -364,7 +364,15 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
   try {
     parsed = JSON.parse(jsonLine);
   } catch {
-    await finishRunFailed(runId, { code: "model_run_failed", message: "could not parse model output" }, runSeconds);
+    // Keep the actual output around (stdout_tail) -- without it, a parse
+    // failure here was previously undiagnosable after the fact, since the
+    // sandbox is already deleted above by the time this runs (confirmed by
+    // hitting exactly this gap debugging a real oscar run.py failure).
+    await finishRunFailed(
+      runId,
+      { code: "model_run_failed", message: "could not parse model output", stdout_tail: stdout.slice(-2000) },
+      runSeconds,
+    );
     row = (await getRun(runId))!;
     return toView(row);
   }
