@@ -23,7 +23,31 @@ function scenarioOf(params: Record<string, unknown>): string | undefined {
   return native ? canonicalScenario(native) : undefined;
 }
 
+// chartjs-plugin-zoom touches `window` at import time (checking for touch/
+// hammer support), which crashes Next's build-time server prerender of
+// this page (confirmed by testing: `next build` failed with "window is not
+// defined" until this import was deferred). Registered once the component
+// actually mounts in a real browser instead of at module load.
+let zoomPluginRegistered = false;
+async function ensureZoomPluginRegistered() {
+  if (zoomPluginRegistered) return;
+  const zoomPlugin = (await import("chartjs-plugin-zoom")).default;
+  Chart.register(zoomPlugin);
+  zoomPluginRegistered = true;
+}
+
 type HoverFilter = { type: "model" | "scenario"; value: string } | null;
+
+// Every model's series goes back to ~1750 (anomaly-from-preindustrial
+// convention, see e.g. oscar/run.py) and some run centuries into the
+// future (hector/dice/magicc keep going past 2100, up to the 2200s-2300s)
+// -- defaulting to that full range squashes the one stretch anyone
+// actually cares about (recent history through the scenario period) into
+// a sliver of the chart. Default window instead to 1950-2100, clamped to
+// whatever the real data covers if it's narrower than that. Zooming out
+// (see the zoom plugin options below) still reaches the full range.
+const DEFAULT_WINDOW_START = 1950;
+const DEFAULT_WINDOW_END = 2100;
 
 export default function OverviewPanel() {
   const [allRuns, setAllRuns] = useState<RunListItem[]>([]);
@@ -121,7 +145,11 @@ export default function OverviewPanel() {
         hiddenByFilter,
         dataset: {
           label: `${model} · ${scenario}`,
-          data: d.data,
+          // {x, y} points (not a plain values array under shared `labels`)
+          // -- needed for a real numeric/linear x scale below, which is
+          // what lets the zoom plugin zoom/pan to an arbitrary year range
+          // instead of just jumping between category-scale label indices.
+          data: aligned.labels.map((year, idx) => ({ x: year, y: d.data[idx] })),
           borderColor: colorWithAlpha(modelColor(model), dimmed ? 0.12 : 0.85),
           borderWidth: isHoverMatch ? 2.75 : 1.4,
           pointRadius: 0,
@@ -132,10 +160,11 @@ export default function OverviewPanel() {
       };
     });
 
-    const visibleData = perRun.filter((p) => !p.hiddenByFilter).map((p) => p.dataset.data as (number | null)[]);
+    const visiblePoints = perRun.filter((p) => !p.hiddenByFilter).map((p) => p.dataset.data as { x: number; y: number | null }[]);
+    const averageY = averageSeries(visiblePoints.map((points) => points.map((pt) => pt.y)));
     const average = {
-      label: `Average (${visibleData.length} visible run${visibleData.length === 1 ? "" : "s"})`,
-      data: averageSeries(visibleData),
+      label: `Average (${visiblePoints.length} visible run${visiblePoints.length === 1 ? "" : "s"})`,
+      data: aligned.labels.map((year, idx) => ({ x: year, y: averageY[idx] })),
       borderColor: "#3a3f4b",
       borderDash: [7, 4],
       borderWidth: 2.25,
@@ -144,41 +173,85 @@ export default function OverviewPanel() {
       order: 1,
     };
 
+    const minYear = aligned.labels[0];
+    const maxYear = aligned.labels[aligned.labels.length - 1];
+    const windowMin = Math.max(minYear, DEFAULT_WINDOW_START);
+    const windowMax = Math.min(maxYear, DEFAULT_WINDOW_END);
+
     return {
-      labels: aligned.labels,
       datasets: [...perRun.map((p) => p.dataset), average],
-      visibleCount: visibleData.length,
+      visibleCount: visiblePoints.length,
       totalCount: perRun.length,
+      minYear,
+      maxYear,
+      // If the default window would be empty/inverted (e.g. every run's
+      // data ends before 1950), fall back to the full real range instead.
+      windowMin: windowMin < windowMax ? windowMin : minYear,
+      windowMax: windowMin < windowMax ? windowMax : maxYear,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plottableRuns, jobs, excludedModels, excludedScenarios, hovered]);
 
   useEffect(() => {
     if (!chartData || !canvasRef.current) return;
+    let cancelled = false;
+    ensureZoomPluginRegistered().then(() => {
+      if (cancelled || !chartData || !canvasRef.current) return;
+      renderChart(chartData);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartData]);
+
+  function renderChart(chartData: any) {
+    if (!canvasRef.current) return;
     if (chartRef.current) chartRef.current.destroy();
     chartRef.current = new Chart(canvasRef.current, {
       type: "line",
-      data: { labels: chartData.labels, datasets: chartData.datasets },
+      data: { datasets: chartData.datasets },
       options: {
         animation: false,
         aspectRatio: chartAspectRatio(),
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: false },
+          // Wheel/pinch zoom and click-drag pan, both x-axis only (the
+          // interesting "zoom in" case here is a narrower year range, not
+          // a narrower temperature range). Clamped to the real data's own
+          // min/max so you can't pan/zoom into empty space beyond it.
+          zoom: {
+            limits: { x: { min: chartData.minYear, max: chartData.maxYear } },
+            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" },
+            pan: { enabled: true, mode: "x" },
+          },
+        },
         scales: {
-          x: { title: { display: true, text: "year" } },
+          x: {
+            type: "linear",
+            min: chartData.windowMin,
+            max: chartData.windowMax,
+            title: { display: true, text: "year" },
+            ticks: { stepSize: 10 },
+          },
           y: { title: { display: true, text: "temperature anomaly" } },
         },
       },
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chartData]);
+  }
 
   return (
     <div>
       <div className="panel-header">
         <h2 className="panel-title">Overview</h2>
-        <button className="text-button" onClick={refresh} disabled={loading}>
-          Refresh
-        </button>
+        <div className="run-controls">
+          <button className="text-button" onClick={() => chartRef.current?.resetZoom()}>
+            Reset zoom
+          </button>
+          <button className="text-button" onClick={refresh} disabled={loading}>
+            Refresh
+          </button>
+        </div>
       </div>
 
       {error && <p className="panel-error">{error}</p>}
@@ -196,6 +269,7 @@ export default function OverviewPanel() {
           <section className="panel">
             <div className="panel-body">
               <canvas ref={canvasRef} height={260}></canvas>
+              <p className="chart-hint">Scroll/pinch to zoom, drag to pan -- "Reset zoom" above returns to this default view.</p>
             </div>
           </section>
 
