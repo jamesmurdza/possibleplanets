@@ -23,6 +23,21 @@ function scenarioOf(params: Record<string, unknown>): string | undefined {
   return native ? canonicalScenario(native) : undefined;
 }
 
+// Same purpose as db.ts's own sortKeysDeep (not importable here -- that
+// one's server-only, uses node's `crypto`): makes two params objects with
+// the same keys in a different order dedupe-key identically.
+function sortKeysDeep(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortKeysDeep);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      out[key] = sortKeysDeep((value as Record<string, unknown>)[key]);
+    }
+    return out;
+  }
+  return value;
+}
+
 // chartjs-plugin-zoom touches `window` at import time (checking for touch/
 // hammer support), which crashes Next's build-time server prerender of
 // this page (confirmed by testing: `next build` failed with "window is not
@@ -102,10 +117,34 @@ export default function OverviewPanel() {
   // Every run this component can actually plot -- has a succeeded job with
   // a chart adapter for its model. Order fixed by allRuns so re-fetching
   // (e.g. Refresh) doesn't reshuffle which line is which color/position.
-  const plottableRuns = useMemo(
-    () => allRuns.filter((r) => jobs[r.run_id]?.status === "succeeded" && CHART_ADAPTERS[r.model]),
-    [allRuns, jobs],
-  );
+  //
+  // Deduped to the single most recently started run per exact (model,
+  // params) -- same "latest wins" convention ComparePanel's grouping
+  // already uses. Without this, every past attempt at the identical
+  // (model, params) shows up as its own line forever: e.g. oscar's run.py
+  // had a bug (fixed earlier) that returned only its 2014-2100 scenario
+  // leg instead of the full 1750-2100 series: the old, already-superseded
+  // 2014-2100 runs are still sitting in the `runs` table as real past
+  // successes, so without deduping they'd keep showing up alongside the
+  // fixed 1750-2100 reruns of those exact same scenarios -- which is
+  // exactly what looked like oscar lines "starting in a weird place"
+  // (confirmed by querying the DB directly: two SSP1-1.9 oscar runs
+  // pre-dated the run.py fix and still start at 2014, not 1750).
+  const plottableRuns = useMemo(() => {
+    const succeeded = allRuns.filter((r) => jobs[r.run_id]?.status === "succeeded" && CHART_ADAPTERS[r.model]);
+    const latestByKey = new Map<string, RunListItem>();
+    for (const r of succeeded) {
+      const key = `${r.model}:${JSON.stringify(sortKeysDeep(r.params))}`;
+      const existing = latestByKey.get(key);
+      if (!existing || new Date(r.started_at) > new Date(existing.started_at)) {
+        latestByKey.set(key, r);
+      }
+    }
+    // Keep allRuns' own order (not Map insertion order) so re-fetching
+    // doesn't reshuffle which line is which color/position.
+    const kept = new Set(latestByKey.values());
+    return succeeded.filter((r) => kept.has(r));
+  }, [allRuns, jobs]);
 
   const allModels = useMemo(() => Array.from(new Set(plottableRuns.map((r) => r.model))).sort(), [plottableRuns]);
   const allScenarios = useMemo(
