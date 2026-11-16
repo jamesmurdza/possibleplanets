@@ -578,6 +578,16 @@ a.icon-button {
 
 .form-field .dropdown {
   max-width: none;
+  /* .dropdown's own `flex: 1 1 9.5rem` is meant for a row layout (e.g.
+     .run-controls), where it sets a width basis -- but .form-field is a
+     column flex container, so that same shorthand set the dropdown's
+     HEIGHT basis/grow instead, stretching it to fill the field's full
+     height and leaving a large blank gap below the toggle button
+     (confirmed via computed style: flex-basis 152px, flex-grow 1, nothing
+     to do with the always-closed dropdown-menu). Override back to a
+     normal, content-sized block here. */
+  flex: none;
+  width: 100%;
 }
 
 .form-field-block {
