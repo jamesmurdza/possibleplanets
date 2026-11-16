@@ -9,12 +9,13 @@
   --color-accent: #2f6feb;
   --color-accent-hover: #2558c4;
   --color-error: #c0152f;
-  /* Square corners throughout -- both radius tokens zeroed here rather than
-     removed, so every rule still referencing var(--radius-sm/md) (plus the
-     few hardcoded pill/badge radii flattened individually below) stays
-     consistent without hunting down each declaration separately. */
-  --radius-sm: 0;
-  --radius-md: 0;
+  /* A few pixels of rounding throughout -- both radius tokens set here
+     rather than removed, so every rule still referencing
+     var(--radius-sm/md) (plus the few hardcoded pill/badge radii set
+     individually below) stays consistent without hunting down each
+     declaration separately. */
+  --radius-sm: 3px;
+  --radius-md: 4px;
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
   --shadow-md: 0 2px 6px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
 
@@ -100,7 +101,7 @@ body {
   text-align: left;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   padding: 0.5rem 0.6rem;
   font-size: 0.8125rem;
   font-weight: 500;
@@ -258,7 +259,7 @@ a.icon-button {
   font-size: 0.75rem;
   white-space: nowrap;
   padding: 0.2rem 0.5rem;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
 }
 
@@ -371,7 +372,7 @@ a.icon-button {
 
 .dropdown-option {
   padding: 0.4rem 0.6rem;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   font-size: 0.8125rem;
   white-space: nowrap;
   cursor: pointer;
@@ -500,7 +501,7 @@ a.icon-button {
   font-size: 0.7rem;
   font-weight: 500;
   padding: 0.12rem 0.5rem;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   text-transform: capitalize;
 }
 
@@ -801,25 +802,25 @@ a.icon-button {
   width: 100%;
   height: 4px;
   border: none;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   appearance: none;
 }
 
 .progress-bar::-webkit-progress-bar {
   background: var(--color-border);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
 }
 
 .progress-bar::-webkit-progress-value {
   background: var(--color-accent);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   transition: width 0.2s ease;
 }
 
 .progress-bar::-moz-progress-bar {
   background: var(--color-accent);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
 }
 
 .chart-placeholder {
