@@ -69,6 +69,22 @@ SUPPORTED_SCENARIOS = [
 PROGRESS_FILE = "/tmp/progress.json"
 
 
+def _nan_to_none(values):
+    """
+    Confirmed by hitting this as a real failure: some scenarios (e.g.
+    SSP3-7.0-LowNTCF at nMC=1) produce a D_Tg series that goes to NaN partway
+    through -- a genuine OSCAR/data limitation for that scenario+sample
+    size, not a bug in this script. Python's json.dumps writes a bare `NaN`
+    token by default (valid to Python's own json module, but not to the
+    JSON spec), which crashes the gateway's JSON.parse on the other end,
+    turning "some years have no valid value" into "the entire run failed to
+    parse". Replacing NaN/Infinity with None here makes that honest in the
+    output instead (those years are genuinely null), rather than silently
+    dropping them or crashing the whole result.
+    """
+    return [None if (isinstance(v, float) and (v != v or v in (float("inf"), float("-inf")))) else v for v in values]
+
+
 def _write_progress(percent):
     """
     Same mechanism as sandboxes/fair/run.py -- a direct file write, read back
@@ -187,8 +203,8 @@ def main():
     _write_progress(100)
 
     years = [int(y) for y in Out_scen.year.values]
-    mean_temp = Out_scen.D_Tg.mean("config").values.tolist()
-    std_temp = Out_scen.D_Tg.std("config").values.tolist()
+    mean_temp = _nan_to_none(Out_scen.D_Tg.mean("config").values.tolist())
+    std_temp = _nan_to_none(Out_scen.D_Tg.std("config").values.tolist())
 
     result = {
         "status": "succeeded",
