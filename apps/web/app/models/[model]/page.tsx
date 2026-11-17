@@ -68,7 +68,7 @@ export default function ModelArticlePage() {
           {loading ? (
             <p className="public-chart-empty">Loading runs...</p>
           ) : (
-            <TemperatureChart series={ownSeries} windowMin={2000} windowMax={2100} colorBy="scenario" />
+            <TemperatureChart series={ownSeries} windowMin={2000} windowMax={2100} colorBy="scenario" legend />
           )}
         </section>
 

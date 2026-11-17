@@ -39,6 +39,7 @@ export default function TemperatureChart({
   aspectRatio,
   hovered,
   colorBy = "model",
+  legend = false,
 }: {
   series: ChartSeries[];
   /** Optional fixed x-axis window (e.g. the home page's 2000-2100) --
@@ -60,6 +61,12 @@ export default function TemperatureChart({
    * each line by its scenario instead -- otherwise every line on a
    * single-model chart would render in the exact same color. */
   colorBy?: "model" | "scenario";
+  /** Off by default -- the home page's chart can have dozens of per-run
+   * lines plus the dashed average, where a legend would be a wall of
+   * near-duplicate entries, not useful. Model article pages (one line per
+   * scenario, `colorBy="scenario"`) pass this true -- a handful of
+   * distinct, meaningful entries worth labeling. */
+  legend?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -154,7 +161,7 @@ export default function TemperatureChart({
           y: { title: { display: true, text: "temperature anomaly" } },
         },
         plugins: {
-          legend: { display: false },
+          legend: { display: legend, position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } },
           tooltip: { mode: "nearest", intersect: false },
         },
       },
@@ -164,7 +171,7 @@ export default function TemperatureChart({
       chartRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [!!chartData, windowMin, windowMax, aspectRatio]);
+  }, [!!chartData, windowMin, windowMax, aspectRatio, legend]);
 
   // Hover (and any other dataset-only change) updates the existing
   // instance in place instead of recreating it -- no resize flash.
