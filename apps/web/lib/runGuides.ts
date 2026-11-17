@@ -33,7 +33,39 @@
  * calibrated) ocean heat capacity/transfer values, since no calibrated
  * ensemble ships inside the `fair` package itself; a link to the full
  * guides/FAIR.markdown walkthrough covers the real calibrated version.
+ *
+ * Every model's step list ends with restApiStep() -- a curl example
+ * against this project's own REST gateway (app/v1/*\/route.ts) as an
+ * alternative to local setup. That endpoint requires an API key
+ * (lib/apiKey.ts) and there's no public self-serve key yet, so the
+ * example's YOUR_API_KEY is a literal placeholder and the shown command
+ * genuinely 401s -- confirmed by testing, not a stale/aspirational
+ * example. Intentional: showing "and here's the request shape" without
+ * implying it works today would be misleading the other way.
  */
+
+// Shown as the last step for every model: this project's own REST gateway
+// (apps/web/app/v1/*/route.ts), as an alternative to the local setup above.
+// POST /v1/models/{model}/runs and GET /v1/runs/{runId} require an
+// Authorization: Bearer <API key> header -- see lib/apiKey.ts. There is no
+// public self-serve key yet (real per-account API keys are planned; this
+// gate exists now so that's a drop-in later, not a breaking change), so
+// `YOUR_API_KEY` is a literal placeholder: pasting this exact command WILL
+// 401. It isn't a stale example -- the 401 is the accurate, current
+// behavior, confirmed by testing (see git history for this file).
+function restApiStep(model: string): RunGuideStep {
+  return {
+    text:
+      "Or skip local setup entirely and call this project's own REST gateway, which runs the same model in a fresh sandbox per request. Run submission requires an API key -- there isn't a public self-serve one yet (real per-account API keys are planned), so this exact command will return 401 Unauthorized as shown; it's here to show the request shape, not to be copy-paste runnable yet.",
+    code:
+      `curl -X POST https://<this-site>/v1/models/${model}/runs \\\n` +
+      `  -H "Authorization: Bearer YOUR_API_KEY" \\\n` +
+      `  -H "Content-Type: application/json" \\\n` +
+      `  -d '{"params": {"scenario": "..."}}'\n` +
+      `# -> 401 {"detail": "missing or invalid API key"}`,
+    language: "bash",
+  };
+}
 
 export interface RunGuideStep {
   text: string;
@@ -58,6 +90,7 @@ const RUN_GUIDES: Record<string, RunGuideStep[]> = {
         'from fair import FAIR\nfrom fair.io import read_properties\nfrom fair.interface import initialise, fill\n\nf = FAIR()\nf.define_time(2000, 2050, 1)\nf.define_scenarios(["ssp245"])\nf.define_configs(["central"])\n\nspecies, properties = read_properties()\nf.define_species(species, properties)\nf.allocate()\n\nf.fill_species_configs()\nf.fill_from_rcmip()  # downloads standard SSP emissions/concentrations\n\n# illustrative (not calibrated) ocean heat response\nfill(f.climate_configs["ocean_heat_capacity"], [5, 20, 100], config="central")\nfill(f.climate_configs["ocean_heat_transfer"], [1.0, 2.0, 1.0], config="central")\nfill(f.climate_configs["deep_ocean_efficacy"], 1.29, config="central")\n\ninitialise(f.concentration, f.species_configs["baseline_concentration"])\ninitialise(f.forcing, 0)\ninitialise(f.temperature, 0)\ninitialise(f.cumulative_emissions, 0)\ninitialise(f.airborne_emissions, 0)\n\nf.run()\nprint(f.temperature.sel(layer=0, scenario="ssp245", config="central").values[-5:])',
       language: "python",
     },
+    restApiStep("fair"),
   ],
   oscar: [
     {
@@ -70,6 +103,7 @@ const RUN_GUIDES: Record<string, RunGuideStep[]> = {
       code: "poetry run python run_scripts/basic_example_1.py",
       language: "bash",
     },
+    restApiStep("oscar"),
   ],
   dice: [
     {
@@ -83,6 +117,7 @@ const RUN_GUIDES: Record<string, RunGuideStep[]> = {
       code: "using DICE\nresult = solve(OptimalPrice, v2016R2())\nresult.results.Tₐₜ",
       language: "julia",
     },
+    restApiStep("dice"),
   ],
   hector: [
     {
@@ -90,6 +125,7 @@ const RUN_GUIDES: Record<string, RunGuideStep[]> = {
       code: "docker build -t hector-sandbox sandboxes/hector\ndocker run --rm hector-sandbox",
       language: "bash",
     },
+    restApiStep("hector"),
   ],
   magicc: [
     {
@@ -97,6 +133,7 @@ const RUN_GUIDES: Record<string, RunGuideStep[]> = {
       code: "docker build -t magicc-sandbox sandboxes/magicc\ndocker run --rm magicc-sandbox",
       language: "bash",
     },
+    restApiStep("magicc"),
   ],
   twolayer: [
     {
@@ -104,6 +141,7 @@ const RUN_GUIDES: Record<string, RunGuideStep[]> = {
       code: "docker build -t twolayer-sandbox sandboxes/twolayer\ndocker run --rm twolayer-sandbox",
       language: "bash",
     },
+    restApiStep("twolayer"),
   ],
 };
 

@@ -1,12 +1,20 @@
 import { getModelOrNull } from "../../../../../lib/models";
 import { submitRun } from "../../../../../lib/runs";
 import { corsJson, corsOptions } from "../../../../../lib/cors";
+import { hasValidApiKey } from "../../../../../lib/apiKey";
 
 export async function OPTIONS() {
   return corsOptions();
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ model: string }> }) {
+  // Run creation requires an API key -- see lib/apiKey.ts for why only
+  // this route and GET /v1/runs/{runId} check it, not the read-only
+  // listing endpoints.
+  if (!hasValidApiKey(req)) {
+    return corsJson({ detail: "missing or invalid API key" }, { status: 401 });
+  }
+
   const { model } = await params;
   if (!getModelOrNull(model)) {
     return corsJson({ detail: `unknown model '${model}'` }, { status: 404 });

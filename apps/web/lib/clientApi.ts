@@ -5,9 +5,22 @@
  * THIS page, not a constraint on the API (CORS is wide open -- lib/cors.ts).
  */
 import type { ModelMeta } from "./clientTypes";
+import { GATEWAY_API_KEY } from "./apiKey";
 
+// Attached to every request this helper makes, not just the two routes
+// that currently check it (POST /v1/models/{model}/runs, GET
+// /v1/runs/{runId} -- see lib/apiKey.ts) -- the read-only endpoints just
+// ignore it. Simpler than threading the header through only some call
+// sites, and means a future newly-gated endpoint works from day one
+// without every caller needing an update.
 export async function fetchJson(path: string, options?: RequestInit) {
-  const res = await fetch(path, options);
+  const res = await fetch(path, {
+    ...options,
+    headers: {
+      ...options?.headers,
+      Authorization: `Bearer ${GATEWAY_API_KEY}`,
+    },
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || `${res.status} ${res.statusText}`);
