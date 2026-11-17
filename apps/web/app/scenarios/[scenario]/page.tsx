@@ -72,10 +72,14 @@ export default function ScenarioArticlePage() {
         )}
 
         <section className="public-chart-section">
+          {/* windowMin is 2015, not 2000 -- the SSP driver data itself only
+              starts at 2014 (lib/scenarioDrivers.ts's
+              SCENARIO_DRIVER_YEARS), so a 2000 start just showed 15 years
+              of empty chart before any real line began. */}
           {seriesLoading ? (
             <p className="public-chart-empty">Loading runs...</p>
           ) : (
-            <ScenarioChart years={driver.years} values={driver.values} series={ownSeries} windowMin={2000} windowMax={2100} />
+            <ScenarioChart years={driver.years} values={driver.values} series={ownSeries} windowMin={2015} windowMax={2100} />
           )}
         </section>
 
