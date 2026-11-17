@@ -75,7 +75,12 @@ export default function ModelArticlePage() {
         {assumptions && (
           <section className="article-section">
             <h2>What this model assumes</h2>
-            <p className="assumptions-summary">{assumptions.summary}</p>
+            {/* assumptions.summary (e.g. "A calibrated climate emulator.") is
+                a generic one-liner that mostly restates the lede/title --
+                not shown here; this section's heading already supplies the
+                equivalent framing, and anything substantive lives in the
+                bullet items below. Still used as-is in the dashboard's (i)
+                info modal, which is a different, more compact context. */}
             <ul className="assumptions-list">
               {assumptions.items.map((item, i) => (
                 <li key={i}>{item}</li>
