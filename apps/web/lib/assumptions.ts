@@ -60,6 +60,22 @@ const MODEL_ASSUMPTIONS: Record<string, AssumptionSection> = {
       "Temperature is an anomaly relative to MAGICC's own pre-industrial baseline.",
     ],
   },
+  twolayer: {
+    summary: "A bare energy-balance physics engine.",
+    items: [
+      "Takes a radiative forcing time series as its input -- it doesn't compute forcing from emissions itself.",
+      "The whole climate system is reduced to two layers: a fast-responding surface and a slow-responding deep ocean.",
+      "No spatial resolution, no carbon cycle, no aerosol or methane chemistry -- only the physical response to a given forcing.",
+    ],
+  },
+  world3: {
+    summary: "A population/resources/pollution systems model, not a climate model.",
+    items: [
+      "Has no temperature or emissions output at all -- its variables are population, industrial output, food, pollution, and nonrenewable resources.",
+      "Models the whole world as one unit, with no countries or regions.",
+      "Built in the 1970s on then-current assumptions about resource reserves and technology, not updated to reflect anything discovered since.",
+    ],
+  },
 };
 
 export function modelAssumptions(model: string): AssumptionSection | null {
@@ -95,7 +111,17 @@ export function scenarioAssumptions(model: string, nativeScenario: string, canon
     };
   }
 
-  // SSP-framework models (hector, fair, oscar).
+  if (model === "world3") {
+    return {
+      summary: "The only run World3 offers here -- its own standard 'business as usual' case.",
+      items: [
+        "Assumes no deliberate policy shift away from historical trends in population, industry, or pollution.",
+        "Not an emissions scenario -- World3 has no SSP/RCP concept at all.",
+      ],
+    };
+  }
+
+  // SSP-framework models (hector, fair, oscar, twolayer).
   return {
     summary: `${canonicalLabel} is a Shared Socioeconomic Pathway (SSP).`,
     items: [
@@ -117,6 +143,9 @@ export function scenarioAssumptions(model: string, nativeScenario: string, canon
 export function scenarioAssumptionsByLabel(label: string): AssumptionSection {
   if (label === "base" || label === "optimal") {
     return scenarioAssumptions("dice", label, label);
+  }
+  if (label === "standard_run") {
+    return scenarioAssumptions("world3", label, label);
   }
   if (/^RCP/i.test(label)) {
     return scenarioAssumptions("magicc", label, label);

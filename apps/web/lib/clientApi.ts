@@ -68,6 +68,26 @@ export const CHART_ADAPTERS: Record<string, (result: any) => { labels: any[]; va
       label: `MAGICC surface temperature anomaly (${result.scenario})`,
     };
   },
+  twolayer(result) {
+    const native = result.result;
+    return {
+      labels: native.years,
+      values: native.T_atmos,
+      label: `Two-layer surface temperature anomaly (${result.scenario})`,
+    };
+  },
+  // World3 has no temperature/forcing output at all (see sandboxes/world3/
+  // run.py) -- population is its own most-recognizable headline series
+  // (same one pyworld3's own hello_world3() example leads with), not a
+  // stand-in for the other models' temperature charts.
+  world3(result) {
+    const native = result.result;
+    return {
+      labels: native.years,
+      values: native.pop,
+      label: `World3 population (${result.scenario})`,
+    };
+  },
 };
 
 // --- Cross-model scenario naming -----------------------------------------

@@ -351,6 +351,67 @@ export const MODELS: Record<string, ModelMeta> = {
       },
     ],
   },
+  twolayer: {
+    family: "RCM",
+    description: "A bare energy-balance physics engine, driven by a published forcing dataset.",
+    website: "https://github.com/openscm/openscm-twolayermodel",
+    dockerfile: path.join(SANDBOXES_DIR, "twolayer", "Dockerfile"),
+    // Same 8 SSPs sandboxes/fair exposes -- confirmed present as rows in
+    // the bundled rcmip-erf.csv (RCMIP v4.0.0, trimmed). Unlike hector/
+    // fair/oscar, this model has no scenario handling of its own: it's
+    // driven directly by an Effective Radiative Forcing (ERF) series, so
+    // "scenario" here means "which bundled ERF series to load", not a
+    // native model concept the way ssp126 is to pyhector.
+    scenarios: ["ssp119", "ssp126", "ssp245", "ssp370", "ssp434", "ssp460", "ssp534-over", "ssp585"],
+    params_shape: "scenario",
+    // Measured directly (bare Debian 12 host): loading the bundled CSV +
+    // running TwoLayerModel completes in well under a second per scenario,
+    // including import time. Generous buffer above that.
+    exec_timeout_seconds: 60,
+    // No progress hook exposed by openscm-twolayermodel -- same situation
+    // already confirmed for hector/dice/magicc.
+    supports_progress: false,
+    // Confirmed by testing (comparing TwoLayerModel() with no override
+    // against `lambda0` passed explicitly at its own documented default,
+    // 3.74/3 W/m^2/degC): bit-identical output. Overriding it with a lower
+    // value (0.8) produced a real, large difference (ssp245's 2500 value
+    // moved from ~3.48 to ~5.10 degC) -- a real knob, not a no-op.
+    parameters: [
+      {
+        key: "climate_feedback_parameter",
+        label: "Climate feedback parameter (W/m² per °C)",
+        type: "number",
+        default: 1.2467,
+        min: 0.5,
+        max: 3.0,
+        step: 0.01,
+      },
+    ],
+  },
+  world3: {
+    family: "IAM",
+    description: "The 'Limits to Growth' population/resources/pollution model.",
+    website: "https://github.com/cvanwynsberghe/pyworld3",
+    dockerfile: path.join(SANDBOXES_DIR, "world3", "Dockerfile"),
+    // Only one real scenario -- see sandboxes/world3/run.py's docstring:
+    // pyworld3 ships no pre-built named scenario presets of its own
+    // (confirmed by checking its docs directly), unlike the original
+    // "Limits to Growth" book's scenarios 1-10, which are specific
+    // constant combinations this project hasn't sourced/verified.
+    scenarios: ["standard_run"],
+    params_shape: "scenario",
+    // Measured directly (bare Debian 12 host): a full fast-mode run
+    // (1900-2100) completes in well under half a second, including import
+    // time. Generous buffer above that.
+    exec_timeout_seconds: 60,
+    // No progress hook -- pyworld3's run loop has no real intermediate
+    // signal to report (same situation as hector/dice/magicc).
+    supports_progress: false,
+    // Not yet measured against a real Daytona sandbox (unlike hector/
+    // fair/dice/magicc's cpu:2 settings, which came from controlled
+    // multi-trial experiments) -- left at the platform default rather
+    // than guessing a resources value with no measurement behind it.
+  },
 };
 
 export function getModelOrNull(model: string): ModelMeta | null {
