@@ -104,6 +104,15 @@ export const MODELS: Record<string, ModelMeta> = {
     // log file, and completes in well under a second -- nothing real to
     // report. progress stays null rather than faking an estimate.
     supports_progress: false,
+    // Confirmed by a controlled 2x2 experiment (5 trials per cell, real
+    // Daytona sandboxes, timing only the exec call): CPU count alone
+    // explains hector's run time -- 1cpu/1gb and 1cpu/4gb both median
+    // ~2.0-2.1s, 4cpu/1gb and 4cpu/4gb both median ~1.06-1.07s. Memory
+    // made no measurable difference in either row; CPU alone roughly
+    // halved it in both columns. So only cpu is bumped here, memory is
+    // left at the default rather than copying oscar's {cpu:4, memory:8}
+    // pattern without evidence memory does anything for this model.
+    resources: { cpu: 4 },
     // Confirmed by testing (comparing pyhector.run() with no override
     // against the same values passed explicitly via `config`): these are
     // real, independent knobs pyhector exposes, and overriding them with
