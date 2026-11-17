@@ -7,6 +7,7 @@ import { fetchJson, canonicalScenario, scenarioDescription } from "../../../lib/
 import { scenarioAssumptionsByLabel } from "../../../lib/assumptions";
 import { scenarioDriverSeries } from "../../../lib/scenarioDrivers";
 import ScenarioChart from "../../../components/ScenarioChart";
+import { PublicHeader, PublicFooter } from "../../../components/PublicChrome";
 import type { ModelListItem } from "../../../lib/clientTypes";
 
 export default function ScenarioArticlePage() {
@@ -69,19 +70,7 @@ export default function ScenarioArticlePage() {
           <ScenarioChart years={driver.years} values={driver.values} />
         </section>
       </main>
+      <PublicFooter />
     </div>
-  );
-}
-
-function PublicHeader() {
-  return (
-    <header className="public-header">
-      <Link href="/" className="public-header-title">
-        Simple Climate Models
-      </Link>
-      <a href="/login" className="public-header-link">
-        Dashboard login
-      </a>
-    </header>
   );
 }

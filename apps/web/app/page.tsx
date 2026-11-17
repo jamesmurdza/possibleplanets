@@ -10,6 +10,7 @@ import Link from "next/link";
 import { fetchJson, canonicalScenario } from "../lib/clientApi";
 import { useRunsAndJobs } from "../lib/useRunsData";
 import TemperatureChart from "../components/TemperatureChart";
+import { PublicHeader, PublicFooter } from "../components/PublicChrome";
 import type { ModelListItem } from "../lib/clientTypes";
 
 // SSPs are a socioeconomic-storyline scenario framework; RCPs (magicc) and
@@ -46,19 +47,15 @@ export default function HomePage() {
 
   return (
     <div className="public-page">
-      <header className="public-header">
-        <div className="public-header-title">Simple Climate Models</div>
-        <a href="/login" className="public-header-link">
-          Dashboard login
-        </a>
-      </header>
+      <PublicHeader />
 
       <main className="public-main">
         <section className="public-hero">
           <h1>How much will the world warm?</h1>
           <p>
-            Five independent climate/economic models, run against the same published emissions scenarios. This chart
-            shows every model run on record, 2000-2100, with the average across all of them dashed.
+            {models.length || "Several"} independent climate/economic models, run against the same published
+            emissions scenarios. This chart shows every model run on record, 2000-2100, with the average across all
+            of them dashed.
           </p>
         </section>
 
@@ -92,6 +89,8 @@ export default function HomePage() {
           </div>
         </section>
       </main>
+
+      <PublicFooter />
     </div>
   );
 }

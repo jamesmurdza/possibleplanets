@@ -1161,56 +1161,96 @@ a.icon-button {
 }
 
 /* --- Public site (home + model/scenario articles) ---
-   Deliberately its own look, no .sidebar/.app-shell -- this is meant to
-   read as a plain public page, not the dashboard. */
+   Themed after the project's existing Jekyll site (../_sass/minima,
+   ../_config.yml, ../_includes/header.html + footer.html) rather than the
+   dashboard's own look -- these are minima's actual SCSS variables, not
+   approximations: $text-color #444, $background-color #fdfdfd,
+   $brand-color #2a7ae2, $grey-color-dark (darken(#828282, 25%)),
+   $grey-color-light (lighten(#828282, 40%)), 850px content width ($on-
+   laptop), 30px spacing unit, and the system sans-serif stack minima's
+   $base-font-family uses. Scoped to its own custom properties so it can't
+   drift the dashboard's --color-* variables. */
 
 .public-page {
+  --pp-text: #444444;
+  --pp-bg: #fdfdfd;
+  --pp-brand: #2a7ae2;
+  --pp-grey: #828282;
+  --pp-grey-dark: #434343;
+  --pp-grey-light: #e8e8e8;
+  --pp-content-width: 850px;
+  --pp-spacing: 30px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--pp-text);
+  background: var(--pp-bg);
   min-height: 100vh;
-  background: var(--color-bg);
+  line-height: 1.6;
 }
 
-.public-header {
+.site-header {
+  border-top: 5px solid var(--pp-grey-dark);
+  border-bottom: 1px solid var(--pp-grey-light);
+}
+
+.site-header-inner {
+  max-width: var(--pp-content-width);
+  margin: 0 auto;
+  padding: 0 calc(var(--pp-spacing) / 2);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface);
+  min-height: 56px;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
-.public-header-title {
-  font-weight: 700;
-  font-size: 1.0625rem;
-  color: var(--color-text);
+.site-title {
+  display: flex;
+  align-items: center;
+  font-size: 1.625rem;
+  font-weight: 300;
+  letter-spacing: -1px;
+  color: var(--pp-grey-dark);
   text-decoration: none;
 }
 
-.public-header-link {
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-  text-decoration: none;
+.site-logo {
+  height: 30px;
+  margin-right: 10px;
 }
 
-.public-header-link:hover {
-  color: var(--color-accent);
+.site-nav {
+  display: flex;
+  gap: 20px;
+}
+
+.site-nav .page-link {
+  color: var(--pp-text);
+  text-decoration: none;
+  font-size: 0.9375rem;
+}
+
+.site-nav .page-link:hover {
+  color: var(--pp-brand);
   text-decoration: underline;
 }
 
 .public-main {
-  max-width: 64rem;
+  max-width: var(--pp-content-width);
   margin: 0 auto;
-  padding: 2rem 1.5rem 4rem;
+  padding: var(--pp-spacing) calc(var(--pp-spacing) / 2) calc(var(--pp-spacing) * 2);
 }
 
 .public-hero h1 {
   font-size: 1.75rem;
   margin: 0 0 0.5rem;
+  color: var(--pp-text);
 }
 
 .public-hero p {
-  color: var(--color-text-muted);
+  color: var(--pp-grey-dark);
   max-width: 42rem;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .public-chart-section {
@@ -1218,15 +1258,15 @@ a.icon-button {
 }
 
 .public-chart {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  background: #fff;
+  border: 1px solid var(--pp-grey-light);
+  border-radius: 4px;
   padding: 1rem;
 }
 
 .public-chart-empty {
-  color: var(--color-text-muted);
-  font-size: 0.875rem;
+  color: var(--pp-grey);
+  font-size: 0.9375rem;
 }
 
 .public-cards-section {
@@ -1236,11 +1276,12 @@ a.icon-button {
 .public-cards-section h2 {
   font-size: 1.125rem;
   margin-bottom: 0.25rem;
+  font-weight: 400;
 }
 
 .public-section-note {
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
+  color: var(--pp-grey);
+  font-size: 0.875rem;
   margin: 0 0 1rem;
 }
 
@@ -1252,17 +1293,17 @@ a.icon-button {
 
 .public-card {
   display: block;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  border: 1px solid var(--pp-grey-light);
+  border-radius: 4px;
+  background: #fff;
   padding: 0.75rem 0.9rem;
   text-decoration: none;
-  color: var(--color-text);
+  color: var(--pp-text);
   transition: border-color 0.12s ease;
 }
 
 .public-card:hover {
-  border-color: var(--color-accent);
+  border-color: var(--pp-brand);
 }
 
 .public-card-title {
@@ -1273,41 +1314,43 @@ a.icon-button {
 
 .public-card-description {
   margin: 0;
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-  line-height: 1.35;
+  font-size: 0.875rem;
+  color: var(--pp-grey);
+  line-height: 1.5;
 }
 
 /* --- Article pages (one model or one scenario) --- */
 
 .article-back-link {
   display: inline-block;
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  color: var(--pp-grey);
   text-decoration: none;
   margin-bottom: 1rem;
 }
 
 .article-back-link:hover {
-  color: var(--color-accent);
+  color: var(--pp-brand);
 }
 
 .article-title {
   font-size: 1.75rem;
   text-transform: capitalize;
   margin: 0 0 0.5rem;
+  font-weight: 300;
+  letter-spacing: -0.5px;
 }
 
 .article-lede {
-  color: var(--color-text-muted);
+  color: var(--pp-grey-dark);
   max-width: 42rem;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .article-website-link {
   display: inline-block;
-  font-size: 0.8125rem;
-  color: var(--color-accent);
+  font-size: 0.875rem;
+  color: var(--pp-brand);
   text-decoration: none;
   margin-bottom: 1rem;
 }
@@ -1323,6 +1366,70 @@ a.icon-button {
 .article-section h2 {
   font-size: 1.0625rem;
   margin-bottom: 0.5rem;
+  font-weight: 400;
+}
+
+/* --- Site footer (matches ../_includes/footer.html's 3-column layout) --- */
+
+.site-footer {
+  border-top: 1px solid var(--pp-grey-light);
+  padding: var(--pp-spacing) 0;
+  margin-top: 2rem;
+}
+
+.site-footer-inner {
+  max-width: var(--pp-content-width);
+  margin: 0 auto;
+  padding: 0 calc(var(--pp-spacing) / 2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.footer-col {
+  flex: 1 1 10rem;
+}
+
+.footer-col-description {
+  flex: 2 1 16rem;
+  color: var(--pp-grey);
+  font-size: 0.875rem;
+}
+
+.footer-heading {
+  font-size: 1.125rem;
+  font-weight: 400;
+  margin-bottom: 0.5rem;
+  color: var(--pp-grey-dark);
+}
+
+.footer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--pp-grey);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.footer-link:hover {
+  color: var(--pp-brand);
+}
+
+.footer-icon {
+  fill: currentColor;
+}
+
+/* .assumptions-summary/.assumptions-list are shared with the dashboard's
+   (i) modal (see Modal.tsx) -- re-themed here to the public palette so an
+   article page's "Modelling assumptions" section doesn't suddenly switch
+   to the dashboard's own colors. */
+.public-page .assumptions-summary {
+  color: var(--pp-text);
+}
+
+.public-page .assumptions-list li {
+  color: var(--pp-grey-dark);
 }
 
 /* --- Login page --- */

@@ -7,6 +7,7 @@ import { fetchJson } from "../../../lib/clientApi";
 import { modelAssumptions } from "../../../lib/assumptions";
 import { useRunsAndJobs } from "../../../lib/useRunsData";
 import TemperatureChart from "../../../components/TemperatureChart";
+import { PublicHeader, PublicFooter } from "../../../components/PublicChrome";
 import type { ModelListItem } from "../../../lib/clientTypes";
 
 export default function ModelArticlePage() {
@@ -79,19 +80,7 @@ export default function ModelArticlePage() {
           )}
         </section>
       </main>
+      <PublicFooter />
     </div>
-  );
-}
-
-function PublicHeader() {
-  return (
-    <header className="public-header">
-      <Link href="/" className="public-header-title">
-        Simple Climate Models
-      </Link>
-      <a href="/login" className="public-header-link">
-        Dashboard login
-      </a>
-    </header>
   );
 }
