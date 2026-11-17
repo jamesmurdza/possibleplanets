@@ -1,13 +1,12 @@
 /**
- * Human-readable "what assumptions does this actually make" text for the
- * (i) info modal on each model/scenario card in the New Run form.
+ * Human-readable "what modelling assumptions does this actually make" text
+ * for the (i) info modal on each model/scenario card in the New Run form.
  *
- * Every line here is grounded in something already confirmed elsewhere in
- * this codebase (a run.py/run.jl comment, a lib/models.ts comment, or
- * direct testing done earlier in this project) -- nothing here is new
- * speculation, it's a user-facing restatement of facts already documented
- * for developers. Where a source file has the fuller explanation, these
- * are deliberately the short version, not a replacement for it.
+ * Deliberately scoped to scientific/methodological assumptions (what the
+ * model simplifies, what a scenario framework does and doesn't specify) --
+ * NOT this project's own integration details (wrapper plumbing, seed
+ * handling, caching, progress signals). Those live in code comments for
+ * developers; this is for someone deciding how much to trust a result.
  */
 
 export interface AssumptionSection {
@@ -17,49 +16,44 @@ export interface AssumptionSection {
 
 const MODEL_ASSUMPTIONS: Record<string, AssumptionSection> = {
   hector: {
-    summary: "A simple, fast, fully deterministic climate model.",
+    summary: "A simple physical climate model -- fast because it simplifies, not because it's less real.",
     items: [
-      "Physical parameters (climate sensitivity, ocean diffusivity, aerosol scaling, CO2 fertilization, soil respiration Q10) default to pyhector's own built-in values unless you override them -- confirmed these reproduce pyhector's no-override output bit-for-bit.",
-      "Temperature is an anomaly relative to pyhector's own ~1750 baseline, not any specific modern reference period.",
-      "Fully deterministic -- no random seed involved. The same scenario and parameters always produce the exact same answer, every time.",
-      "Has no real progress signal: pyhector's run() finishes in under a second with no intermediate hook to report, so this project doesn't fake one.",
+      "Reduces the climate system to a small set of global carbon-cycle and energy-balance equations -- no spatial resolution (no regions, no ocean circulation detail), unlike a full GCM.",
+      "Climate sensitivity, ocean heat diffusivity, aerosol forcing scaling, CO2 fertilization, and soil respiration temperature-sensitivity (Q10) are each single global numbers here, not spatially or regionally varying.",
+      "Deterministic: given a scenario and parameters, there's exactly one answer, with no representation of internal variability or uncertainty.",
     ],
   },
   fair: {
-    summary: "Averages an ensemble of 66 CMIP6-calibrated configurations, not a single run.",
+    summary: "A calibrated emulator: it's built to reproduce the range of full climate models' behavior, not to simulate physics from first principles.",
     items: [
-      "The chart shows the MEAN temperature across FAIR's own bundled ensemble of 66 CMIP6-calibrated parameter sets -- not one single model run.",
-      "CH4 radiative forcing uses FAIR's \"thornhill2021\" calculation method. FAIR also supports an alternate \"leach2021\" method that this project doesn't currently expose as a choice.",
-      "The \"seed\" parameter controls each config's own internal stochastic noise realization -- it changes which noise draw each of the 66 configs gets, not which 66 configs are used (that set is fixed).",
-      "Runs from 1750 to 2100, annually.",
+      "The temperature shown is the MEAN across an ensemble of 66 parameter sets, each independently calibrated to match a different CMIP6 model's behavior -- it represents a central estimate across structural climate-model uncertainty, not one model's physics.",
+      "Methane's radiative forcing is computed using one specific published method (Thornhill et al. 2021); other valid published methods exist and would shift CH4-driven warming slightly.",
+      "Like hector, it has no spatial resolution -- global-mean quantities only.",
     ],
   },
   oscar: {
-    summary: "Every run is actually two OSCAR simulations stitched together.",
+    summary: "A compact Earth-system model with Monte Carlo parameter uncertainty and simple regional structure.",
     items: [
-      "Each run concatenates a historical leg (1750 to the scenario's start year, started from a zero-valued initial state) with the scenario leg -- this is why OSCAR's chart starts near 0 in 1750 rather than already-elevated partway through.",
-      "Uses a fixed regional aggregation (OSCAR's own \"RCP_5reg\" mode). OSCAR supports other spatial resolutions that aren't exposed here.",
-      "Monte Carlo sample size (nMC) defaults to 1, the smallest possible -- a real run can take several minutes even at this minimum, and increasing nMC takes proportionally longer.",
-      "Always applies a random seed (explicit, or a fixed default of 0) for the Monte Carlo parameter draw -- OSCAR's own code leaves that draw unseeded by default, which this project corrects for so results stay reproducible.",
-      "A few scenario/sample-size combinations (e.g. SSP3-7.0-LowNTCF at nMC=1) can genuinely produce NaN partway through the run -- shown as a real gap in the data, not hidden or silently dropped.",
+      "Aggregates the world into a small number of broad regions (5), not fine spatial detail -- a deliberate speed/complexity tradeoff versus a full Earth-system model.",
+      "A single run uses one Monte Carlo draw from OSCAR's parameter uncertainty distributions by default, so default output is one plausible trajectory, not a converged uncertainty range -- running more samples would reveal the spread around it.",
+      "Some scenario/parameter combinations are physically marginal enough that OSCAR's own internals produce non-finite values partway through -- a real limitation of the scenario for this model, not a data artifact.",
     ],
   },
   dice: {
-    summary: "An economic optimization model, not a physical climate simulation.",
+    summary: "An integrated economic-climate model -- temperature here is a side effect of an economic optimization, not the primary target.",
     items: [
-      "DICE (the Nordhaus DICE/RICE family, v2016R2 here) is an economic model -- it reports the social cost of carbon and an economic utility measure alongside temperature, and temperature is itself downstream of its economic/emissions optimization, not the primary output.",
-      "Only two named scenarios exist: \"base\" (no abatement policy) and \"optimal\" (DICE's own economically-optimal path under its built-in objective function). These aren't emissions scenarios in the SSP/RCP sense.",
-      "Starts in 2015 and steps every 5 years out to 2510 -- a much coarser time resolution than every other model in this project, which report annually.",
-      "This project's wrapper doesn't expose any of DICE's underlying economic parameters (discount rate, damage function, abatement cost) -- every run uses DICE.jl's own built-in v2016R2 defaults for those.",
+      "Couples a simplified climate module to an economic growth/damage model; its main purpose is computing the economically optimal carbon price and abatement path, with temperature as one downstream output among several.",
+      "Only two policy paths exist: \"base\" (no climate policy at all) and \"optimal\" (whatever path DICE's own cost-benefit optimizer picks under its built-in assumptions about discounting and damages) -- neither is a specific emissions scenario the way SSPs/RCPs are.",
+      "Those discounting and damage-function assumptions are highly consequential and contested in the economics literature (DICE is well-known for being sensitive to the discount rate chosen) -- this project uses its standard published defaults.",
+      "Reports in 5-year steps, reflecting the model's own economic planning horizon rather than a yearly physical simulation.",
     ],
   },
   magicc: {
-    summary: "Runs the actual legacy MAGICC6 binary (via Wine), using RCPs, not SSPs.",
+    summary: "A long-standing reduced-complexity climate model, run here on CMIP5-era scenarios rather than the newer CMIP6 ones.",
     items: [
-      "Scenarios are RCP26/45/60/85 -- CMIP5-era radiative forcing pathways, a genuinely different framework from the SSP narratives the other models here use. This project does NOT treat e.g. \"RCP4.5\" and \"SSP2-4.5\" as equivalent, even though some papers use that shorthand.",
-      "Runs the actual original MAGICC6 Fortran/C binary under Wine emulation -- not a pure-Python reimplementation of its physics.",
-      "Only climate sensitivity is exposed as a tunable parameter. Other MAGICC6 config options (e.g. forcing per CO2 doubling) exist but aren't surfaced here.",
-      "Has no real progress signal -- MAGICC6 only writes its output after the entire run finishes, so this project doesn't fake intermediate progress.",
+      "Scenarios are RCPs (Representative Concentration Pathways) -- the CMIP5-generation framework built around a target radiative forcing level, not the newer SSP socioeconomic narratives the other models here use. RCPs and SSPs are not interchangeable, even where a given RCP and SSP target similar forcing.",
+      "Only climate sensitivity is adjustable here; MAGICC's other internal physical parameters (e.g. ocean heat uptake, carbon cycle feedbacks) use its own built-in defaults.",
+      "Like hector and fair, it's a global/simple-regional reduced-complexity model, not a spatially resolved GCM.",
     ],
   },
 };
@@ -69,10 +63,9 @@ export function modelAssumptions(model: string): AssumptionSection | null {
 }
 
 /**
- * Scenario assumptions depend on which model's card they're shown on --
- * same canonical SSP label reads differently depending on whether this is
- * an SSP-framework model, magicc's RCP framework, or dice's non-scenario
- * named policies.
+ * Scenario assumptions depend on which framework the scenario belongs to
+ * (SSP vs RCP vs DICE's own named policies) -- that framework is the
+ * modelling-relevant fact, not which model card it happens to be shown on.
  */
 export function scenarioAssumptions(model: string, nativeScenario: string, canonicalLabel: string): AssumptionSection {
   if (model === "dice") {
@@ -80,9 +73,9 @@ export function scenarioAssumptions(model: string, nativeScenario: string, canon
       summary: "Not an emissions scenario -- one of DICE's two named economic policy paths.",
       items: [
         nativeScenario === "base"
-          ? "\"base\" is DICE's business-as-usual path: no carbon abatement policy is applied."
-          : "\"optimal\" is the path DICE's own optimizer finds economically best under its built-in objective function (balancing abatement cost against climate damage) -- not a policy anyone has actually proposed.",
-        "Not comparable to the SSP/RCP scenarios the other models use -- DICE doesn't model specific emissions trajectories the way those frameworks do.",
+          ? "\"base\": no carbon abatement policy is ever applied -- emissions follow the model's unconstrained economic growth path."
+          : "\"optimal\": the path DICE's own cost-benefit optimizer picks as economically best, under its built-in discounting and damage-function assumptions -- not a policy anyone has actually proposed or committed to.",
+        "Isn't comparable to the SSP/RCP scenarios the other models use -- those specify emissions trajectories directly, while DICE derives emissions as a byproduct of its economic optimization.",
       ],
     };
   }
@@ -91,23 +84,18 @@ export function scenarioAssumptions(model: string, nativeScenario: string, canon
     return {
       summary: `${nativeScenario} is a CMIP5-era Representative Concentration Pathway, not an SSP.`,
       items: [
-        "RCPs are a different scenario framework than the SSP narratives hector/fair/oscar use -- defined by CMIP5, not CMIP6, and built around a target radiative forcing level rather than a detailed socioeconomic narrative.",
-        "This project does not map RCPs onto SSP labels, even where papers sometimes suggest an approximate correspondence (e.g. \"RCP4.5 ~ SSP2-4.5\") -- that's an approximation some research uses, not an equivalence this project asserts.",
+        "RCPs specify a target radiative forcing trajectory directly, without an underlying socioeconomic narrative -- SSPs (used by hector/fair/oscar) instead start from a socioeconomic storyline and derive emissions from it.",
+        "RCPs and SSPs with similar numbers (e.g. RCP4.5 and SSP2-4.5) are not the same scenario -- any resemblance is approximate, not an equivalence.",
       ],
     };
   }
 
-  // SSP-framework models (hector, fair, oscar): the canonical label is
-  // presentation-only (see canonicalScenario in lib/clientApi.ts) -- the
-  // actual string submitted to/cached by this specific model is its own
-  // native form, which can look different even for the same scenario.
+  // SSP-framework models (hector, fair, oscar).
   return {
-    summary: `${canonicalLabel} is this project's canonical label for the same SSP narrative across models.`,
+    summary: `${canonicalLabel} is a Shared Socioeconomic Pathway -- a socioeconomic storyline with emissions derived from it, not a directly specified forcing target.`,
     items: [
-      nativeScenario === canonicalLabel
-        ? `This model's own native scenario string is already "${nativeScenario}" -- no translation needed.`
-        : `This model's own native scenario string is "${nativeScenario}", shown here as "${canonicalLabel}" for consistency across models -- that's a display-only relabeling. The actual value submitted/cached is "${nativeScenario}", never the canonical form.`,
-      "The small chart on this card is the scenario's own real projected CO2 emissions trajectory (OSCAR's driver data, GtC/yr) -- not a model's output. It's the same for every model's card, since it describes what the scenario itself specifies, not a prediction any one model makes.",
+      "SSPs combine a narrative about future population, economic growth, and technology with a forcing-level target (the number after the dash) -- two scenarios with the same forcing target can still differ in how they get there.",
+      "The small chart on this card shows the scenario's actual projected CO2 emissions pathway, not any model's temperature output -- it's the same input every model here runs on for this scenario.",
     ],
   };
 }
