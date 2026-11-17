@@ -90,9 +90,6 @@ export default function HomePage() {
 
         <section className="public-cards-section">
           <h2>Emissions scenarios</h2>
-          <p className="public-section-note">
-            The {sharedSsps.length} Shared Socioeconomic Pathways run by every SSP-framework model here.
-          </p>
           <div className="public-card-grid">
             {sharedSsps.map((s) => (
               <Link
