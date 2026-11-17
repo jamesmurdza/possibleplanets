@@ -35,6 +35,19 @@ export interface ModelListItem {
   website: string;
 }
 
+/**
+ * What GET /v1/runs/latest returns per run -- already reduced to one
+ * line's worth of points server-side (see that route), not a full RunJob.
+ */
+export interface ChartSeries {
+  run_id: string;
+  model: string;
+  params: Record<string, unknown>;
+  started_at: string;
+  labels: (string | number)[];
+  values: number[];
+}
+
 export interface RunJob {
   run_id: string;
   model: string;

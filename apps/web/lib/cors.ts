@@ -16,7 +16,7 @@ export function withCors(res: NextResponse): NextResponse {
   return res;
 }
 
-export function corsJson(body: unknown, init?: { status?: number }): NextResponse {
+export function corsJson(body: unknown, init?: { status?: number; headers?: Record<string, string> }): NextResponse {
   return withCors(NextResponse.json(body, init));
 }
 

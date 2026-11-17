@@ -7,19 +7,16 @@
  * OverviewPanel's version -- no isolate/hover/zoom interactivity, since
  * this is meant to read as a plain illustrative chart on a public page,
  * not a dashboard tool.
+ *
+ * Takes already-reduced ChartSeries (GET /v1/runs/latest, see that
+ * route's comment) rather than raw runs+jobs -- CHART_ADAPTERS now runs
+ * server-side, so this component no longer needs it or each run's full
+ * native result blob.
  */
 import { useEffect, useMemo, useRef } from "react";
 import Chart from "chart.js/auto";
-import {
-  CHART_ADAPTERS,
-  alignSeriesByYear,
-  modelColor,
-  colorWithAlpha,
-  averageSeries,
-  nativeScenarioOf,
-  canonicalScenario,
-} from "../lib/clientApi";
-import type { RunJob, RunListItem } from "../lib/clientTypes";
+import { alignSeriesByYear, modelColor, colorWithAlpha, averageSeries, nativeScenarioOf, canonicalScenario } from "../lib/clientApi";
+import type { ChartSeries } from "../lib/clientTypes";
 
 export type HoverFilter = { type: "model" | "scenario"; value: string } | null;
 
@@ -36,16 +33,14 @@ function scenarioOf(params: Record<string, unknown>): string | undefined {
 const SCENARIO_PALETTE = ["#2f6fed", "#1fa37a", "#e0862f", "#9b51e0", "#e0415a", "#1b8f9e", "#c2a52e", "#5c6bc0"];
 
 export default function TemperatureChart({
-  runs,
-  jobs,
+  series,
   windowMin,
   windowMax,
   aspectRatio,
   hovered,
   colorBy = "model",
 }: {
-  runs: RunListItem[];
-  jobs: Record<string, RunJob>;
+  series: ChartSeries[];
   /** Optional fixed x-axis window (e.g. the home page's 2000-2100) --
    * omit to show each series' own full real range. */
   windowMin?: number;
@@ -61,7 +56,7 @@ export default function TemperatureChart({
   hovered?: HoverFilter;
   /** "model" (default, for the home page's mixed-model chart) colors/
    * labels each line by its model. "scenario" (for a model's own article
-   * page, where `runs` is already filtered to one model) colors/labels
+   * page, where `series` is already filtered to one model) colors/labels
    * each line by its scenario instead -- otherwise every line on a
    * single-model chart would render in the exact same color. */
   colorBy?: "model" | "scenario";
@@ -69,23 +64,15 @@ export default function TemperatureChart({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
 
-  const plottable = useMemo(() => runs.filter((r) => CHART_ADAPTERS[r.model]), [runs]);
-
   const chartData = useMemo(() => {
-    if (plottable.length === 0) return null;
-    const series = plottable.map((r) => {
-      const job = jobs[r.run_id];
-      const adapter = CHART_ADAPTERS[r.model];
-      const s = adapter(job.result);
-      return { labels: s.labels, values: s.values, label: r.run_id };
-    });
-    const aligned = alignSeriesByYear(series);
+    if (series.length === 0) return null;
+    const aligned = alignSeriesByYear(series.map((s) => ({ labels: s.labels, values: s.values, label: s.run_id })));
 
     // Stable scenario -> color assignment, in first-seen order -- only
     // used when colorBy="scenario".
     const scenarioColors = new Map<string, string>();
     if (colorBy === "scenario") {
-      for (const r of plottable) {
+      for (const r of series) {
         const s = scenarioOf(r.params) ?? "unknown";
         if (!scenarioColors.has(s)) {
           scenarioColors.set(s, SCENARIO_PALETTE[scenarioColors.size % SCENARIO_PALETTE.length]);
@@ -94,7 +81,7 @@ export default function TemperatureChart({
     }
 
     const perRun = aligned.datasets.map((d, i) => {
-      const run = plottable[i];
+      const run = series[i];
       const model = run.model;
       const scenario = scenarioOf(run.params);
       const isMatch = !!hovered && (hovered.type === "model" ? hovered.value === model : hovered.value === scenario);
@@ -125,7 +112,7 @@ export default function TemperatureChart({
     };
 
     return { datasets: [...perRun, average] };
-  }, [plottable, jobs, hovered, colorBy]);
+  }, [series, hovered, colorBy]);
 
   // Creates the chart once per (windowMin/windowMax/aspectRatio/canvas
   // presence) -- deliberately NOT re-run on every `hovered` change. A

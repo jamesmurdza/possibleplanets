@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { fetchJson } from "../../../lib/clientApi";
 import { modelAssumptions } from "../../../lib/assumptions";
-import { useRunsAndJobs } from "../../../lib/useRunsData";
+import { useChartSeries } from "../../../lib/useRunsData";
 import TemperatureChart from "../../../components/TemperatureChart";
 import { PublicHeader, PublicFooter } from "../../../components/PublicChrome";
 import type { ModelListItem } from "../../../lib/clientTypes";
@@ -15,7 +15,7 @@ export default function ModelArticlePage() {
   const model = params.model;
   const [meta, setMeta] = useState<ModelListItem | null>(null);
   const [notFound, setNotFound] = useState(false);
-  const { plottableRuns, jobs, loading } = useRunsAndJobs();
+  const { series, loading } = useChartSeries();
 
   useEffect(() => {
     fetchJson("/v1/models")
@@ -27,7 +27,7 @@ export default function ModelArticlePage() {
       .catch(() => setNotFound(true));
   }, [model]);
 
-  const ownRuns = plottableRuns.filter((r) => r.model === model);
+  const ownSeries = series.filter((r) => r.model === model);
   const assumptions = modelAssumptions(model);
 
   if (notFound) {
@@ -55,7 +55,7 @@ export default function ModelArticlePage() {
           {loading ? (
             <p className="public-chart-empty">Loading runs...</p>
           ) : (
-            <TemperatureChart runs={ownRuns} jobs={jobs} windowMin={2000} windowMax={2100} colorBy="scenario" />
+            <TemperatureChart series={ownSeries} windowMin={2000} windowMax={2100} colorBy="scenario" />
           )}
         </section>
 

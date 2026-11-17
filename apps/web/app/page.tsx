@@ -8,7 +8,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { fetchJson, canonicalScenario } from "../lib/clientApi";
-import { useRunsAndJobs } from "../lib/useRunsData";
+import { useChartSeries } from "../lib/useRunsData";
 import TemperatureChart, { type HoverFilter } from "../components/TemperatureChart";
 import { PublicHeader, PublicFooter } from "../components/PublicChrome";
 import { modelAcronym, modelFullName } from "../lib/modelFullNames";
@@ -27,7 +27,7 @@ const NON_SSP_MODELS = new Set(["dice", "magicc"]);
 export default function HomePage() {
   const [models, setModels] = useState<ModelListItem[]>([]);
   const [hovered, setHovered] = useState<HoverFilter>(null);
-  const { plottableRuns, jobs, loading } = useRunsAndJobs();
+  const { series, loading } = useChartSeries();
 
   useEffect(() => {
     fetchJson("/v1/models")
@@ -66,7 +66,7 @@ export default function HomePage() {
           {loading ? (
             <p className="public-chart-empty">Loading runs...</p>
           ) : (
-            <TemperatureChart runs={plottableRuns} jobs={jobs} windowMin={2000} windowMax={2100} hovered={hovered} />
+            <TemperatureChart series={series} windowMin={2000} windowMax={2100} hovered={hovered} />
           )}
         </section>
 
