@@ -9,7 +9,6 @@
  */
 import { useEffect, useRef } from "react";
 import Chart from "chart.js/auto";
-import { chartAspectRatio } from "../lib/clientApi";
 
 export default function ScenarioChart({ years, values }: { years: number[]; values: number[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -34,7 +33,10 @@ export default function ScenarioChart({ years, values }: { years: number[]; valu
       },
       options: {
         animation: false,
-        aspectRatio: chartAspectRatio(),
+        // Taller than the dashboard's own chartAspectRatio() (3.4) -- this
+        // renders inside .public-main's narrower 850px column, where that
+        // ratio made the chart look squashed/too short.
+        aspectRatio: typeof window !== "undefined" && window.innerWidth <= 640 ? 1.1 : 1.8,
         scales: {
           x: { title: { display: true, text: "year" } },
           y: { title: { display: true, text: "CO2 emissions (GtC/yr)" } },

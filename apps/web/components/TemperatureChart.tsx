@@ -10,14 +10,7 @@
  */
 import { useEffect, useMemo, useRef } from "react";
 import Chart from "chart.js/auto";
-import {
-  CHART_ADAPTERS,
-  alignSeriesByYear,
-  modelColor,
-  colorWithAlpha,
-  averageSeries,
-  chartAspectRatio,
-} from "../lib/clientApi";
+import { CHART_ADAPTERS, alignSeriesByYear, modelColor, colorWithAlpha, averageSeries } from "../lib/clientApi";
 import type { RunJob, RunListItem } from "../lib/clientTypes";
 
 export default function TemperatureChart({
@@ -25,6 +18,7 @@ export default function TemperatureChart({
   jobs,
   windowMin,
   windowMax,
+  aspectRatio,
 }: {
   runs: RunListItem[];
   jobs: Record<string, RunJob>;
@@ -32,6 +26,11 @@ export default function TemperatureChart({
    * omit to show each series' own full real range. */
   windowMin?: number;
   windowMax?: number;
+  /** Width:height ratio. Defaults taller than the dashboard's own
+   * chartAspectRatio() (3.4, tuned for its wider main area) -- this
+   * component mostly renders inside .public-main's narrower 850px column,
+   * where that ratio makes the chart look squashed/too short. */
+  aspectRatio?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -83,7 +82,7 @@ export default function TemperatureChart({
       data: { datasets: chartData.datasets as any },
       options: {
         animation: false,
-        aspectRatio: chartAspectRatio(),
+        aspectRatio: aspectRatio ?? (typeof window !== "undefined" && window.innerWidth <= 640 ? 1.1 : 1.8),
         scales: {
           x: {
             type: "linear",
@@ -102,7 +101,7 @@ export default function TemperatureChart({
       chartRef.current?.destroy();
       chartRef.current = null;
     };
-  }, [chartData, windowMin, windowMax]);
+  }, [chartData, windowMin, windowMax, aspectRatio]);
 
   if (!chartData) return <p className="public-chart-empty">No runs to plot yet.</p>;
 
