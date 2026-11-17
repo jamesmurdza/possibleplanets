@@ -1396,7 +1396,10 @@ a.icon-button {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin: -0.5rem 0 1.5rem;
+  /* Now the last thing on the page (after "What this scenario assumes"),
+     not sitting right under the lede -- same top spacing as
+     .article-section, no trailing margin needed since nothing follows. */
+  margin-top: 2rem;
 }
 
 .article-run-by-label {

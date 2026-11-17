@@ -64,17 +64,20 @@ export default function ScenarioArticlePage() {
           {scenario}
           {hasNarrativeName && <span className="article-subtitle">: {fullName}</span>}
         </h1>
-        {description && <p className="article-lede">{description}</p>}
-        {runOnModels.length > 0 && (
-          <div className="article-run-by">
-            <span className="article-run-by-label">Run by</span>
-            {runOnModels.map((m) => (
-              <Link key={m} href={`/models/${m}`} className="article-model-tag">
-                {modelAcronym(m)}
-              </Link>
-            ))}
-          </div>
+        {description && (
+          <p className="article-lede">
+            {description} The chart below plots its projected CO2 emissions (left axis) against each model&apos;s
+            actual temperature response to it (right axis).
+          </p>
         )}
+
+        <section className="public-chart-section">
+          {seriesLoading ? (
+            <p className="public-chart-empty">Loading runs...</p>
+          ) : (
+            <ScenarioChart years={driver.years} values={driver.values} series={ownSeries} windowMin={2000} windowMax={2100} />
+          )}
+        </section>
 
         <section className="article-section">
           <h2>What this scenario assumes</h2>
@@ -86,18 +89,16 @@ export default function ScenarioArticlePage() {
           </ul>
         </section>
 
-        <section className="article-section">
-          <h2>Emissions and projected warming</h2>
-          <p className="public-section-note">
-            The scenario&apos;s own projected CO2 emissions (left axis) -- the same input every model below runs
-            on -- alongside each model&apos;s actual temperature response to it (right axis).
-          </p>
-          {seriesLoading ? (
-            <p className="public-chart-empty">Loading runs...</p>
-          ) : (
-            <ScenarioChart years={driver.years} values={driver.values} series={ownSeries} windowMin={2000} windowMax={2100} />
-          )}
-        </section>
+        {runOnModels.length > 0 && (
+          <div className="article-run-by">
+            <span className="article-run-by-label">Run by</span>
+            {runOnModels.map((m) => (
+              <Link key={m} href={`/models/${m}`} className="article-model-tag">
+                {modelAcronym(m)}
+              </Link>
+            ))}
+          </div>
+        )}
       </main>
       <PublicFooter />
     </div>
