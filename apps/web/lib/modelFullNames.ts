@@ -9,7 +9,7 @@
  */
 export const MODEL_FULL_NAMES: Record<string, string> = {
   hector: "The Hector Simple Climate Model",
-  fair: "Finite Amplitude Impulse-Response simple climate-carbon-cycle model",
+  fair: "Finite Amplitude Impulse-Response",
   oscar: "OSCAR",
   dice: "Dynamic Integrated Climate Economy model",
   magicc: "Model for the Assessment of Greenhouse Gas Induced Climate Change",
