@@ -94,7 +94,9 @@ export interface ModelMeta {
 export const MODELS: Record<string, ModelMeta> = {
   hector: {
     family: "RCM",
-    description: "A simple, fast climate model.",
+    // Wording from ../../models.markdown's own model table -- the Jekyll
+    // site's real description of this model, not invented here.
+    description: "Model with a simplified box structure for atmosphere, ocean, and land components.",
     website: "https://jgcri.github.io/hector/",
     dockerfile: path.join(SANDBOXES_DIR, "hector", "Dockerfile"),
     scenarios: ["ssp119", "ssp126", "ssp245", "ssp370", "ssp585"],
@@ -177,7 +179,8 @@ export const MODELS: Record<string, ModelMeta> = {
   },
   fair: {
     family: "RCM",
-    description: "A climate model used in IPCC reports.",
+    // Wording from ../../models.markdown's own model table.
+    description: "Regionally differentiated model with detailed process-based representation of carbon cycles and greenhouse gas interactions.",
     website: "https://docs.fairmodel.net/",
     dockerfile: path.join(SANDBOXES_DIR, "fair", "Dockerfile"),
     scenarios: [
@@ -227,7 +230,8 @@ export const MODELS: Record<string, ModelMeta> = {
   },
   oscar: {
     family: "RCM",
-    description: "A compact Earth system model.",
+    // Wording from ../../models.markdown's own model table.
+    description: "Hemispherically resolved model with parameterizations for carbon cycling, atmospheric chemistry, and radiative forcing.",
     website: "https://github.com/tgasser/OSCAR",
     dockerfile: path.join(SANDBOXES_DIR, "oscar", "Dockerfile"),
     scenarios: [
@@ -289,7 +293,9 @@ export const MODELS: Record<string, ModelMeta> = {
   },
   dice: {
     family: "IAM",
-    description: "A climate-economy model.",
+    // Wording from ../../models.markdown's own model table (fixing that
+    // table's own typo, "human-indunced" -> "human-induced").
+    description: "Prize-winning economic model used to estimate the costs of human-induced climate change on the global economy.",
     website: "https://williamnordhaus.com/dicerice-models",
     dockerfile: path.join(SANDBOXES_DIR, "dice", "Dockerfile"),
     // Only base/optimal -- confirmed by testing that DICE.jl only implements
@@ -310,7 +316,8 @@ export const MODELS: Record<string, ModelMeta> = {
   },
   magicc: {
     family: "RCM",
-    description: "A simple climate model used in IPCC assessments.",
+    // Wording from ../../models.markdown's own model table.
+    description: "Emissions-based model using impulse response functions to directly connect greenhouse gas emissions to temperature outcomes.",
     website: "https://magicc.org/",
     dockerfile: path.join(SANDBOXES_DIR, "magicc", "Dockerfile"),
     // pymagicc's own four RCP scenarios -- confirmed via
@@ -353,7 +360,9 @@ export const MODELS: Record<string, ModelMeta> = {
   },
   twolayer: {
     family: "RCM",
-    description: "A bare energy-balance physics engine, driven by a published forcing dataset.",
+    // Wording from ../../models.markdown's own model table.
+    description:
+      "Bare two-layer energy-balance physics engine; driven by a published radiative forcing dataset rather than its own emissions scenarios.",
     website: "https://github.com/openscm/openscm-twolayermodel",
     dockerfile: path.join(SANDBOXES_DIR, "twolayer", "Dockerfile"),
     // Same 8 SSPs sandboxes/fair exposes -- confirmed present as rows in
