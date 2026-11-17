@@ -1249,7 +1249,10 @@ a.icon-button {
 
 .public-hero p {
   color: var(--pp-grey-dark);
-  max-width: 42rem;
+  /* Was capped at 42rem (672px) -- much narrower than .public-main's own
+     ~870px column (--pp-content-width minus padding), so the hero text
+     wrapped far earlier than everything else on the page for no reason.
+     Let it use the same width as the rest of .public-main. */
   line-height: 1.6;
 }
 
