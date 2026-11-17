@@ -8,13 +8,6 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ model: string }> }) {
-  // Run creation requires an API key -- see lib/apiKey.ts for why only
-  // this route and GET /v1/runs/{runId} check it, not the read-only
-  // listing endpoints.
-  if (!hasValidApiKey(req)) {
-    return corsJson({ detail: "missing or invalid API key" }, { status: 401 });
-  }
-
   const { model } = await params;
   if (!getModelOrNull(model)) {
     return corsJson({ detail: `unknown model '${model}'` }, { status: 404 });
@@ -30,7 +23,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ model: 
   const refresh = body.refresh ?? false;
 
   try {
-    const { run_id, error, inline } = await submitRun(model, runParams, refresh);
+    // Computed up front, but only enforced INSIDE submitRun, on a cache
+    // miss -- see lib/apiKey.ts / lib/runs.ts's submitRun for why an
+    // already-cached result doesn't need this at all. Inside this same
+    // try/catch as submitRun itself -- it can throw too (e.g. a DB error
+    // looking up an API key), and that should 502 the same way a
+    // submitRun failure does, not bubble up as an unhandled 500.
+    const isAuthed = await hasValidApiKey(req);
+    const { run_id, error, inline, unauthorized } = await submitRun(model, runParams, refresh, isAuthed);
+    if (unauthorized) {
+      return corsJson({ detail: "missing or invalid API key" }, { status: 401 });
+    }
     if (error) {
       return corsJson({ detail: error }, { status: 400 });
     }

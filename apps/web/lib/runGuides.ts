@@ -36,33 +36,39 @@
  *
  * Every model's step list ends with restApiStep() -- a curl example
  * against this project's own REST gateway (app/v1/*\/route.ts) as an
- * alternative to local setup. That endpoint requires an API key
- * (lib/apiKey.ts) and there's no public self-serve key yet, so the
+ * alternative to local setup. Starting a new run needs a real API key
+ * (lib/apiKey.ts), created at /account after signing in with GitHub
+ * (app/api/auth/github/*, lib/db.ts's users/api_keys tables) -- so the
  * example's YOUR_API_KEY is a literal placeholder and the shown command
- * genuinely 401s -- confirmed by testing, not a stale/aspirational
- * example. Intentional: showing "and here's the request shape" without
- * implying it works today would be misleading the other way.
+ * genuinely 401s, confirmed by testing against a real Postgres-backed
+ * dev server. Already-cached (model, params) skip the key check
+ * entirely (lib/runs.ts's submitRun) since nothing new is being started.
  */
 
 // Shown as the last step for every model: this project's own REST gateway
 // (apps/web/app/v1/*/route.ts), as an alternative to the local setup above.
 // POST /v1/models/{model}/runs and GET /v1/runs/{runId} require an
-// Authorization: Bearer <API key> header -- see lib/apiKey.ts. There is no
-// public self-serve key yet (real per-account API keys are planned; this
-// gate exists now so that's a drop-in later, not a breaking change), so
-// `YOUR_API_KEY` is a literal placeholder: pasting this exact command WILL
-// 401. It isn't a stale example -- the 401 is the accurate, current
-// behavior, confirmed by testing (see git history for this file).
+// Authorization: Bearer <API key> header when the request would actually
+// start a new sandbox run -- see lib/apiKey.ts. Real per-account keys now
+// exist (sign in with GitHub at /account, lib/db.ts's users/api_keys
+// tables, app/api/keys/*), so `YOUR_API_KEY` below is a literal
+// placeholder for a key you don't have yet, not a stand-in for a feature
+// that doesn't exist -- pasting this exact command genuinely 401s,
+// confirmed by testing against a real Postgres-backed dev server, not
+// guessed. A request whose (model, params) are already cached skips this
+// check entirely and returns the cached result with no key at all, since
+// nothing new is being authorized in that case -- see lib/runs.ts's
+// submitRun().
 function restApiStep(model: string): RunGuideStep {
   return {
     text:
-      "Or skip local setup entirely and call this project's own REST gateway, which runs the same model in a fresh sandbox per request. Run submission requires an API key -- there isn't a public self-serve one yet (real per-account API keys are planned), so this exact command will return 401 Unauthorized as shown; it's here to show the request shape, not to be copy-paste runnable yet.",
+      "Or skip local setup entirely and call this project's own REST gateway, which runs the same model in a fresh sandbox per request. Starting a new run requires an API key -- sign in with GitHub at /account to create one. This exact command uses a placeholder key, so it will return 401 Unauthorized as shown; swap in a real key from /account to make it work. (An already-cached result -- same model and params someone already ran -- skips the key check entirely and returns instantly, since nothing new is being started.)",
     code:
       `curl -X POST https://<this-site>/v1/models/${model}/runs \\\n` +
       `  -H "Authorization: Bearer YOUR_API_KEY" \\\n` +
       `  -H "Content-Type: application/json" \\\n` +
       `  -d '{"params": {"scenario": "..."}}'\n` +
-      `# -> 401 {"detail": "missing or invalid API key"}`,
+      `# -> 401 {"detail": "missing or invalid API key"}  (with a real key from /account: 200)`,
     language: "bash",
   };
 }

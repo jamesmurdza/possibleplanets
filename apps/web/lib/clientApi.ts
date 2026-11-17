@@ -3,24 +3,21 @@
  * paths ("" base) since the dashboard and gateway are same-origin -- see
  * app/page.tsx's original comment on why that's just a convenience for
  * THIS page, not a constraint on the API (CORS is wide open -- lib/cors.ts).
+ *
+ * No Authorization header attached here (unlike an earlier version of this
+ * file, which sent a single shared placeholder key on every request --
+ * visible to anyone who opened devtools or grepped the client bundle, so
+ * not a real credential at all). The two gateway routes that need auth
+ * (POST /v1/models/{model}/runs, GET /v1/runs/{runId}) now accept the
+ * existing httpOnly dashboard_auth cookie as this console's own
+ * credential -- see lib/apiKey.ts -- which the browser already attaches
+ * automatically on every same-origin request once logged into /dashboard,
+ * and which client-side JS can't read out to begin with.
  */
 import type { ModelMeta } from "./clientTypes";
-import { GATEWAY_API_KEY } from "./apiKey";
 
-// Attached to every request this helper makes, not just the two routes
-// that currently check it (POST /v1/models/{model}/runs, GET
-// /v1/runs/{runId} -- see lib/apiKey.ts) -- the read-only endpoints just
-// ignore it. Simpler than threading the header through only some call
-// sites, and means a future newly-gated endpoint works from day one
-// without every caller needing an update.
 export async function fetchJson(path: string, options?: RequestInit) {
-  const res = await fetch(path, {
-    ...options,
-    headers: {
-      ...options?.headers,
-      Authorization: `Bearer ${GATEWAY_API_KEY}`,
-    },
-  });
+  const res = await fetch(path, options);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || `${res.status} ${res.statusText}`);

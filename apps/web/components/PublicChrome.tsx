@@ -24,6 +24,9 @@ export function PublicHeader() {
           <Link href="/" className="page-link">
             Models
           </Link>
+          <Link href="/account" className="page-link">
+            Account / API keys
+          </Link>
           <a href="/login" className="page-link">
             Dashboard login
           </a>
