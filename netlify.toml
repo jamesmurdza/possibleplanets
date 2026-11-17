@@ -9,11 +9,17 @@
 [build]
   base = "apps/web"
   command = "npm run build"
+  # Explicit, not left to fall back on the dashboard's own "Publish
+  # directory" setting -- this site's dashboard apparently still has that
+  # set equal to the base directory (a leftover from before this file
+  # existed), which the Next.js Runtime plugin rejects outright
+  # ("publish directory cannot be the same as base directory"). Relative
+  # to `base`, so this resolves to apps/web/.next.
+  publish = ".next"
 
 # Netlify's Next.js Runtime auto-detects next.config.js in `base` and
-# handles SSR/API routes/etc. itself -- no `publish` directory needed,
-# and this plugin is normally auto-installed on detection, but pinning it
-# explicitly here makes the dependency visible in source rather than
-# relying on silent auto-detection.
+# handles SSR/API routes/etc. itself. Normally auto-installed on
+# detection, but pinning it explicitly here makes the dependency visible
+# in source rather than relying on silent auto-detection.
 [[plugins]]
   package = "@netlify/plugin-nextjs"
