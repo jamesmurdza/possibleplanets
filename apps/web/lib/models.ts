@@ -109,10 +109,18 @@ export const MODELS: Record<string, ModelMeta> = {
     // explains hector's run time -- 1cpu/1gb and 1cpu/4gb both median
     // ~2.0-2.1s, 4cpu/1gb and 4cpu/4gb both median ~1.06-1.07s. Memory
     // made no measurable difference in either row; CPU alone roughly
-    // halved it in both columns. So only cpu is bumped here, memory is
+    // halved it in both columns, so only cpu is bumped here, memory is
     // left at the default rather than copying oscar's {cpu:4, memory:8}
     // pattern without evidence memory does anything for this model.
-    resources: { cpu: 4 },
+    //
+    // cpu:2, not cpu:4 -- a follow-up 1/2/4 cpu sweep (5 trials each)
+    // found the 1->2 step carries nearly all of the real gain (2.24s ->
+    // 1.25s median, ~44% faster) while 2->4 is a much smaller further
+    // step (1.25s -> 1.11s, ~11% faster). Since cost scales with cpu
+    // count, cpu:2 is the better cost/latency tradeoff -- doubling the
+    // cost again for 4 only buys a fraction of what the first doubling
+    // bought.
+    resources: { cpu: 2 },
     // Confirmed by testing (comparing pyhector.run() with no override
     // against the same values passed explicitly via `config`): these are
     // real, independent knobs pyhector exposes, and overriding them with
