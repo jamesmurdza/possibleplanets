@@ -45,12 +45,22 @@ export default function ScenarioChart({
     if (!canvasRef.current) return;
     if (chartRef.current) chartRef.current.destroy();
 
+    // Dashed, not solid -- the one visual cue that doesn't depend on
+    // reading the legend or an axis label: every model (temperature,
+    // right axis) is a solid line, the scenario's own emissions driver
+    // (left axis) is the one dashed line, so "which axis is this line
+    // using" is visible at a glance instead of only inferable from color.
+    const EMISSIONS_COLOR = "#2f6fed";
+    const TEMPERATURE_AXIS_COLOR = "#3a3f4b";
+
     const driverDataset = {
       label: "CO2 emissions (GtC/yr)",
       data: years.map((year, i) => ({ x: year, y: values[i] })),
-      borderColor: "#2f6fed",
-      borderWidth: 2,
+      borderColor: EMISSIONS_COLOR,
+      borderWidth: 2.5,
+      borderDash: [6, 4],
       pointRadius: 0,
+      pointHoverRadius: 4,
       yAxisID: "y",
       order: 1,
     };
@@ -61,6 +71,7 @@ export default function ScenarioChart({
       borderColor: modelColor(s.model),
       borderWidth: 1.5,
       pointRadius: 0,
+      pointHoverRadius: 4,
       spanGaps: true,
       yAxisID: "y1",
       order: 2,
@@ -75,6 +86,12 @@ export default function ScenarioChart({
         // renders inside .public-main's narrower column, where that ratio
         // made the chart look squashed/too short.
         aspectRatio: typeof window !== "undefined" && window.innerWidth <= 640 ? 1.1 : 1.8,
+        // "index" + intersect:false -- hovering anywhere along a given
+        // year shows every line's value at that year, not just whichever
+        // one you're pixel-precisely over. With pointRadius:0 (no visible
+        // points), Chart.js's default intersect:true mode made the
+        // tooltip nearly impossible to trigger at all.
+        interaction: { mode: "index", intersect: false },
         scales: {
           x: {
             type: "linear",
@@ -88,11 +105,13 @@ export default function ScenarioChart({
           },
           y: {
             position: "left",
-            title: { display: true, text: "CO2 emissions (GtC/yr)" },
+            title: { display: true, text: "CO2 emissions (GtC/yr)", color: EMISSIONS_COLOR },
+            ticks: { color: EMISSIONS_COLOR },
           },
           y1: {
             position: "right",
-            title: { display: true, text: "temperature anomaly (°C)" },
+            title: { display: true, text: "temperature anomaly (°C)", color: TEMPERATURE_AXIS_COLOR },
+            ticks: { color: TEMPERATURE_AXIS_COLOR },
             // Only the left axis's gridlines are drawn -- two overlapping
             // grids would just be visual noise, not extra information.
             grid: { drawOnChartArea: false },
@@ -100,6 +119,7 @@ export default function ScenarioChart({
         },
         plugins: {
           legend: { display: true, position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } },
+          tooltip: { mode: "index", intersect: false },
         },
       },
     });

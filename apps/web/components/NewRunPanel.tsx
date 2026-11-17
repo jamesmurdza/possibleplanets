@@ -248,13 +248,17 @@ export default function NewRunPanel() {
     if (!canvasRef.current) return;
     chartRef.current = new Chart(canvasRef.current, {
       type: "line",
-      data: { labels, datasets: [{ label, data: values, borderWidth: 1.5, pointRadius: 0 }] },
+      data: { labels, datasets: [{ label, data: values, borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4 }] },
       options: {
         animation: false,
         aspectRatio: chartAspectRatio(),
+        interaction: { mode: "nearest", intersect: false },
         scales: {
           x: { title: { display: true, text: "year" } },
           y: { title: { display: true, text: "temperature anomaly" } },
+        },
+        plugins: {
+          tooltip: { mode: "nearest", intersect: false },
         },
       },
     });

@@ -94,6 +94,7 @@ export default function TemperatureChart({
         borderColor: colorWithAlpha(baseColor, isMatch ? 0.95 : dimmed ? 0.12 : 0.55),
         borderWidth: isMatch ? 2.5 : 1.2,
         pointRadius: 0,
+        pointHoverRadius: 4,
         spanGaps: true,
         order: 2,
       };
@@ -107,6 +108,7 @@ export default function TemperatureChart({
       borderDash: [7, 4],
       borderWidth: 2.25,
       pointRadius: 0,
+      pointHoverRadius: 4,
       spanGaps: true,
       order: 1,
     };
@@ -130,6 +132,14 @@ export default function TemperatureChart({
       options: {
         animation: false,
         aspectRatio: aspectRatio ?? (typeof window !== "undefined" && window.innerWidth <= 640 ? 1.1 : 1.8),
+        // "nearest" + intersect:false -- this chart can have dozens of
+        // thin, pointRadius:0 lines overlapping, so requiring a
+        // pixel-exact hover (Chart.js's intersect:true default) made the
+        // tooltip nearly impossible to trigger. "nearest" (rather than
+        // ScenarioChart's "index", which shows every dataset at once --
+        // fine for its handful of lines, overwhelming for this chart's
+        // dozens) surfaces just the one closest line under the cursor.
+        interaction: { mode: "nearest", intersect: false },
         scales: {
           x: {
             type: "linear",
@@ -145,6 +155,7 @@ export default function TemperatureChart({
         },
         plugins: {
           legend: { display: false },
+          tooltip: { mode: "nearest", intersect: false },
         },
       },
     });

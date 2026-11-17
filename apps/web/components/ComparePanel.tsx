@@ -174,9 +174,17 @@ export default function ComparePanel() {
       options: {
         animation: false,
         aspectRatio: chartAspectRatio(),
+        // "index" + intersect:false -- a handful of lines being directly
+        // compared, so showing every one's value at the hovered year (not
+        // just whichever is pixel-exact under the cursor) is the useful
+        // behavior here, same as ScenarioChart's few-lines case.
+        interaction: { mode: "index", intersect: false },
         scales: {
           x: { title: { display: true, text: "year" } },
           y: { title: { display: true, text: "temperature anomaly" } },
+        },
+        plugins: {
+          tooltip: { mode: "index", intersect: false },
         },
       },
     });
@@ -217,6 +225,7 @@ export default function ComparePanel() {
           data: d.data,
           borderWidth: 1.5,
           pointRadius: 0,
+          pointHoverRadius: 4,
           // See alignSeriesByYear's comment in lib/clientApi.ts -- dice
           // reports every 5 years, not annually like the rest, so this
           // has to be true or dice's line never draws at all.

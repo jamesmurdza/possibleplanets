@@ -231,6 +231,7 @@ export default function OverviewPanel() {
           borderColor: colorWithAlpha(modelColor(model), colored ? 0.9 : dimmed ? 0.1 : 0.4),
           borderWidth: colored ? 2.75 : 1.2,
           pointRadius: 0,
+          pointHoverRadius: 4,
           // See alignSeriesByYear's comment in lib/clientApi.ts -- dice
           // reports every 5 years, not annually like the rest, so this has
           // to be true or dice's line never draws at all.
@@ -250,6 +251,7 @@ export default function OverviewPanel() {
       borderDash: [7, 4],
       borderWidth: 2.25,
       pointRadius: 0,
+      pointHoverRadius: 4,
       spanGaps: true,
       order: 1,
     };
@@ -295,8 +297,14 @@ export default function OverviewPanel() {
       options: {
         animation: false,
         aspectRatio: chartAspectRatio(),
+        // "nearest" + intersect:false -- same fix as TemperatureChart.tsx:
+        // with pointRadius:0 on dozens of overlapping lines, Chart.js's
+        // intersect:true default made the tooltip nearly impossible to
+        // trigger.
+        interaction: { mode: "nearest", intersect: false },
         plugins: {
           legend: { display: false },
+          tooltip: { mode: "nearest", intersect: false },
           // Wheel/pinch zoom and click-drag pan, both x-axis only (the
           // interesting "zoom in" case here is a narrower year range, not
           // a narrower temperature range). Clamped to the real data's own
