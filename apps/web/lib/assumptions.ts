@@ -21,6 +21,7 @@ const MODEL_ASSUMPTIONS: Record<string, AssumptionSection> = {
       "No spatial resolution -- everything is a single global-average value, with no regions or ocean circulation detail.",
       "Climate sensitivity, ocean heat uptake, aerosol forcing, CO2 fertilization, and soil respiration sensitivity are each one fixed global number.",
       "Fully deterministic: the same scenario and parameters always give exactly the same answer, with no uncertainty range.",
+      "Temperature is an anomaly relative to hector's own ~1750 baseline, not a modern reference period.",
     ],
   },
   fair: {
@@ -29,6 +30,7 @@ const MODEL_ASSUMPTIONS: Record<string, AssumptionSection> = {
       "The temperature shown is the mean across an internal ensemble of 66 parameter sets, not a single physics run.",
       "Methane's warming effect is computed with one specific published calculation method (Thornhill et al. 2021).",
       "No spatial resolution -- only global-average quantities.",
+      "Covers 1750-2100 annually; it has nothing to say beyond 2100.",
     ],
   },
   oscar: {
@@ -37,6 +39,7 @@ const MODEL_ASSUMPTIONS: Record<string, AssumptionSection> = {
       "Aggregates the world into 5 broad regions, not finer spatial detail.",
       "A single run draws one Monte Carlo sample from its parameter uncertainty, so one run is one plausible trajectory, not a converged range.",
       "Some scenarios can produce non-finite values partway through a run -- a real numerical limit, not a data artifact.",
+      "Each run starts from a zero-valued state in 1750, which is why its chart starts near 0 rather than already elevated.",
     ],
   },
   dice: {
@@ -45,7 +48,7 @@ const MODEL_ASSUMPTIONS: Record<string, AssumptionSection> = {
       "Temperature is a downstream output of an economic optimization, not the model's primary target.",
       "Only two policy paths exist: a no-policy baseline and the path its own cost-benefit optimizer picks as economically best.",
       "Its discount rate and damage-function assumptions drive the result and are a long-standing point of debate in the economics literature.",
-      "Reports in 5-year steps, matching its own economic planning horizon.",
+      "Covers 2015-2510 in 5-year steps.",
     ],
   },
   magicc: {
@@ -54,6 +57,7 @@ const MODEL_ASSUMPTIONS: Record<string, AssumptionSection> = {
       "Scenarios are RCPs: trajectories defined by a target radiative forcing level, not a socioeconomic narrative.",
       "Only climate sensitivity is adjustable here -- its other internal physical parameters use built-in defaults.",
       "No spatial resolution -- only global-average output.",
+      "Temperature is an anomaly relative to MAGICC's own pre-industrial baseline.",
     ],
   },
 };
@@ -86,6 +90,7 @@ export function scenarioAssumptions(model: string, nativeScenario: string, canon
       items: [
         "Defined by a target radiative forcing trajectory, not a socioeconomic narrative.",
         "Emissions are back-derived to hit that forcing target.",
+        "The number in its name is the target forcing level in watts per square meter by 2100.",
       ],
     };
   }
@@ -96,6 +101,7 @@ export function scenarioAssumptions(model: string, nativeScenario: string, canon
     items: [
       "Defined by a socioeconomic storyline (population, growth, technology) plus a forcing-level target.",
       "Emissions are derived from that storyline, not specified directly.",
+      "The number after the dash is the target forcing level in watts per square meter by 2100.",
       "The small chart on this card is the scenario's own projected CO2 emissions pathway, not a model's output.",
     ],
   };
