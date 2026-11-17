@@ -56,9 +56,9 @@ export default function HomePage() {
         <section className="public-hero">
           <h1>How much will the world warm?</h1>
           <p>
-            {models.length || "Several"} independent climate/economic models, run against the same published
-            emissions scenarios. This chart shows every model run on record, 2000-2100, with the average across all
-            of them dashed.
+            By 2100, global temperatures are likely to be several degrees warmer than pre-industrial levels, with
+            the precise amount determined by the emissions path the world chooses to follow. Here is the range of
+            outcomes projected by {models.length || "several"} independent models.
           </p>
         </section>
 
