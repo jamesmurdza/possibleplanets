@@ -8,6 +8,7 @@ import { modelAssumptions } from "../../../lib/assumptions";
 import { useChartSeries } from "../../../lib/useRunsData";
 import TemperatureChart from "../../../components/TemperatureChart";
 import { PublicHeader, PublicFooter } from "../../../components/PublicChrome";
+import { modelAcronym, modelFullName } from "../../../lib/modelFullNames";
 import type { ModelListItem } from "../../../lib/clientTypes";
 
 export default function ModelArticlePage() {
@@ -49,7 +50,12 @@ export default function ModelArticlePage() {
         <Link href="/" className="article-back-link">
           &larr; All models
         </Link>
-        <h1 className="article-title">{model}</h1>
+        <h1 className="article-title">
+          {modelAcronym(model)}
+          <span className="article-subtitle"> &mdash; {modelFullName(model)}</span>
+        </h1>
+
+        {meta && <p className="article-lede">{meta.description}</p>}
 
         <section className="public-chart-section">
           {loading ? (
@@ -60,18 +66,17 @@ export default function ModelArticlePage() {
         </section>
 
         {meta && (
-          <>
-            <p className="article-lede">{meta.description}</p>
-            <p className="article-implementation">{meta.implementation}</p>
+          <p className="article-implementation">
+            {meta.implementation}{" "}
             <a href={meta.website} target="_blank" rel="noopener noreferrer" className="article-website-link">
               Model website &rarr;
             </a>
-          </>
+          </p>
         )}
 
         {assumptions && (
           <section className="article-section">
-            <h2>Modelling assumptions</h2>
+            <h2>What this model assumes</h2>
             <p className="assumptions-summary">{assumptions.summary}</p>
             <ul className="assumptions-list">
               {assumptions.items.map((item, i) => (

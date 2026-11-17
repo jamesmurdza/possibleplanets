@@ -8,6 +8,8 @@ import { scenarioAssumptionsByLabel } from "../../../lib/assumptions";
 import { scenarioDriverSeries } from "../../../lib/scenarioDrivers";
 import ScenarioChart from "../../../components/ScenarioChart";
 import { PublicHeader, PublicFooter } from "../../../components/PublicChrome";
+import { scenarioFullName } from "../../../lib/scenarioFullNames";
+import { modelAcronym } from "../../../lib/modelFullNames";
 import type { ModelListItem } from "../../../lib/clientTypes";
 
 export default function ScenarioArticlePage() {
@@ -25,6 +27,11 @@ export default function ScenarioArticlePage() {
   const description = scenarioDescription(scenario);
   const assumptions = scenarioAssumptionsByLabel(scenario);
   const runOnModels = models.filter((m) => m.scenarios.some((s) => canonicalScenario(s) === scenario)).map((m) => m.model);
+  // scenarioFullName() falls back to the label itself for anything that
+  // isn't a real SSP narrative (DICE's base/optimal, MAGICC's RCPs) -- only
+  // show it as a subtitle when it's actually a different, real name.
+  const fullName = scenarioFullName(scenario);
+  const hasNarrativeName = fullName !== scenario;
 
   if (!driver) {
     return (
@@ -45,14 +52,24 @@ export default function ScenarioArticlePage() {
         <Link href="/" className="article-back-link">
           &larr; All scenarios
         </Link>
-        <h1 className="article-title">{scenario}</h1>
+        <h1 className="article-title">
+          {scenario}
+          {hasNarrativeName && <span className="article-subtitle">: {fullName}</span>}
+        </h1>
         {description && <p className="article-lede">{description}</p>}
         {runOnModels.length > 0 && (
-          <p className="article-website-link">Run by: {runOnModels.join(", ")}</p>
+          <div className="article-run-by">
+            <span className="article-run-by-label">Run by</span>
+            {runOnModels.map((m) => (
+              <Link key={m} href={`/models/${m}`} className="article-model-tag">
+                {modelAcronym(m)}
+              </Link>
+            ))}
+          </div>
         )}
 
         <section className="article-section">
-          <h2>Scenario assumptions</h2>
+          <h2>What this scenario assumes</h2>
           <p className="assumptions-summary">{assumptions.summary}</p>
           <ul className="assumptions-list">
             {assumptions.items.map((item, i) => (
