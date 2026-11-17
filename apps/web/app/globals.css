@@ -1178,7 +1178,7 @@ a.icon-button {
   --pp-grey: #828282;
   --pp-grey-dark: #434343;
   --pp-grey-light: #e8e8e8;
-  --pp-content-width: 850px;
+  --pp-content-width: 900px;
   --pp-spacing: 30px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: var(--pp-text);
