@@ -1,32 +1,24 @@
 "use client";
 
 /**
- * Shared "fetch every succeeded run, then fetch each one's full result"
- * hook -- same two-step fetch (GET /v1/runs, then GET /v1/runs/[runId] for
- * anything not already cached) and same "latest run per exact (model,
- * params) wins" dedupe OverviewPanel.tsx already uses, pulled out so the
- * public home page and the per-model article pages can build their own
- * charts from the same real run history without copy-pasting that logic a
- * third/fourth time.
+ * Fetches exactly the runs a public chart ever plots: the latest
+ * succeeded run per distinct (model, params), full result included, in
+ * one request (GET /v1/runs/latest). This used to be a client-side "list
+ * 200 runs, then fetch each one's full result individually, then dedupe"
+ * N+1 pattern -- slow (up to ~200 round trips gating the home page's first
+ * paint) and wasteful (most of those individually-fetched results were
+ * immediately thrown away by the dedupe step). Pushing the dedupe into
+ * the query itself (lib/db.ts's getLatestSucceededRuns, via DISTINCT ON)
+ * means the server does it once, correctly, with no arbitrary limit to
+ * guess at -- see the home page's "brainstorm slow chart" discussion this
+ * was written for.
  */
 import { useEffect, useState } from "react";
 import { fetchJson } from "./clientApi";
 import type { RunJob, RunListItem } from "./clientTypes";
 
-function sortKeysDeep(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sortKeysDeep);
-  if (value && typeof value === "object") {
-    const sorted: Record<string, unknown> = {};
-    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-      sorted[key] = sortKeysDeep((value as Record<string, unknown>)[key]);
-    }
-    return sorted;
-  }
-  return value;
-}
-
 export function useRunsAndJobs() {
-  const [allRuns, setAllRuns] = useState<RunListItem[]>([]);
+  const [plottableRuns, setPlottableRuns] = useState<RunListItem[]>([]);
   const [jobs, setJobs] = useState<Record<string, RunJob>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,15 +28,38 @@ export function useRunsAndJobs() {
     async function load() {
       setLoading(true);
       try {
-        const data = await fetchJson("/v1/runs?limit=200");
-        const succeeded: RunListItem[] = (data.runs ?? []).filter((r: RunListItem) => r.status === "succeeded");
+        const data = await fetchJson("/v1/runs/latest");
+        const rows: { run_id: string; model: string; params: unknown; result: unknown; started_at: string }[] =
+          data.runs ?? [];
         if (cancelled) return;
-        setAllRuns(succeeded);
-        const fetched: RunJob[] = await Promise.all(succeeded.map((r) => fetchJson(`/v1/runs/${r.run_id}`)));
-        if (cancelled) return;
-        const next: Record<string, RunJob> = {};
-        for (const job of fetched) next[job.run_id] = job;
-        setJobs(next);
+
+        const nextRuns: RunListItem[] = rows.map((r) => ({
+          run_id: r.run_id,
+          model: r.model,
+          params: r.params as Record<string, unknown>,
+          status: "succeeded",
+          cached: false,
+          progress: { percent: 100 },
+          duration_seconds: null,
+          started_at: r.started_at,
+          updated_at: r.started_at,
+        }));
+        const nextJobs: Record<string, RunJob> = {};
+        for (const r of rows) {
+          nextJobs[r.run_id] = {
+            run_id: r.run_id,
+            model: r.model,
+            params: r.params as Record<string, unknown>,
+            status: "succeeded",
+            result: r.result,
+            error: null,
+            cached: false,
+            progress: { percent: 100 },
+            duration_seconds: null,
+          };
+        }
+        setPlottableRuns(nextRuns);
+        setJobs(nextJobs);
       } catch (err: any) {
         if (!cancelled) setError(err.message);
       } finally {
@@ -56,24 +71,6 @@ export function useRunsAndJobs() {
       cancelled = true;
     };
   }, []);
-
-  // Dedup to the single most recently started run per exact (model,
-  // params) -- see OverviewPanel.tsx's comment on why this matters (old,
-  // already-superseded runs of a scenario that was later fixed shouldn't
-  // keep showing up alongside the corrected rerun).
-  const plottableRuns = (() => {
-    const succeeded = allRuns.filter((r) => jobs[r.run_id]?.status === "succeeded");
-    const latestByKey = new Map<string, RunListItem>();
-    for (const r of succeeded) {
-      const key = `${r.model}:${JSON.stringify(sortKeysDeep(r.params))}`;
-      const existing = latestByKey.get(key);
-      if (!existing || new Date(r.started_at) > new Date(existing.started_at)) {
-        latestByKey.set(key, r);
-      }
-    }
-    const kept = new Set(latestByKey.values());
-    return succeeded.filter((r) => kept.has(r));
-  })();
 
   return { plottableRuns, jobs, loading, error };
 }

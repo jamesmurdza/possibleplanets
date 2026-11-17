@@ -280,6 +280,39 @@ export async function listRuns(limit = 50): Promise<RunListItem[]> {
   }));
 }
 
+export interface LatestRunItem {
+  run_id: string;
+  model: string;
+  params: unknown;
+  result: unknown;
+  started_at: string;
+}
+
+/**
+ * The single most recently started succeeded run per distinct (model,
+ * params) -- exactly the set of lines a chart that plots "one line per
+ * distinct run configuration" (public home page, model article pages)
+ * will ever draw, computed by the database in one query instead of the
+ * client fetching every run's full result and discarding the
+ * already-superseded ones itself.
+ *
+ * DISTINCT ON relies on Postgres's JSONB equality being key-order-
+ * independent (confirmed: `'{"a":1,"b":2}'::jsonb = '{"b":2,"a":1}'::jsonb`
+ * is true, since JSONB storage normalizes object key order -- unlike a
+ * plain TEXT/JSON column, which would compare byte-for-byte), so this
+ * doesn't need the client's own sortKeysDeep() normalization first.
+ */
+export async function getLatestSucceededRuns(): Promise<LatestRunItem[]> {
+  await ensureDb();
+  const { rows } = await getPool().query(
+    `SELECT DISTINCT ON (model, params) run_id, model, params, result, started_at
+     FROM runs
+     WHERE status = 'succeeded'
+     ORDER BY model, params, started_at DESC`,
+  );
+  return rows as LatestRunItem[];
+}
+
 export async function updateRunProgress(runId: string, progress: { percent: number }): Promise<void> {
   await ensureDb();
   await getPool().query(
