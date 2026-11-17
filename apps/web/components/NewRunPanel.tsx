@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Chart from "chart.js/auto";
-import { fetchJson, CHART_ADAPTERS, buildParams, chartAspectRatio, scenarioDescription, canonicalScenario, yAxisTitle } from "../lib/clientApi";
+import { fetchJson, CHART_ADAPTERS, buildParams, chartAspectRatio, scenarioDescription, canonicalScenario } from "../lib/clientApi";
 import { scenarioDriverSeries } from "../lib/scenarioDrivers";
 import { modelAssumptions, scenarioAssumptions, type AssumptionSection } from "../lib/assumptions";
 import Sparkline from "./Sparkline";
@@ -100,18 +100,6 @@ function ModelIcon({ model }: { model: string }) {
             strokeWidth="1.2"
             strokeLinecap="round"
             strokeLinejoin="round"
-          />
-        </svg>
-      );
-    case "world3": // globe -- world-as-one-unit systems model
-      return (
-        <svg {...common}>
-          <circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" strokeWidth="1.2" />
-          <path
-            d="M1.7 8h12.6M8 1.7v12.6M4 3.3c-2 2.6-2 7.8 0 9.4M12 3.3c2 2.6 2 7.8 0 9.4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1"
           />
         </svg>
       );
@@ -266,7 +254,7 @@ export default function NewRunPanel() {
         aspectRatio: chartAspectRatio(),
         scales: {
           x: { title: { display: true, text: "year" } },
-          y: { title: { display: true, text: yAxisTitle(name) } },
+          y: { title: { display: true, text: "temperature anomaly" } },
         },
       },
     });

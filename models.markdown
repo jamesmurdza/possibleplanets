@@ -15,7 +15,7 @@ Integrated Assesment Models are multi-disciplinary economic models which often i
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | --------------------- |
 | Dynamic Integrated Climate Economy model | Prize-winning economic model used to estimate the costs of human-indunced climate change on the global economy. [Learn more...](./DICE)           | [GAMS](http://www.econ.yale.edu/~nordhaus/homepage/homepage/DICE2016R-091916ap.gms)       | [Guide](/guides/DICE) |
 | Global Change Analysis Model             | Open-source integrated assessment model used to generate scenarios for IPCC assessments.                                                          | [C++](https://github.com/JGCRI/gcam-core) (ECL-2.0)                                       | Not&nbsp;yet          |
-| World3                                   | Legacy model of non-renewable resource use, population, and pollution, developed in the 70s and still often cited in research today. Run here via the maintained `pyworld3` Python port, not the original Stella model. | [Python](https://github.com/cvanwynsberghe/pyworld3) (CeCILL-2.1) | Built (no guide yet) |
+| World3                                   | Legacy model of non-renewable resource use and population growth, developed in the 70s until 2004, and still often cited in research today. | [Stella](https://gitlab.inria.fr/squinito/world3-03_python/-/tree/master/models/WRLD3-03) | Not&nbsp;yet          |
 
 <a name="rcms" />
 

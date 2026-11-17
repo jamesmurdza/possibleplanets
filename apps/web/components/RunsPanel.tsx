@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Chart from "chart.js/auto";
 import Dropdown from "./Dropdown";
-import { fetchJson, CHART_ADAPTERS, summarizeParams, chartAspectRatio, nativeScenarioOf, canonicalScenario, yAxisTitle } from "../lib/clientApi";
+import { fetchJson, CHART_ADAPTERS, summarizeParams, chartAspectRatio, nativeScenarioOf, canonicalScenario } from "../lib/clientApi";
 import type { RunJob, RunListItem } from "../lib/clientTypes";
 
 const ALL = "__all__";
@@ -155,7 +155,7 @@ export default function RunsPanel() {
         aspectRatio: chartAspectRatio(),
         scales: {
           x: { title: { display: true, text: "year" } },
-          y: { title: { display: true, text: yAxisTitle(job.model) } },
+          y: { title: { display: true, text: "temperature anomaly" } },
         },
       },
     });

@@ -388,58 +388,6 @@ export const MODELS: Record<string, ModelMeta> = {
       },
     ],
   },
-  world3: {
-    family: "IAM",
-    description: "The 'Limits to Growth' population/resources/pollution model.",
-    website: "https://github.com/cvanwynsberghe/pyworld3",
-    dockerfile: path.join(SANDBOXES_DIR, "world3", "Dockerfile"),
-    // Only one real scenario -- see sandboxes/world3/run.py's docstring:
-    // pyworld3 ships no pre-built named scenario presets of its own
-    // (confirmed by checking its docs directly), unlike the original
-    // "Limits to Growth" book's scenarios 1-10, which are specific
-    // constant combinations this project hasn't sourced/verified.
-    scenarios: ["standard_run"],
-    params_shape: "scenario",
-    // Measured directly (bare Debian 12 host): a full fast-mode run
-    // (1900-2100) completes in well under half a second, including import
-    // time. Generous buffer above that.
-    exec_timeout_seconds: 60,
-    // No progress hook -- pyworld3's run loop has no real intermediate
-    // signal to report (same situation as hector/dice/magicc).
-    supports_progress: false,
-    // Not yet measured against a real Daytona sandbox (unlike hector/
-    // fair/dice/magicc's cpu:2 settings, which came from controlled
-    // multi-trial experiments) -- left at the platform default rather
-    // than guessing a resources value with no measurement behind it.
-    //
-    // Two of init_world3_constants()'s ~80 constants, confirmed by direct
-    // testing (see sandboxes/world3/run.py's docstring) to be real knobs:
-    // passing each one's own documented default value explicitly
-    // reproduces bit-identical output to no override, and a real change to
-    // either moves the result substantially. Other constants exist (e.g.
-    // pyear) but aren't exposed here because they're a documented no-op on
-    // their own with every other constant left at its default.
-    parameters: [
-      {
-        key: "nri",
-        label: "Nonrenewable resources, initial (1970)",
-        type: "number",
-        default: 1e12,
-        min: 1e11,
-        max: 5e12,
-        step: 1e10,
-      },
-      {
-        key: "ppoli",
-        label: "Persistent pollution, initial (1970)",
-        type: "number",
-        default: 2.5e7,
-        min: 1e6,
-        max: 1e9,
-        step: 1e6,
-      },
-    ],
-  },
 };
 
 export function getModelOrNull(model: string): ModelMeta | null {

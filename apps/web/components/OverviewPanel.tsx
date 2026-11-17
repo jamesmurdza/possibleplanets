@@ -5,7 +5,6 @@ import Chart from "chart.js/auto";
 import {
   fetchJson,
   CHART_ADAPTERS,
-  TEMPERATURE_ANOMALY_MODELS,
   chartAspectRatio,
   nativeScenarioOf,
   canonicalScenario,
@@ -150,9 +149,7 @@ export default function OverviewPanel() {
   // (confirmed by querying the DB directly: two SSP1-1.9 oscar runs
   // pre-dated the run.py fix and still start at 2014, not 1750).
   const plottableRuns = useMemo(() => {
-    const succeeded = allRuns.filter(
-      (r) => jobs[r.run_id]?.status === "succeeded" && CHART_ADAPTERS[r.model] && TEMPERATURE_ANOMALY_MODELS.has(r.model),
-    );
+    const succeeded = allRuns.filter((r) => jobs[r.run_id]?.status === "succeeded" && CHART_ADAPTERS[r.model]);
     const latestByKey = new Map<string, RunListItem>();
     for (const r of succeeded) {
       const key = `${r.model}:${JSON.stringify(sortKeysDeep(r.params))}`;
