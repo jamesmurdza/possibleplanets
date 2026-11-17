@@ -12,6 +12,7 @@ export async function GET() {
       family: meta.family,
       scenarios: meta.scenarios,
       description: meta.description,
+      implementation: meta.implementation,
       website: meta.website,
     })),
   });

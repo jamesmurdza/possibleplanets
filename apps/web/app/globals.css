@@ -1366,6 +1366,13 @@ a.icon-button {
   line-height: 1.6;
 }
 
+.article-implementation {
+  color: var(--pp-grey);
+  font-size: 0.875rem;
+  max-width: 42rem;
+  margin-top: -0.5rem;
+}
+
 .article-website-link {
   display: inline-block;
   font-size: 0.875rem;

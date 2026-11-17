@@ -32,6 +32,7 @@ export interface ModelListItem {
   family: string;
   scenarios: string[];
   description: string;
+  implementation: string;
   website: string;
 }
 

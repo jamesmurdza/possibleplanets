@@ -66,6 +66,10 @@ export interface ModelMeta {
   // project/documentation site -- shown as a card when picking a model on
   // the New Run form.
   description: string;
+  // One sentence on language/license, from ../../models.markdown's own
+  // "Source code" column (the Jekyll site's own wording) -- shown as a
+  // second line under `description` on a model's public article page.
+  implementation: string;
   website: string;
   dockerfile: string;
   scenarios: string[];
@@ -96,7 +100,8 @@ export const MODELS: Record<string, ModelMeta> = {
     family: "RCM",
     // Wording from ../../models.markdown's own model table -- the Jekyll
     // site's real description of this model, not invented here.
-    description: "Model with a simplified box structure for atmosphere, ocean, and land components.",
+    description: "Hector uses a simplified box structure for its atmosphere, ocean, and land components.",
+    implementation: "It's implemented in C++, licensed under the GPLv3.",
     website: "https://jgcri.github.io/hector/",
     dockerfile: path.join(SANDBOXES_DIR, "hector", "Dockerfile"),
     scenarios: ["ssp119", "ssp126", "ssp245", "ssp370", "ssp585"],
@@ -180,7 +185,9 @@ export const MODELS: Record<string, ModelMeta> = {
   fair: {
     family: "RCM",
     // Wording from ../../models.markdown's own model table.
-    description: "Regionally differentiated model with detailed process-based representation of carbon cycles and greenhouse gas interactions.",
+    description:
+      "FAIR is a regionally differentiated model, with a detailed, process-based representation of carbon cycles and greenhouse gas interactions.",
+    implementation: "It's implemented in Python, licensed under the Apache-2.0 license.",
     website: "https://docs.fairmodel.net/",
     dockerfile: path.join(SANDBOXES_DIR, "fair", "Dockerfile"),
     scenarios: [
@@ -231,7 +238,9 @@ export const MODELS: Record<string, ModelMeta> = {
   oscar: {
     family: "RCM",
     // Wording from ../../models.markdown's own model table.
-    description: "Hemispherically resolved model with parameterizations for carbon cycling, atmospheric chemistry, and radiative forcing.",
+    description:
+      "OSCAR is a hemispherically resolved model, with parameterizations for carbon cycling, atmospheric chemistry, and radiative forcing.",
+    implementation: "It's implemented in Python, licensed under the CeCILL-2.1 license.",
     website: "https://github.com/tgasser/OSCAR",
     dockerfile: path.join(SANDBOXES_DIR, "oscar", "Dockerfile"),
     scenarios: [
@@ -295,7 +304,9 @@ export const MODELS: Record<string, ModelMeta> = {
     family: "IAM",
     // Wording from ../../models.markdown's own model table (fixing that
     // table's own typo, "human-indunced" -> "human-induced").
-    description: "Prize-winning economic model used to estimate the costs of human-induced climate change on the global economy.",
+    description:
+      "DICE is a prize-winning economic model, used to estimate the costs of human-induced climate change on the global economy.",
+    implementation: "It's implemented in GAMS.",
     website: "https://williamnordhaus.com/dicerice-models",
     dockerfile: path.join(SANDBOXES_DIR, "dice", "Dockerfile"),
     // Only base/optimal -- confirmed by testing that DICE.jl only implements
@@ -317,7 +328,9 @@ export const MODELS: Record<string, ModelMeta> = {
   magicc: {
     family: "RCM",
     // Wording from ../../models.markdown's own model table.
-    description: "Emissions-based model using impulse response functions to directly connect greenhouse gas emissions to temperature outcomes.",
+    description:
+      "MAGICC is an emissions-based model, using impulse response functions to directly connect greenhouse gas emissions to temperature outcomes.",
+    implementation: "Its source code is closed-source, not publicly available.",
     website: "https://magicc.org/",
     dockerfile: path.join(SANDBOXES_DIR, "magicc", "Dockerfile"),
     // pymagicc's own four RCP scenarios -- confirmed via
@@ -362,7 +375,8 @@ export const MODELS: Record<string, ModelMeta> = {
     family: "RCM",
     // Wording from ../../models.markdown's own model table.
     description:
-      "Bare two-layer energy-balance physics engine; driven by a published radiative forcing dataset rather than its own emissions scenarios.",
+      "The Two Layer Model is a bare two-layer energy-balance physics engine, driven by a published radiative forcing dataset rather than its own emissions scenarios.",
+    implementation: "It's implemented in Python, licensed under the BSD-3-Clause license.",
     website: "https://github.com/openscm/openscm-twolayermodel",
     dockerfile: path.join(SANDBOXES_DIR, "twolayer", "Dockerfile"),
     // Same 8 SSPs sandboxes/fair exposes -- confirmed present as rows in

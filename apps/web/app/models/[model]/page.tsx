@@ -62,6 +62,7 @@ export default function ModelArticlePage() {
         {meta && (
           <>
             <p className="article-lede">{meta.description}</p>
+            <p className="article-implementation">{meta.implementation}</p>
             <a href={meta.website} target="_blank" rel="noopener noreferrer" className="article-website-link">
               Model website &rarr;
             </a>
