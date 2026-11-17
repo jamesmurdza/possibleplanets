@@ -89,6 +89,10 @@ export default function TemperatureChart({
             title: { display: true, text: "year" },
             min: windowMin,
             max: windowMax,
+            // Chart.js's default tick formatter adds thousands separators
+            // to a linear scale's numbers (e.g. "2,000") -- fine for most
+            // data, wrong for a year. Format as a plain integer instead.
+            ticks: { callback: (value) => Math.round(Number(value)).toString() },
           },
           y: { title: { display: true, text: "temperature anomaly" } },
         },

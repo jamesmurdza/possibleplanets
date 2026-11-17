@@ -313,7 +313,10 @@ export default function OverviewPanel() {
             min: chartData.windowMin,
             max: chartData.windowMax,
             title: { display: true, text: "year" },
-            ticks: { stepSize: 10 },
+            // See TemperatureChart.tsx's identical fix -- a linear scale's
+            // default tick formatter adds thousands separators ("2,000"),
+            // wrong for a year.
+            ticks: { stepSize: 10, callback: (value) => Math.round(Number(value)).toString() },
           },
           y: { title: { display: true, text: "temperature anomaly" } },
         },
