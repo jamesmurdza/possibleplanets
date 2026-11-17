@@ -9,6 +9,7 @@ import { useChartSeries } from "../../../lib/useRunsData";
 import TemperatureChart from "../../../components/TemperatureChart";
 import { PublicHeader, PublicFooter } from "../../../components/PublicChrome";
 import { modelAcronym, modelFullName } from "../../../lib/modelFullNames";
+import { runGuide } from "../../../lib/runGuides";
 import type { ModelListItem } from "../../../lib/clientTypes";
 
 export default function ModelArticlePage() {
@@ -30,6 +31,7 @@ export default function ModelArticlePage() {
 
   const ownSeries = series.filter((r) => r.model === model);
   const assumptions = modelAssumptions(model);
+  const guide = runGuide(model);
 
   if (notFound) {
     return (
@@ -86,6 +88,18 @@ export default function ModelArticlePage() {
                 <li key={i}>{item}</li>
               ))}
             </ul>
+          </section>
+        )}
+
+        {guide && (
+          <section className="article-section">
+            <h2>How to run {modelAcronym(model)}</h2>
+            {guide.map((step, i) => (
+              <div key={i} className="run-guide-step">
+                <p>{step.text}</p>
+                {step.code && <pre className="run-guide-code">{step.code}</pre>}
+              </div>
+            ))}
           </section>
         )}
       </main>
