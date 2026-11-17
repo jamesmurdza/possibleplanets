@@ -163,9 +163,13 @@ no higher tier available to test against.
    compiling the full codebase (546 `.o` files, ~747MB) inside the 1.7GB
    cloned repo filled the 3GB disk to 79% before the final `ar ru
    libgcam.a` archive step, which then failed outright with "No space
-   left on device" -- one step away from a working build. Retried with
-   `disk: 20` (also confirmed to be allowed on this account, unlike the
-   cpu/memory ceilings) and it built clean.
+   left on device" -- one step away from a working build. First retried
+   with `disk: 20` (confirmed allowed on this account, unlike the
+   cpu/memory ceilings) to confirm the build itself was otherwise fine --
+   it was. Then sized down to find the real minimum rather than shipping
+   an arbitrary 20GB: `disk: 4` also builds clean, peaking at 88% full
+   (3.6GB used, 499MB to spare) -- `disk: 4` is what's actually used,
+   not 20.
 
 **Build time:** ~9 minutes with `cpu: 4` from a cold clone to a working
 `gcam.exe` (294MB binary), once all three issues above were fixed. Not
