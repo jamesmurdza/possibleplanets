@@ -50,6 +50,15 @@ export default function ModelArticlePage() {
           &larr; All models
         </Link>
         <h1 className="article-title">{model}</h1>
+
+        <section className="public-chart-section">
+          {loading ? (
+            <p className="public-chart-empty">Loading runs...</p>
+          ) : (
+            <TemperatureChart runs={ownRuns} jobs={jobs} windowMin={2000} windowMax={2100} colorBy="scenario" />
+          )}
+        </section>
+
         {meta && (
           <>
             <p className="article-lede">{meta.description}</p>
@@ -70,15 +79,6 @@ export default function ModelArticlePage() {
             </ul>
           </section>
         )}
-
-        <section className="article-section">
-          <h2>Temperature projections</h2>
-          {loading ? (
-            <p className="public-chart-empty">Loading runs...</p>
-          ) : (
-            <TemperatureChart runs={ownRuns} jobs={jobs} />
-          )}
-        </section>
       </main>
       <PublicFooter />
     </div>

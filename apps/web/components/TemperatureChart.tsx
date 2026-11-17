@@ -28,6 +28,13 @@ function scenarioOf(params: Record<string, unknown>): string | undefined {
   return native ? canonicalScenario(native) : undefined;
 }
 
+// Used only when colorBy="scenario" (a model's own article page, where
+// every line is already the same model -- modelColor() would make every
+// line identical). Purely a display palette, not derived from anything
+// about the scenarios themselves, so a fixed cycling list is fine; falls
+// back to repeating once there are more distinct scenarios than colors.
+const SCENARIO_PALETTE = ["#2f6fed", "#1fa37a", "#e0862f", "#9b51e0", "#e0415a", "#1b8f9e", "#c2a52e", "#5c6bc0"];
+
 export default function TemperatureChart({
   runs,
   jobs,
@@ -35,6 +42,7 @@ export default function TemperatureChart({
   windowMax,
   aspectRatio,
   hovered,
+  colorBy = "model",
 }: {
   runs: RunListItem[];
   jobs: Record<string, RunJob>;
@@ -51,6 +59,12 @@ export default function TemperatureChart({
    * matching lines get full color/width and everything else fades,
    * instead of every line always sitting at the same half-opacity. */
   hovered?: HoverFilter;
+  /** "model" (default, for the home page's mixed-model chart) colors/
+   * labels each line by its model. "scenario" (for a model's own article
+   * page, where `runs` is already filtered to one model) colors/labels
+   * each line by its scenario instead -- otherwise every line on a
+   * single-model chart would render in the exact same color. */
+  colorBy?: "model" | "scenario";
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -67,16 +81,30 @@ export default function TemperatureChart({
     });
     const aligned = alignSeriesByYear(series);
 
+    // Stable scenario -> color assignment, in first-seen order -- only
+    // used when colorBy="scenario".
+    const scenarioColors = new Map<string, string>();
+    if (colorBy === "scenario") {
+      for (const r of plottable) {
+        const s = scenarioOf(r.params) ?? "unknown";
+        if (!scenarioColors.has(s)) {
+          scenarioColors.set(s, SCENARIO_PALETTE[scenarioColors.size % SCENARIO_PALETTE.length]);
+        }
+      }
+    }
+
     const perRun = aligned.datasets.map((d, i) => {
       const run = plottable[i];
       const model = run.model;
       const scenario = scenarioOf(run.params);
       const isMatch = !!hovered && (hovered.type === "model" ? hovered.value === model : hovered.value === scenario);
       const dimmed = !!hovered && !isMatch;
+      const label = colorBy === "scenario" ? scenario ?? "unknown" : model;
+      const baseColor = colorBy === "scenario" ? scenarioColors.get(scenario ?? "unknown")! : modelColor(model);
       return {
-        label: model,
+        label,
         data: aligned.labels.map((year, idx) => ({ x: year, y: d.data[idx] })),
-        borderColor: colorWithAlpha(modelColor(model), isMatch ? 0.95 : dimmed ? 0.12 : 0.55),
+        borderColor: colorWithAlpha(baseColor, isMatch ? 0.95 : dimmed ? 0.12 : 0.55),
         borderWidth: isMatch ? 2.5 : 1.2,
         pointRadius: 0,
         spanGaps: true,
@@ -97,7 +125,7 @@ export default function TemperatureChart({
     };
 
     return { datasets: [...perRun, average] };
-  }, [plottable, jobs, hovered]);
+  }, [plottable, jobs, hovered, colorBy]);
 
   // Creates the chart once per (windowMin/windowMax/aspectRatio/canvas
   // presence) -- deliberately NOT re-run on every `hovered` change. A
