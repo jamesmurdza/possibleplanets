@@ -86,12 +86,14 @@ export default function ScenarioChart({
         // renders inside .public-main's narrower column, where that ratio
         // made the chart look squashed/too short.
         aspectRatio: typeof window !== "undefined" && window.innerWidth <= 640 ? 1.1 : 1.8,
-        // "index" + intersect:false -- hovering anywhere along a given
-        // year shows every line's value at that year, not just whichever
-        // one you're pixel-precisely over. With pointRadius:0 (no visible
-        // points), Chart.js's default intersect:true mode made the
-        // tooltip nearly impossible to trigger at all.
-        interaction: { mode: "index", intersect: false },
+        // "nearest" + intersect:false, same as TemperatureChart -- "index"
+        // (every dataset's value at the hovered year, all at once) turned
+        // out noisier here than useful: this chart mixes two different
+        // units (emissions + N models' temperature) on two axes, so one
+        // tooltip listing all of them together read as chaotic rather
+        // than clarifying. "nearest" surfaces just the one line under the
+        // cursor, same simple behavior as every other chart in the app.
+        interaction: { mode: "nearest", intersect: false },
         scales: {
           x: {
             type: "linear",
@@ -119,7 +121,7 @@ export default function ScenarioChart({
         },
         plugins: {
           legend: { display: true, position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } },
-          tooltip: { mode: "index", intersect: false },
+          tooltip: { mode: "nearest", intersect: false },
         },
       },
     });
