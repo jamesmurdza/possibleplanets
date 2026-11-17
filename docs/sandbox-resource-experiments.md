@@ -111,9 +111,8 @@ as hector's experiment 2 (memory fixed small/sufficient, only CPU varied).
 is, 2->4 is flat or noise" shape hector and dice show clearly; fair shows
 the same direction with more variance. None of the three justify `cpu: 4`.
 
-**Conclusion: not yet applied.** `cpu: 2` would be the same cost/latency
-tradeoff as hector for all three, but this hasn't been added to
-`lib/models.ts` yet -- pending confirmation/go-ahead.
+**Conclusion / applied:** `resources: { cpu: 2 }` for all three
+(`apps/web/lib/models.ts`) -- same cost/latency tradeoff as hector.
 
 ## Overall takeaways
 
@@ -129,7 +128,6 @@ tradeoff as hector for all three, but this hasn't been added to
 3. **Not every model benefits from more CPU at all** -- oscar is the
    counterexample: its real bottleneck is memory (avoiding an OOM kill at
    7.8s), and once past that, more CPU doesn't move its ~520s runtime.
-4. Applied so far: hector -> `cpu: 2`. Oscar's existing `{cpu: 4, memory:
-   8}` is validated as-is (memory load-bearing, cpu incidental). fair/
-   dice/magicc have measured evidence for `cpu: 2` but it hasn't been
-   applied yet.
+4. Applied: hector/fair/dice/magicc all set to `cpu: 2`. Oscar's existing
+   `{cpu: 4, memory: 8}` is validated as-is (memory load-bearing, cpu
+   incidental, and also this plan's per-sandbox cpu ceiling anyway).

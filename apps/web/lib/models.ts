@@ -195,6 +195,13 @@ export const MODELS: Record<string, ModelMeta> = {
     // run.py monkey-patches FAIR's own tqdm bar to write /tmp/progress.json
     // as it runs -- a real intermediate signal, read via the sandbox fs API.
     supports_progress: true,
+    // Confirmed by a 1/2/4 cpu sweep (5 trials each, real sandboxes, see
+    // docs/sandbox-resource-experiments.md): 1cpu ~19.2s median, 2cpu
+    // ~14.6s median (-24%), 4cpu ~12.8s median (-10% further). Same
+    // diminishing-returns shape as hector/dice/magicc -- cpu:2 captures
+    // most of the real gain without doubling cost again for a much
+    // smaller further step.
+    resources: { cpu: 2 },
     // Confirmed by reading the installed fair library's source
     // (energy_balance_model.py): each config's stochastic internal
     // variability noise is seeded (`random_state=self.seed`), and run.py
@@ -292,6 +299,11 @@ export const MODELS: Record<string, ModelMeta> = {
     run_command: "julia /app/run.jl",
     exec_timeout_seconds: 120,
     supports_progress: false,
+    // Confirmed by a 1/2/4 cpu sweep (5 trials each, real sandboxes, see
+    // docs/sandbox-resource-experiments.md): 1cpu ~36.3s median, 2cpu
+    // ~19.6s median (-46%), 4cpu ~20.7s median (flat/slightly worse,
+    // noise) -- same shape as hector, the 1->2 step carries the real gain.
+    resources: { cpu: 2 },
     // No extra parameters: DICE.jl's solve(scenario, version) doesn't
     // expose a hook for overriding other economic parameters (discount
     // rate, damage function, etc.) through this wrapper -- see run.jl.
@@ -317,6 +329,11 @@ export const MODELS: Record<string, ModelMeta> = {
     // real mid-run signal to report via the file-polling mechanism used
     // for fair/oscar.
     supports_progress: false,
+    // Confirmed by a 1/2/4 cpu sweep (5 trials each, real sandboxes, see
+    // docs/sandbox-resource-experiments.md): 1cpu ~12.5s median, 2cpu
+    // ~9.5s median (-24%), 4cpu ~9.1s median (flat, noise-level further
+    // change) -- same diminishing-returns shape as the other models.
+    resources: { cpu: 2 },
     // Confirmed by testing: `pymagicc.run(scenario, core_climatesensitivity=X)`
     // really changes the result (2100 warming under RCP26 moved from
     // 1.56degC at the default 3.0 to 2.26degC at 4.5), and passing the
