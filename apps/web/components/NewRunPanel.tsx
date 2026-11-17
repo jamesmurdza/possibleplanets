@@ -4,8 +4,43 @@ import { useEffect, useRef, useState } from "react";
 import Chart from "chart.js/auto";
 import { fetchJson, CHART_ADAPTERS, buildParams, chartAspectRatio, scenarioDescription, canonicalScenario } from "../lib/clientApi";
 import { scenarioDriverSeries } from "../lib/scenarioDrivers";
+import { modelAssumptions, scenarioAssumptions, type AssumptionSection } from "../lib/assumptions";
 import Sparkline from "./Sparkline";
+import Modal from "./Modal";
 import type { ModelMeta, ModelListItem, RunJob, ModelDurationStats, CheckResult } from "../lib/clientTypes";
+
+function InfoButton({ label, onClick }: { label: string; onClick: (e: React.MouseEvent) => void }) {
+  return (
+    <button
+      type="button"
+      className="icon-button secondary info-button"
+      aria-label={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(e);
+      }}
+    >
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+        <circle cx="8" cy="5" r="0.75" fill="currentColor" />
+        <path d="M8 7.5v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      </svg>
+    </button>
+  );
+}
+
+function AssumptionsModalBody({ section }: { section: AssumptionSection }) {
+  return (
+    <div>
+      <p className="assumptions-summary">{section.summary}</p>
+      <ul className="assumptions-list">
+        {section.items.map((item, i) => (
+          <li key={i}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 // One simple, distinct glyph per model -- purely decorative wayfinding on
 // the model cards, not derived from any real model property. Falls back to
@@ -108,6 +143,7 @@ export default function NewRunPanel() {
   const [lastRunParams, setLastRunParams] = useState<Record<string, unknown> | null>(null);
   const [statsByModel, setStatsByModel] = useState<Record<string, ModelDurationStats>>({});
   const [checkResult, setCheckResult] = useState<CheckResult | null>(null);
+  const [infoModal, setInfoModal] = useState<{ title: string; section: AssumptionSection } | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -392,6 +428,15 @@ export default function NewRunPanel() {
                     <ModelIcon model={m.model} />
                   </span>
                   <span className="model-card-name">{m.model}</span>
+                  {modelAssumptions(m.model) && (
+                    <InfoButton
+                      label={`${m.model} assumptions`}
+                      onClick={() => {
+                        const section = modelAssumptions(m.model);
+                        if (section) setInfoModal({ title: `${m.model}: assumptions`, section });
+                      }}
+                    />
+                  )}
                 </div>
                 <p className="model-card-description">{m.description}</p>
                 {m.website && (
@@ -439,6 +484,13 @@ export default function NewRunPanel() {
                         <Sparkline values={driver.values} />
                       </span>
                     )}
+                    <InfoButton
+                      label={`${canonical} assumptions`}
+                      onClick={() => {
+                        const section = scenarioAssumptions(modelName, s, canonical);
+                        setInfoModal({ title: `${canonical}: assumptions`, section });
+                      }}
+                    />
                   </div>
                   {desc && <p className="scenario-card-description">{desc}</p>}
                 </div>
@@ -556,6 +608,12 @@ export default function NewRunPanel() {
           </span>
         )}
       </div>
+
+      {infoModal && (
+        <Modal title={infoModal.title} onClose={() => setInfoModal(null)}>
+          <AssumptionsModalBody section={infoModal.section} />
+        </Modal>
+      )}
     </div>
   );
 }
