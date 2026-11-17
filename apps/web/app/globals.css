@@ -1262,6 +1262,17 @@ a.icon-button {
   border: 1px solid var(--pp-grey-light);
   border-radius: 4px;
   padding: 1rem;
+  /* Chart.js's responsive resize (used here via its `aspectRatio` option,
+     no custom resize code) measures its canvas's immediate parent on every
+     resize -- without `position: relative` + an explicit width, that
+     parent has no independent size of its own to measure: it just
+     shrink-wraps to whatever the canvas's current pixel size already is.
+     That's a resize *down* feedback loop that works fine (parent shrinks
+     because canvas shrinks), but nothing ever makes the parent (or canvas)
+     grow back when the window widens again. This is Chart.js's own
+     documented fix -- see https://www.chartjs.org/docs/latest/configuration/responsive.html. */
+  position: relative;
+  width: 100%;
 }
 
 .public-chart-empty {
