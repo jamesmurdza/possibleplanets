@@ -90,6 +90,30 @@ export const CHART_ADAPTERS: Record<string, (result: any) => { labels: any[]; va
   },
 };
 
+// Models whose CHART_ADAPTERS output is a temperature anomaly on one
+// shared, comparable scale (degC) -- what OverviewPanel's single
+// cross-model chart/average assumes every line it plots is. world3 has a
+// perfectly real CHART_ADAPTERS entry above (population, for its own
+// single-run chart in NewRunPanel/RunsPanel), but population is in the
+// billions -- mixing it into a chart of single-digit degC anomalies would
+// either flatten every real temperature line to a flat 0 on the shared
+// axis, or fold a nonsense "average" of population and temperature
+// together. Confirmed this is exactly what was happening on Overview
+// before this existed: world3 runs weren't a different unit shown oddly,
+// they were silently corrupting the scale/average for every other model's
+// line too. OverviewPanel filters to this set instead of just
+// `CHART_ADAPTERS[model]` for that reason.
+export const TEMPERATURE_ANOMALY_MODELS = new Set(["hector", "fair", "oscar", "dice", "magicc", "twolayer"]);
+
+/** Y-axis title for a single-model chart (NewRunPanel/RunsPanel's own
+ * single-run preview) -- "temperature anomaly" for every model whose
+ * CHART_ADAPTERS output actually is one; world3's real output is
+ * population, so it gets its own honest label instead of a leftover
+ * "temperature anomaly" title over a billions-of-people y-axis. */
+export function yAxisTitle(model: string): string {
+  return TEMPERATURE_ANOMALY_MODELS.has(model) ? "temperature anomaly" : "population";
+}
+
 // --- Cross-model scenario naming -----------------------------------------
 // hector/fair use lowercase short codes ("ssp119"), oscar uses IPCC's own
 // longer form ("SSP1-1.9") -- same scenarios, just different native string

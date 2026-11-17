@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Chart from "chart.js/auto";
 import Dropdown from "./Dropdown";
-import { fetchJson, CHART_ADAPTERS, chartAspectRatio, nativeScenarioOf, canonicalScenario, alignSeriesByYear } from "../lib/clientApi";
+import { fetchJson, CHART_ADAPTERS, chartAspectRatio, nativeScenarioOf, canonicalScenario, alignSeriesByYear, yAxisTitle } from "../lib/clientApi";
 import type { ModelMeta, ModelListItem, RunJob, RunListItem } from "../lib/clientTypes";
 
 type Axis = "model" | "scenario" | "parameter";
@@ -176,7 +176,7 @@ export default function ComparePanel() {
         aspectRatio: chartAspectRatio(),
         scales: {
           x: { title: { display: true, text: "year" } },
-          y: { title: { display: true, text: "temperature anomaly" } },
+          y: { title: { display: true, text: yAxisTitle(modelName) } },
         },
       },
     });

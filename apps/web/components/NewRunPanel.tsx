@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Chart from "chart.js/auto";
-import { fetchJson, CHART_ADAPTERS, buildParams, chartAspectRatio, scenarioDescription, canonicalScenario } from "../lib/clientApi";
+import { fetchJson, CHART_ADAPTERS, buildParams, chartAspectRatio, scenarioDescription, canonicalScenario, yAxisTitle } from "../lib/clientApi";
 import { scenarioDriverSeries } from "../lib/scenarioDrivers";
 import { modelAssumptions, scenarioAssumptions, type AssumptionSection } from "../lib/assumptions";
 import Sparkline from "./Sparkline";
@@ -266,7 +266,7 @@ export default function NewRunPanel() {
         aspectRatio: chartAspectRatio(),
         scales: {
           x: { title: { display: true, text: "year" } },
-          y: { title: { display: true, text: "temperature anomaly" } },
+          y: { title: { display: true, text: yAxisTitle(name) } },
         },
       },
     });
