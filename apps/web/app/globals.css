@@ -1,0 +1,1573 @@
+:root {
+  --color-bg: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-border: #e5e7eb;
+  --color-border-strong: #d7dae0;
+  --color-text: #14171a;
+  --color-text-muted: #6b7280;
+  --color-text-faint: #9aa1ab;
+  --color-accent: #2f6feb;
+  --color-accent-hover: #2558c4;
+  --color-error: #c0152f;
+  /* A few pixels of rounding throughout -- both radius tokens set here
+     rather than removed, so every rule still referencing
+     var(--radius-sm/md) (plus the few hardcoded pill/badge radii set
+     individually below) stays consistent without hunting down each
+     declaration separately. */
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 2px 6px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+
+  /* Sidebar -- deliberately a separate, dark palette from the rest of the
+     app (which stays light/minimal) -- this is the one place the "serious
+     data dashboard" framing shows up most, as a fixed, quiet navigation
+     rail rather than anything decorative. */
+  --color-sidebar-bg: #12151a;
+  --color-sidebar-border: #1f242b;
+  --color-sidebar-text: #aeb4bd;
+  --color-sidebar-text-muted: #6b7280;
+  --color-sidebar-active-bg: #1b2027;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto,
+    sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+/* --- App shell / sidebar ---
+   Single-page app: the sidebar never triggers a navigation/page load, just
+   a tab state change in app/page.tsx -- every panel mounts once and keeps
+   its own state (e.g. an in-flight run keeps polling) in the background. */
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--color-sidebar-bg);
+  border-right: 1px solid var(--color-sidebar-border);
+  display: flex;
+  flex-direction: column;
+  padding: 1.1rem 0.75rem;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.5rem 1.4rem;
+}
+
+.sidebar-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.sidebar-subtitle {
+  font-size: 0.7rem;
+  color: var(--color-sidebar-text-muted);
+  margin-top: 0.1rem;
+}
+
+.sidebar-nav {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.6rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-sidebar-text);
+  cursor: pointer;
+  height: auto;
+}
+
+.sidebar-nav-item svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.sidebar-nav-item:hover:not(.active) {
+  background: var(--color-sidebar-active-bg);
+  border-color: transparent;
+  color: #fff;
+}
+
+.sidebar-nav-item.active {
+  background: var(--color-sidebar-active-bg);
+  color: #fff;
+  border-color: var(--color-sidebar-border);
+}
+
+.main-area {
+  flex: 1;
+  min-width: 0;
+  padding: 1.75rem 2rem 3rem;
+  max-width: 1200px;
+}
+
+.panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.run-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+button {
+  font-family: inherit;
+  font-size: 0.8125rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0.4rem 0.65rem;
+  line-height: 1.3;
+  height: 2rem;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+button:disabled {
+  background: var(--color-border);
+  border-color: var(--color-border);
+  color: var(--color-text-faint);
+  cursor: not-allowed;
+}
+
+.text-button {
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.text-button:hover:not(:disabled) {
+  color: var(--color-accent);
+}
+
+/* Primary/secondary icon buttons (Run, Refresh, Download) -- minimal square
+   icon buttons. Run stays accent-filled since it's the one primary action;
+   Refresh/Download are outlined, lower-emphasis "secondary" actions. */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.icon-button svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+.icon-button.secondary {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+  color: var(--color-text-muted);
+}
+
+.icon-button.secondary:hover:not(:disabled) {
+  background: var(--color-bg);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* The raw-download link is styled as an icon button but is an <a>, not a
+   <button> -- `button:disabled` styles above don't apply to it, and it never
+   needs a disabled state, so that's fine. */
+a.icon-button {
+  text-decoration: none;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 1.5rem;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+
+/* "Would this be cached, or how long would it take" preview -- see
+   NewRunPanel's etaBadge(). Color communicates the three real states: a
+   true cache hit, a real historical estimate, or a warning that this exact
+   selection can't be cached at all. */
+.eta-badge {
+  font-size: 0.75rem;
+  white-space: nowrap;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.eta-badge-cached {
+  color: #1a7f4b;
+  background: #e8f6ee;
+  border-color: #c3e9d4;
+}
+
+.eta-badge-estimate {
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border-color: var(--color-border-strong);
+}
+
+.eta-badge-warn {
+  color: #9a6400;
+  background: #fdf3df;
+  border-color: #f1ddab;
+}
+
+/* --- Custom dropdowns ---
+   The real <select> stays in the DOM but is visually hidden; Dropdown.tsx
+   renders a styled button + listbox on top of it. */
+
+.visually-hidden-select {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dropdown {
+  position: relative;
+  flex: 1 1 9.5rem;
+  min-width: 6rem;
+  max-width: 14rem;
+}
+
+.dropdown-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0.4rem 0.6rem;
+  height: 2rem;
+  cursor: pointer;
+}
+
+.dropdown-toggle:hover {
+  border-color: var(--color-accent);
+}
+
+.dropdown-toggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.dropdown.open .dropdown-toggle {
+  border-color: var(--color-accent);
+}
+
+.dropdown-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdown-chevron {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--color-text-faint);
+  transition: transform 0.12s ease;
+}
+
+.dropdown.open .dropdown-chevron {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  min-width: 100%;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  max-height: 16rem;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.dropdown-menu[hidden] {
+  display: none;
+}
+
+/* Portaled into document.body (see Dropdown.tsx) so an ancestor's own
+   `overflow: hidden` (e.g. .panel's rounded-corner clipping) can never cut
+   the menu off -- position is computed in JS from the toggle button's real
+   rect and applied as inline top/left/minWidth, so `position` here is
+   `fixed` (viewport-relative, matching getBoundingClientRect) instead of
+   the in-flow `absolute` above. z-index raised past .panel's own stacking
+   context since this now sits directly under <body>, not under .panel. */
+.dropdown-menu-portal {
+  position: fixed;
+  z-index: 1000;
+}
+
+.dropdown-option {
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dropdown-option:hover,
+.dropdown-option.active {
+  background: var(--color-bg);
+}
+
+.dropdown-option.selected {
+  color: var(--color-accent);
+  font-weight: 500;
+}
+
+/* --- Panels (shared by all three tabs) --- */
+
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.detail-panel {
+  margin-top: 1rem;
+}
+
+.panel-body {
+  position: relative;
+  padding: 1.5rem 1.25rem 1rem;
+}
+
+.panel-error {
+  font-size: 0.8125rem;
+  color: var(--color-error);
+  margin: 0 0 0.75rem;
+}
+
+.panel-footer {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.4rem 0.1rem;
+}
+
+.status-text {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.status-text.error {
+  color: var(--color-error);
+}
+
+/* Exact params a just-finished run used. Monospace so a raw JSON object
+   reads cleanly at a glance. */
+.status-params,
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+}
+
+.status-params {
+  color: var(--color-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Runs table (Runs + Compare tabs) --- */
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.runs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.runs-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.runs-table td {
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+  color: var(--color-text);
+}
+
+.runs-table tbody tr {
+  cursor: pointer;
+}
+
+.runs-table tbody tr:hover {
+  background: var(--color-bg);
+}
+
+.runs-table tbody tr.selected {
+  background: #eef3fd;
+}
+
+.runs-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.runs-table-empty {
+  color: var(--color-text-faint);
+  text-align: center;
+  cursor: default;
+}
+
+.status-pill {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.12rem 0.5rem;
+  border-radius: var(--radius-sm);
+  text-transform: capitalize;
+}
+
+.status-pill-succeeded {
+  background: #e8f6ee;
+  color: #1a7f4b;
+}
+
+.status-pill-failed {
+  background: #fbe9ea;
+  color: var(--color-error);
+}
+
+.status-pill-running,
+.status-pill-queued {
+  background: #eaf1fe;
+  color: var(--color-accent);
+}
+
+.cached-tag {
+  margin-left: 0.4rem;
+  font-size: 0.7rem;
+  color: var(--color-text-faint);
+}
+
+/* --- New Run form --- */
+
+.run-form {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.form-row:last-of-type {
+  margin-bottom: 0;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  flex: 1 1 11rem;
+  min-width: 9rem;
+  max-width: 16rem;
+}
+
+.form-field-label {
+  font-weight: 500;
+}
+
+.form-field input {
+  font-family: inherit;
+  font-size: 0.8125rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0.4rem 0.55rem;
+  height: 2rem;
+  width: 100%;
+}
+
+.form-field input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.form-field .dropdown {
+  max-width: none;
+  /* .dropdown's own `flex: 1 1 9.5rem` is meant for a row layout (e.g.
+     .run-controls), where it sets a width basis -- but .form-field is a
+     column flex container, so that same shorthand set the dropdown's
+     HEIGHT basis/grow instead, stretching it to fill the field's full
+     height and leaving a large blank gap below the toggle button
+     (confirmed via computed style: flex-basis 152px, flex-grow 1, nothing
+     to do with the always-closed dropdown-menu). Override back to a
+     normal, content-sized block here. */
+  flex: none;
+  width: 100%;
+}
+
+.form-field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: 1.1rem;
+  margin-bottom: 1.1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.form-field-block:last-of-type {
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-bottom: none;
+}
+
+/* Parameter inputs laid out as a proper grid (fixed, aligned column
+   widths) rather than .form-row's flex-wrap (used elsewhere for dropdown
+   filter rows, where ragged widths don't matter) -- each parameter field
+   lines up into clean columns instead of floating at its own
+   content-driven width. */
+.param-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 1rem 1.25rem;
+}
+
+.form-field-block > .form-field-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+/* --- Model picker cards --- */
+
+.model-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.6rem;
+}
+
+.model-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  padding: 0.55rem 0.7rem 1.4rem;
+  cursor: pointer;
+  transition: border-color 0.12s ease;
+}
+
+.model-card:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.model-card.selected {
+  /* 1px thicker than the default border -- padding shrinks by that same
+     1px so the card's outer box size doesn't shift when selected. */
+  border-width: 2px;
+  border-color: var(--color-accent);
+  padding: calc(0.55rem - 1px) calc(0.7rem - 1px) calc(1.4rem - 1px);
+}
+
+.model-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.model-card-icon {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.model-card.selected .model-card-icon {
+  color: var(--color-accent);
+}
+
+.model-card-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.model-card-name {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  text-transform: capitalize;
+  flex: 1;
+}
+
+.model-card-description {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+  flex: 1;
+  /* A long slash-separated word (e.g. world3's "population/resources/
+     pollution") has no spaces for the browser's default wrapping to break
+     on, so it was overflowing the card instead of wrapping -- this lets it
+     break mid-word as a last resort, same as a long URL would. */
+  overflow-wrap: break-word;
+}
+
+/* (i) assumptions glyph -- deliberately bare (no border/background/box),
+   reads as inline punctuation next to a name rather than a toolbar action.
+   stopPropagation in the click handler keeps it from also triggering an
+   ancestor card's own onClick (model/scenario selection). */
+.info-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-text-faint);
+  cursor: pointer;
+}
+
+.info-button:hover {
+  color: var(--color-accent);
+}
+
+.info-button svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* On model/scenario cards specifically, the (i) sits pinned to the
+   bottom-right corner rather than inline with the name, so it doesn't
+   compete with the card's title/icon/sparkline for space. */
+.card-info-button {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.5rem;
+}
+
+.model-card-link {
+  font-size: 0.8125rem;
+  color: var(--color-accent);
+  text-decoration: none;
+  align-self: flex-start;
+}
+
+.model-card-link:hover {
+  text-decoration: underline;
+}
+
+/* --- Scenario picker cards --- */
+
+.scenario-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.6rem;
+}
+
+.scenario-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  padding: 0.55rem 0.7rem 1.4rem;
+  cursor: pointer;
+  transition: border-color 0.12s ease;
+}
+
+.scenario-card:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.scenario-card.selected {
+  /* 1px thicker than the default border -- padding shrinks by that same
+     1px so the card's outer box size doesn't shift when selected. */
+  border-width: 2px;
+  border-color: var(--color-accent);
+  padding: calc(0.55rem - 1px) calc(0.7rem - 1px) calc(1.4rem - 1px);
+}
+
+.scenario-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.scenario-card-name {
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.scenario-card-sparkline {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.scenario-card.selected .scenario-card-sparkline {
+  color: var(--color-accent);
+}
+
+.scenario-card-description {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+/* --- Compare tab's "compare by" axis toggle --- */
+
+.axis-toggle {
+  display: inline-flex;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  width: fit-content;
+}
+
+.axis-toggle-option {
+  border: none;
+  border-radius: 0;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  padding: 0.4rem 0.9rem;
+  height: 2rem;
+}
+
+.axis-toggle-option + .axis-toggle-option {
+  border-left: 1px solid var(--color-border-strong);
+}
+
+.axis-toggle-option.selected {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.axis-toggle-option:hover:not(.selected) {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.primary-button {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+  font-weight: 500;
+  padding: 0.4rem 1.1rem;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+/* Note shown under the parameter fields when a model has a
+   non-deterministic-unless-seeded param (see run-form above). */
+
+.advanced-note {
+  margin: 0.6rem 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-faint);
+}
+
+.chart-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-faint);
+  text-align: center;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 4px;
+  border: none;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  appearance: none;
+}
+
+.progress-bar::-webkit-progress-bar {
+  background: var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.progress-bar::-webkit-progress-value {
+  background: var(--color-accent);
+  border-radius: var(--radius-sm);
+  transition: width 0.2s ease;
+}
+
+.progress-bar::-moz-progress-bar {
+  background: var(--color-accent);
+  border-radius: var(--radius-sm);
+}
+
+.chart-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-faint);
+  font-size: 0.85rem;
+  pointer-events: none;
+  text-align: center;
+  padding: 0 1rem;
+}
+
+.chart-placeholder[hidden] {
+  display: none;
+}
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(1px);
+  z-index: 1;
+}
+
+.loading-overlay[hidden] {
+  display: none;
+}
+
+.loading-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  width: min(220px, 80%);
+}
+
+.loading-text {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+/* --- Small screens --- */
+
+@media (max-width: 800px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    padding: 0.6rem 1rem;
+    border-right: none;
+    border-bottom: 1px solid var(--color-sidebar-border);
+  }
+
+  .sidebar-brand {
+    padding: 0 1rem 0 0;
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .main-area {
+    padding: 1.25rem 1rem 2.5rem;
+  }
+
+  .dropdown {
+    flex: 1 1 7rem;
+    max-width: none;
+  }
+}
+
+/* --- Overview tab's model/scenario filter checkboxes --- */
+
+.overview-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-top: 0.75rem;
+}
+
+.overview-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 10rem;
+}
+
+/* Scenarios run to 13-14 entries (vs. Models' 5), which made a single
+   column tower over the Models column and left the panel looking
+   lopsided -- spreading into a few CSS columns balances the two groups'
+   heights instead. column-count (not a grid) so the list still just
+   flows/wraps naturally regardless of how many scenarios exist. */
+.overview-filter-group-columns {
+  /* Override .overview-filter-group's flex layout -- CSS multi-column
+     (column-count) only affects block-level content, not a flex
+     container's children, so this needs to switch back to block first. */
+  display: block;
+  column-count: 2;
+  column-gap: 1.25rem;
+  min-width: 20rem;
+}
+
+.overview-filter-group-columns > .form-field-label {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+
+.overview-filter-group-columns .overview-filter-checkbox {
+  break-inside: avoid;
+}
+
+.overview-filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  /* Hovering a checkbox is what drives the chart's highlight-matching-lines
+     behavior (see OverviewPanel.tsx's `hovered` state) -- padding gives
+     that hit target a little breathing room instead of just the text's own
+     line height. */
+  padding: 0.15rem 0;
+}
+
+.overview-filter-checkbox.isolated {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.overview-filter-swatch {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.overview-filter-text {
+  /* Click target for isolating just this one line (see
+     OverviewPanel.tsx's toggleIsolate) -- underline-on-hover signals
+     that the text itself (not just the checkbox) does something. */
+  cursor: pointer;
+}
+
+.overview-filter-text:hover {
+  text-decoration: underline;
+}
+
+/* --- Modal (assumptions info dialog, see Modal.tsx) ---
+   Portaled into document.body, same reasoning as .dropdown-menu-portal
+   above -- escapes .panel's own overflow:hidden clipping. */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  z-index: 2000;
+}
+
+.modal-box {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  max-width: 28rem;
+  width: 100%;
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  background: var(--color-surface);
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.modal-close {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.modal-close svg {
+  width: 11px;
+  height: 11px;
+}
+
+.modal-body {
+  padding: 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--color-text);
+}
+
+.assumptions-summary {
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+
+.assumptions-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.assumptions-list li {
+  color: var(--color-text-muted);
+}
+
+/* --- Public site (home + model/scenario articles) ---
+   Themed after the project's existing Jekyll site (../_sass/minima,
+   ../_config.yml, ../_includes/header.html + footer.html) rather than the
+   dashboard's own look -- these are minima's actual SCSS variables, not
+   approximations: $text-color #444, $background-color #fdfdfd,
+   $brand-color #2a7ae2, $grey-color-dark (darken(#828282, 25%)),
+   $grey-color-light (lighten(#828282, 40%)), 850px content width ($on-
+   laptop), 30px spacing unit, and the system sans-serif stack minima's
+   $base-font-family uses. Scoped to its own custom properties so it can't
+   drift the dashboard's --color-* variables. */
+
+.public-page {
+  --pp-text: #444444;
+  --pp-bg: #fdfdfd;
+  --pp-brand: #2a7ae2;
+  --pp-grey: #828282;
+  --pp-grey-dark: #434343;
+  --pp-grey-light: #e8e8e8;
+  --pp-content-width: 900px;
+  --pp-spacing: 30px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--pp-text);
+  background: var(--pp-bg);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+.site-header {
+  border-top: 5px solid var(--pp-grey-dark);
+  border-bottom: 1px solid var(--pp-grey-light);
+}
+
+.site-header-inner {
+  max-width: var(--pp-content-width);
+  margin: 0 auto;
+  padding: 0 calc(var(--pp-spacing) / 2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 56px;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.site-title {
+  display: flex;
+  align-items: center;
+  font-size: 1.625rem;
+  font-weight: 300;
+  letter-spacing: -1px;
+  color: var(--pp-grey-dark);
+  text-decoration: none;
+}
+
+.site-logo {
+  height: 30px;
+  margin-right: 10px;
+}
+
+.site-nav {
+  display: flex;
+  gap: 20px;
+}
+
+.site-nav .page-link {
+  color: var(--pp-text);
+  text-decoration: none;
+  font-size: 0.9375rem;
+}
+
+.site-nav .page-link:hover {
+  color: var(--pp-brand);
+  text-decoration: underline;
+}
+
+.public-main {
+  max-width: var(--pp-content-width);
+  margin: 0 auto;
+  padding: var(--pp-spacing) calc(var(--pp-spacing) / 2) calc(var(--pp-spacing) * 2);
+}
+
+.public-hero h1 {
+  font-size: 1.75rem;
+  margin: 0 0 0.5rem;
+  color: var(--pp-text);
+}
+
+.public-hero p {
+  color: var(--pp-grey-dark);
+  /* Was capped at 42rem (672px) -- much narrower than .public-main's own
+     ~870px column (--pp-content-width minus padding), so the hero text
+     wrapped far earlier than everything else on the page for no reason.
+     Let it use the same width as the rest of .public-main. */
+  line-height: 1.6;
+}
+
+.public-chart-section {
+  margin: 1.5rem 0 3rem;
+}
+
+.public-chart {
+  background: #fff;
+  border: 1px solid var(--pp-grey-light);
+  border-radius: 4px;
+  padding: 1rem;
+  /* Chart.js's responsive resize (used here via its `aspectRatio` option,
+     no custom resize code) measures its canvas's immediate parent on every
+     resize -- without `position: relative` + an explicit width, that
+     parent has no independent size of its own to measure: it just
+     shrink-wraps to whatever the canvas's current pixel size already is.
+     That's a resize *down* feedback loop that works fine (parent shrinks
+     because canvas shrinks), but nothing ever makes the parent (or canvas)
+     grow back when the window widens again. This is Chart.js's own
+     documented fix -- see https://www.chartjs.org/docs/latest/configuration/responsive.html. */
+  position: relative;
+  width: 100%;
+}
+
+.public-chart-empty {
+  color: var(--pp-grey);
+  font-size: 0.9375rem;
+}
+
+.public-cards-section {
+  margin-bottom: 3rem;
+}
+
+.public-cards-section h2 {
+  font-size: 1.125rem;
+  margin-bottom: 0.25rem;
+  font-weight: 400;
+}
+
+.public-section-note {
+  color: var(--pp-grey);
+  font-size: 0.875rem;
+  margin: 0 0 1rem;
+}
+
+/* One row, always -- cards divide the full row width evenly and shrink
+   together rather than wrapping to a second row (auto-fill grid would
+   wrap once cards got too narrow for their min-width). On genuinely
+   narrow viewports this lets the row scroll horizontally instead, so a
+   card's content is never crushed past readability. */
+.public-card-grid {
+  display: flex;
+  gap: 0.6rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.public-card {
+  display: block;
+  flex: 1 1 0;
+  min-width: 7rem;
+  border: 1px solid var(--pp-grey-light);
+  border-radius: 4px;
+  background: #fff;
+  padding: 0.75rem 0.9rem;
+  text-decoration: none;
+  color: var(--pp-text);
+  transition: border-color 0.12s ease;
+}
+
+.public-card:hover {
+  border-color: var(--pp-brand);
+}
+
+.public-card-title {
+  font-weight: 600;
+  text-transform: capitalize;
+  margin-bottom: 0.25rem;
+}
+
+.public-card-description {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--pp-grey);
+  line-height: 1.5;
+}
+
+/* --- Article pages (one model or one scenario) --- */
+
+.article-back-link {
+  display: inline-block;
+  font-size: 0.875rem;
+  color: var(--pp-grey);
+  text-decoration: none;
+  margin-bottom: 1rem;
+}
+
+.article-back-link:hover {
+  color: var(--pp-brand);
+}
+
+.article-title {
+  font-size: 1.75rem;
+  margin: 0 0 0.5rem;
+  font-weight: 300;
+  letter-spacing: -0.5px;
+}
+
+/* No more text-transform: capitalize -- titles now mix a real acronym
+   (FAIR, SSP2-4.5) with a proper full name, not a raw lowercase registry
+   key, so forcing capitalization isn't needed and would mangle acronyms
+   capitalize can't tell from ordinary words. */
+.article-subtitle {
+  color: var(--pp-grey-dark);
+  font-weight: 300;
+}
+
+.article-lede {
+  color: var(--pp-grey-dark);
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+
+.article-website-link {
+  /* Inline now -- part of the same .article-lede sentence as the
+     description/implementation text, not its own block below the chart
+     -- so no display/font-size override; it should read as part of that
+     paragraph, just colored as a link. */
+  color: var(--pp-brand);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.article-website-link:hover {
+  text-decoration: underline;
+}
+
+.article-run-by {
+  /* Plain prose, like the rest of the article -- no pill/tag styling.
+     Now the last thing on the page (after "What this scenario assumes"),
+     not sitting right under the lede -- same top spacing as
+     .article-section. */
+  color: var(--pp-grey-dark);
+  margin-top: 2rem;
+}
+
+.article-run-by-link {
+  color: var(--pp-brand);
+  text-decoration: none;
+}
+
+.article-run-by-link:hover {
+  text-decoration: underline;
+}
+
+.article-section {
+  margin-top: 2rem;
+}
+
+.article-section h2 {
+  font-size: 1.0625rem;
+  margin-bottom: 0.5rem;
+  font-weight: 400;
+}
+
+/* --- Site footer (matches ../_includes/footer.html's 3-column layout) --- */
+
+.site-footer {
+  border-top: 1px solid var(--pp-grey-light);
+  padding: var(--pp-spacing) 0;
+  margin-top: 2rem;
+}
+
+.site-footer-inner {
+  max-width: var(--pp-content-width);
+  margin: 0 auto;
+  padding: 0 calc(var(--pp-spacing) / 2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.footer-col {
+  flex: 1 1 10rem;
+}
+
+.footer-col-description {
+  flex: 2 1 16rem;
+  color: var(--pp-grey);
+  font-size: 0.875rem;
+}
+
+.footer-heading {
+  font-size: 1.125rem;
+  font-weight: 400;
+  margin-bottom: 0.5rem;
+  color: var(--pp-grey-dark);
+}
+
+.footer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--pp-grey);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.footer-link:hover {
+  color: var(--pp-brand);
+}
+
+.footer-icon {
+  fill: currentColor;
+}
+
+/* .assumptions-summary/.assumptions-list are shared with the dashboard's
+   (i) modal (see Modal.tsx) -- re-themed here to the public palette so an
+   article page's "Modelling assumptions" section doesn't suddenly switch
+   to the dashboard's own colors. */
+.public-page .assumptions-summary {
+  color: var(--pp-text);
+}
+
+.public-page .assumptions-list li {
+  color: var(--pp-grey-dark);
+}
+
+.run-guide-step {
+  margin-bottom: 1rem;
+}
+
+.run-guide-step p {
+  color: var(--pp-grey-dark);
+  line-height: 1.6;
+  margin: 0 0 0.5rem;
+}
+
+.run-guide-code {
+  background: var(--pp-grey-light);
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* --- Login page --- */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg);
+}
+
+.login-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: 100%;
+  max-width: 22rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 2rem;
+}
+
+.login-title {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.login-subtitle {
+  margin: -0.5rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.login-back-link {
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.login-back-link:hover {
+  color: var(--color-accent);
+}
+
+/* --- Sidebar footer (dashboard-only: logout / back to public site) --- */
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 0.75rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.sidebar-footer-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sidebar-footer-link:hover {
+  color: var(--color-accent);
+}
