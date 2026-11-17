@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { fetchJson, canonicalScenario, scenarioDescription } from "../../../lib/clientApi";
+import { fetchJson, canonicalScenario, nativeScenarioOf, scenarioDescription } from "../../../lib/clientApi";
 import { scenarioAssumptionsByLabel } from "../../../lib/assumptions";
 import { scenarioDriverSeries } from "../../../lib/scenarioDrivers";
+import { useChartSeries } from "../../../lib/useRunsData";
 import ScenarioChart from "../../../components/ScenarioChart";
 import { PublicHeader, PublicFooter } from "../../../components/PublicChrome";
 import { scenarioFullName } from "../../../lib/scenarioFullNames";
@@ -16,6 +17,7 @@ export default function ScenarioArticlePage() {
   const params = useParams<{ scenario: string }>();
   const scenario = decodeURIComponent(params.scenario);
   const [models, setModels] = useState<ModelListItem[]>([]);
+  const { series, loading: seriesLoading } = useChartSeries();
 
   useEffect(() => {
     fetchJson("/v1/models")
@@ -27,6 +29,12 @@ export default function ScenarioArticlePage() {
   const description = scenarioDescription(scenario);
   const assumptions = scenarioAssumptionsByLabel(scenario);
   const runOnModels = models.filter((m) => m.scenarios.some((s) => canonicalScenario(s) === scenario)).map((m) => m.model);
+  // Every actual run (any model, any params) submitted for this exact
+  // scenario -- what ScenarioChart overlays on the emissions driver.
+  const ownSeries = series.filter((s) => {
+    const native = nativeScenarioOf(s.params);
+    return native ? canonicalScenario(native) === scenario : false;
+  });
   // scenarioFullName() falls back to the label itself for anything that
   // isn't a real SSP narrative (DICE's base/optimal, MAGICC's RCPs) -- only
   // show it as a subtitle when it's actually a different, real name.
@@ -79,12 +87,16 @@ export default function ScenarioArticlePage() {
         </section>
 
         <section className="article-section">
-          <h2>Emissions pathway</h2>
+          <h2>Emissions and projected warming</h2>
           <p className="public-section-note">
-            The scenario&apos;s own projected CO2 emissions -- the same input every model runs on, not any model&apos;s
-            output.
+            The scenario&apos;s own projected CO2 emissions (left axis) -- the same input every model below runs
+            on -- alongside each model&apos;s actual temperature response to it (right axis).
           </p>
-          <ScenarioChart years={driver.years} values={driver.values} />
+          {seriesLoading ? (
+            <p className="public-chart-empty">Loading runs...</p>
+          ) : (
+            <ScenarioChart years={driver.years} values={driver.values} series={ownSeries} windowMin={2000} windowMax={2100} />
+          )}
         </section>
       </main>
       <PublicFooter />
