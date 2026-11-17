@@ -217,7 +217,10 @@ export default function ComparePanel() {
           data: d.data,
           borderWidth: 1.5,
           pointRadius: 0,
-          spanGaps: false,
+          // See alignSeriesByYear's comment in lib/clientApi.ts -- dice
+          // reports every 5 years, not annually like the rest, so this
+          // has to be true or dice's line never draws at all.
+          spanGaps: true,
         })),
       });
     } catch (err: any) {

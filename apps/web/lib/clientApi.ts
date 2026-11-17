@@ -152,9 +152,22 @@ export function scenarioDescription(scenario: string): string | null {
  * inspecting real cached run data, not assumed.
  *
  * Each returned dataset is the same length as the merged, sorted label
- * array, with `null` at any year that series didn't report -- an honest
- * gap (Chart.js breaks the line there), never an interpolated/fabricated
- * value.
+ * array, with `null` at any year that series didn't report. Consumers
+ * should render these with `spanGaps: true`, not `false` -- confirmed by
+ * hitting this directly: dice reports every 5 years while every other
+ * model reports annually, so against the shared (annual) label array,
+ * EVERY one of dice's real points ends up isolated by 4 synthetic nulls
+ * on each side. With spanGaps:false, Chart.js (pointRadius:0) never draws
+ * a segment between two points separated by a null, so dice's line was
+ * completely invisible -- not missing data, just never connected.
+ * spanGaps:true only connects through nulls BETWEEN two real points of
+ * the same series (exactly dice's case -- those nulls are an artifact of
+ * this function's shared grid, not a real absence of data); it does NOT
+ * extend a line beyond where a series actually starts/ends, since
+ * leading/trailing nulls have no second real point on the far side to
+ * connect to. So the original "honest gap, never fabricated" goal still
+ * holds for genuine out-of-range periods -- this only fixes a model
+ * reporting at coarser-than-annual resolution.
  */
 export function alignSeriesByYear(
   series: { labels: any[]; values: any[]; label: string }[],

@@ -227,7 +227,10 @@ export default function OverviewPanel() {
           borderColor: colorWithAlpha(modelColor(model), colored ? 0.9 : dimmed ? 0.1 : 0.4),
           borderWidth: colored ? 2.75 : 1.2,
           pointRadius: 0,
-          spanGaps: false,
+          // See alignSeriesByYear's comment in lib/clientApi.ts -- dice
+          // reports every 5 years, not annually like the rest, so this has
+          // to be true or dice's line never draws at all.
+          spanGaps: true,
           hidden: hiddenByFilter,
           order: 2,
         },
@@ -243,7 +246,7 @@ export default function OverviewPanel() {
       borderDash: [7, 4],
       borderWidth: 2.25,
       pointRadius: 0,
-      spanGaps: false,
+      spanGaps: true,
       order: 1,
     };
 
