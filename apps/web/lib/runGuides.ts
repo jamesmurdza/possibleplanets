@@ -38,6 +38,11 @@
 export interface RunGuideStep {
   text: string;
   code?: string;
+  // Prism.js language id for `code`, when present -- picks which syntax
+  // highlighting grammar CodeBlock loads. Omit for plain shell one-liners
+  // where highlighting wouldn't add anything (still renders as plain
+  // <pre>, just un-highlighted).
+  language?: "bash" | "python" | "julia";
 }
 
 const RUN_GUIDES: Record<string, RunGuideStep[]> = {
@@ -45,21 +50,25 @@ const RUN_GUIDES: Record<string, RunGuideStep[]> = {
     {
       text: "FAIR is a plain Python package, with no compiled extension or system packages required.",
       code: "pip install fair",
+      language: "bash",
     },
     {
       text: "From there, follow FAIR's own documented example to define a scenario, configure it, and run it -- linked above as this model's website. The shortest version that actually runs end to end looks like this (illustrative, not calibrated, climate parameters):",
       code:
         'from fair import FAIR\nfrom fair.io import read_properties\nfrom fair.interface import initialise, fill\n\nf = FAIR()\nf.define_time(2000, 2050, 1)\nf.define_scenarios(["ssp245"])\nf.define_configs(["central"])\n\nspecies, properties = read_properties()\nf.define_species(species, properties)\nf.allocate()\n\nf.fill_species_configs()\nf.fill_from_rcmip()  # downloads standard SSP emissions/concentrations\n\n# illustrative (not calibrated) ocean heat response\nfill(f.climate_configs["ocean_heat_capacity"], [5, 20, 100], config="central")\nfill(f.climate_configs["ocean_heat_transfer"], [1.0, 2.0, 1.0], config="central")\nfill(f.climate_configs["deep_ocean_efficacy"], 1.29, config="central")\n\ninitialise(f.concentration, f.species_configs["baseline_concentration"])\ninitialise(f.forcing, 0)\ninitialise(f.temperature, 0)\ninitialise(f.cumulative_emissions, 0)\ninitialise(f.airborne_emissions, 0)\n\nf.run()\nprint(f.temperature.sel(layer=0, scenario="ssp245", config="central").values[-5:])',
+      language: "python",
     },
   ],
   oscar: [
     {
       text: "OSCAR is distributed as a Git repository managed with Poetry, not a pip package.",
       code: "git clone https://github.com/jamesmurdza/OSCAR.git\ncd OSCAR\npoetry install",
+      language: "bash",
     },
     {
       text: "Run one of its own example scripts directly through Poetry, from inside that cloned directory.",
       code: "poetry run python run_scripts/basic_example_1.py",
+      language: "bash",
     },
   ],
   dice: [
@@ -67,28 +76,33 @@ const RUN_GUIDES: Record<string, RunGuideStep[]> = {
       text: "DICE runs on Julia's own package manager. Add the pinned Ipopt solver and the DICE.jl package directly from its repository -- these exact versions avoid a real segfault in a newer Ipopt/DICE.jl combination.",
       code:
         'using Pkg\nPkg.add(Pkg.PackageSpec(name="Ipopt", version="1.0.2"))\nPkg.add(url="https://github.com/possibleplanets/DICE.jl", rev="754e9ba250e549f3f385a9b5e9c7f39117d29b4d")\nPkg.pin(Pkg.PackageSpec(name="Ipopt", version="1.0.2"))',
+      language: "julia",
     },
     {
       text: "Solve a named policy path and read its atmospheric temperature series back out.",
       code: "using DICE\nresult = solve(OptimalPrice, v2016R2())\nresult.results.Tₐₜ",
+      language: "julia",
     },
   ],
   hector: [
     {
       text: "A plain `pip install pyhector` fails on a bare machine -- it builds Hector's C++ core from source and needs Boost headers it doesn't bundle. This repo's sandboxes/hector/Dockerfile already installs the right system packages, so build and run that image instead of fighting the compile step yourself.",
       code: "docker build -t hector-sandbox sandboxes/hector\ndocker run --rm hector-sandbox",
+      language: "bash",
     },
   ],
   magicc: [
     {
       text: "pymagicc wraps a real Windows MAGICC6.exe binary via Wine, and its current pip dependency resolution pulls an xarray version too new for it to import. sandboxes/magicc/Dockerfile installs Wine and pins xarray to a version confirmed to work, so build and run that image rather than installing pymagicc directly.",
       code: "docker build -t magicc-sandbox sandboxes/magicc\ndocker run --rm magicc-sandbox",
+      language: "bash",
     },
   ],
   twolayer: [
     {
       text: "openscm-twolayermodel==0.2.3 calls a pandas API in a form pandas>=2.0 removed, and no pandas version compatible with both this package and Python 3.11 exists on PyPI -- so the installed package itself needs a 2-line patch. sandboxes/twolayer/Dockerfile applies that patch automatically, so build and run that image rather than patching the package by hand.",
       code: "docker build -t twolayer-sandbox sandboxes/twolayer\ndocker run --rm twolayer-sandbox",
+      language: "bash",
     },
   ],
 };

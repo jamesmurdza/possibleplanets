@@ -7,6 +7,7 @@ import { fetchJson } from "../../../lib/clientApi";
 import { modelAssumptions } from "../../../lib/assumptions";
 import { useChartSeries } from "../../../lib/useRunsData";
 import TemperatureChart from "../../../components/TemperatureChart";
+import CodeBlock from "../../../components/CodeBlock";
 import { PublicHeader, PublicFooter } from "../../../components/PublicChrome";
 import { modelAcronym, modelFullName } from "../../../lib/modelFullNames";
 import { runGuide } from "../../../lib/runGuides";
@@ -97,7 +98,7 @@ export default function ModelArticlePage() {
             {guide.map((step, i) => (
               <div key={i} className="run-guide-step">
                 <p>{step.text}</p>
-                {step.code && <pre className="run-guide-code">{step.code}</pre>}
+                {step.code && <CodeBlock code={step.code} language={step.language} />}
               </div>
             ))}
           </section>
