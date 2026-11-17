@@ -90,14 +90,17 @@ export default function ScenarioArticlePage() {
         </section>
 
         {runOnModels.length > 0 && (
-          <div className="article-run-by">
-            <span className="article-run-by-label">Run by</span>
-            {runOnModels.map((m) => (
-              <Link key={m} href={`/models/${m}`} className="article-model-tag">
-                {modelAcronym(m)}
-              </Link>
+          <p className="article-run-by">
+            Run by{" "}
+            {runOnModels.map((m, i) => (
+              <span key={m}>
+                <Link href={`/models/${m}`} className="article-run-by-link">
+                  {modelAcronym(m)}
+                </Link>
+                {i < runOnModels.length - 1 ? ", " : ""}
+              </span>
             ))}
-          </div>
+          </p>
         )}
       </main>
       <PublicFooter />

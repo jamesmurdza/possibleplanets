@@ -1392,32 +1392,20 @@ a.icon-button {
 }
 
 .article-run-by {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  /* Now the last thing on the page (after "What this scenario assumes"),
+  /* Plain prose, like the rest of the article -- no pill/tag styling.
+     Now the last thing on the page (after "What this scenario assumes"),
      not sitting right under the lede -- same top spacing as
-     .article-section, no trailing margin needed since nothing follows. */
+     .article-section. */
+  color: var(--pp-grey-dark);
   margin-top: 2rem;
 }
 
-.article-run-by-label {
-  font-size: 0.8125rem;
-  color: var(--pp-grey);
-}
-
-.article-model-tag {
-  font-size: 0.8125rem;
-  font-weight: 600;
+.article-run-by-link {
   color: var(--pp-brand);
-  background: var(--pp-grey-light);
-  border-radius: 3px;
-  padding: 0.15rem 0.5rem;
   text-decoration: none;
 }
 
-.article-model-tag:hover {
+.article-run-by-link:hover {
   text-decoration: underline;
 }
 
