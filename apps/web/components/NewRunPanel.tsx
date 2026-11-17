@@ -83,6 +83,38 @@ function ModelIcon({ model }: { model: string }) {
           />
         </svg>
       );
+    case "twolayer": // two stacked layers -- surface + deep ocean
+      return (
+        <svg {...common}>
+          <path
+            d="M8 2 1.5 5.5 8 9l6.5-3.5L8 2z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M1.5 9.5 8 13l6.5-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "world3": // globe -- world-as-one-unit systems model
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" strokeWidth="1.2" />
+          <path
+            d="M1.7 8h12.6M8 1.7v12.6M4 3.3c-2 2.6-2 7.8 0 9.4M12 3.3c2 2.6 2 7.8 0 9.4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1"
+          />
+        </svg>
+      );
     default:
       return (
         <svg {...common}>

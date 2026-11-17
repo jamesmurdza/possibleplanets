@@ -709,6 +709,11 @@ a.icon-button {
   line-height: 1.35;
   color: var(--color-text-muted);
   flex: 1;
+  /* A long slash-separated word (e.g. world3's "population/resources/
+     pollution") has no spaces for the browser's default wrapping to break
+     on, so it was overflowing the card instead of wrapping -- this lets it
+     break mid-word as a last resort, same as a long URL would. */
+  overflow-wrap: break-word;
 }
 
 /* (i) assumptions glyph -- deliberately bare (no border/background/box),
