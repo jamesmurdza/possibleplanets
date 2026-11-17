@@ -1,15 +1,27 @@
 /**
- * "How to run this yourself" guides for the models that genuinely don't
- * need Docker to run -- no compiled C/C++ extension, no OS-level emulation
- * layer (Wine), no source patch to a dependency, just the language's own
- * package manager. See the Dockerfile comments this is grounded in:
- * sandboxes/fair/Dockerfile ("no compiled extension or extra system
- * packages were needed"), sandboxes/oscar/Dockerfile (git clone + plain
- * pip, no compiler), sandboxes/dice/Dockerfile (a plain `Pkg.add` with two
- * version pins, no OS packages). hector (needs libboost-all-dev + a C++
- * toolchain), magicc (needs Wine), and twolayer (needs a source patch to
- * the installed package) are deliberately NOT here -- Docker earns its
- * keep for those three.
+ * "How to run this yourself" guides for every model that has a sandboxes/*
+ * Dockerfile. Two different shapes of step, by model:
+ *
+ * fair/oscar/dice: a plain package-manager path (pip/poetry/Pkg.add) is
+ * enough -- no compiled C/C++ extension, no OS-level emulation layer
+ * (Wine), no source patch to a dependency. See sandboxes/fair/Dockerfile
+ * ("no compiled extension or extra system packages were needed"),
+ * sandboxes/oscar/Dockerfile (git clone + plain pip, no compiler),
+ * sandboxes/dice/Dockerfile (a plain `Pkg.add` with two version pins, no
+ * OS packages).
+ *
+ * hector/magicc/twolayer: the plain package-manager path is confirmed
+ * broken on a bare machine (not a style choice -- each Dockerfile's own
+ * comments document the exact failure): hector's pyhector needs
+ * libboost-all-dev + a C++ toolchain to compile its bundled Hector core
+ * from source; magicc's pymagicc needs Wine (it wraps a real MAGICC6.exe)
+ * plus an xarray version pin newer pip resolution gets wrong; twolayer
+ * needs a 2-line source patch to the installed openscm-twolayermodel
+ * package for pandas>=2.0 compatibility. For these three, the guide step
+ * below points at `docker build`/`docker run` against this repo's own
+ * sandboxes/<model>/Dockerfile -- the only path actually confirmed
+ * working for each, per that Dockerfile's own comments -- rather than
+ * repeating a pip command already known to fail.
  *
  * Each model's steps are a minimal real path to a result, not the full
  * guides/*.markdown walkthrough -- e.g. FAIR's own full setup (forcing
@@ -59,6 +71,24 @@ const RUN_GUIDES: Record<string, RunGuideStep[]> = {
     {
       text: "Solve a named policy path and read its atmospheric temperature series back out.",
       code: "using DICE\nresult = solve(OptimalPrice, v2016R2())\nresult.results.Tₐₜ",
+    },
+  ],
+  hector: [
+    {
+      text: "A plain `pip install pyhector` fails on a bare machine -- it builds Hector's C++ core from source and needs Boost headers it doesn't bundle. This repo's sandboxes/hector/Dockerfile already installs the right system packages, so build and run that image instead of fighting the compile step yourself.",
+      code: "docker build -t hector-sandbox sandboxes/hector\ndocker run --rm hector-sandbox",
+    },
+  ],
+  magicc: [
+    {
+      text: "pymagicc wraps a real Windows MAGICC6.exe binary via Wine, and its current pip dependency resolution pulls an xarray version too new for it to import. sandboxes/magicc/Dockerfile installs Wine and pins xarray to a version confirmed to work, so build and run that image rather than installing pymagicc directly.",
+      code: "docker build -t magicc-sandbox sandboxes/magicc\ndocker run --rm magicc-sandbox",
+    },
+  ],
+  twolayer: [
+    {
+      text: "openscm-twolayermodel==0.2.3 calls a pandas API in a form pandas>=2.0 removed, and no pandas version compatible with both this package and Python 3.11 exists on PyPI -- so the installed package itself needs a 2-line patch. sandboxes/twolayer/Dockerfile applies that patch automatically, so build and run that image rather than patching the package by hand.",
+      code: "docker build -t twolayer-sandbox sandboxes/twolayer\ndocker run --rm twolayer-sandbox",
     },
   ],
 };
