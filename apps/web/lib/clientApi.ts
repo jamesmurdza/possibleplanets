@@ -143,6 +143,36 @@ export function scenarioDescription(scenario: string): string | null {
   return SCENARIO_DESCRIPTIONS[canonicalScenario(scenario)] ?? null;
 }
 
+// Same underlying facts as SCENARIO_DESCRIPTIONS above, written as a full
+// sentence instead of a card-sized fragment ("Very low emissions -- likely
+// holds warming near 1.5°C."). Needed because that map does two jobs --
+// NewRunPanel's scenario-picker card blurb (where a short fragment reads
+// fine) and the scenario article page's opening lede sentence (where a
+// dash-fragment reads like a caption, not prose) -- and one string can't
+// comfortably serve both. Scenario article pages should use this instead.
+const SCENARIO_LEDES: Record<string, string> = {
+  "SSP1-1.9": "SSP1-1.9 is a very-low-emissions pathway, likely to hold warming near 1.5°C.",
+  "SSP1-2.6": "SSP1-2.6 is a low-emissions pathway, consistent with strong mitigation and staying below 2°C.",
+  "SSP2-4.5": "SSP2-4.5 is an intermediate, middle-of-the-road emissions pathway.",
+  "SSP3-7.0": "SSP3-7.0 is a high-emissions pathway, reflecting regional rivalry and weak mitigation.",
+  "SSP3-7.0-LowNTCF":
+    "SSP3-7.0-LowNTCF follows the same high-emissions path as SSP3-7.0, but with reduced near-term climate forcers.",
+  "SSP4-3.4": "SSP4-3.4 is a lower-middle forcing pathway, with a gradual, late transition.",
+  "SSP4-6.0": "SSP4-6.0 is a medium-high forcing pathway, with a gradual, late transition.",
+  "SSP5-3.4-OS": "SSP5-3.4-OS starts with high near-term emissions, then follows an overshoot drawdown.",
+  "SSP5-8.5": "SSP5-8.5 is a very-high-emissions pathway, reflecting fossil-fueled development.",
+  RCP26: "RCP26 is a low radiative forcing pathway, peaking around 2.6 W/m².",
+  RCP45: "RCP45 is an intermediate stabilization pathway, around 4.5 W/m².",
+  RCP60: "RCP60 is a higher stabilization pathway, around 6.0 W/m².",
+  RCP85: "RCP85 is a high, rising radiative forcing pathway, around 8.5 W/m².",
+  base: "DICE's base scenario is a business-as-usual emissions path, with no abatement policy.",
+  optimal: "DICE's optimal scenario is the economically optimal emissions path under its own model.",
+};
+
+export function scenarioLede(scenario: string): string | null {
+  return SCENARIO_LEDES[canonicalScenario(scenario)] ?? null;
+}
+
 /**
  * Aligns multiple chart series onto one shared x-axis by actual year value,
  * not by array index.

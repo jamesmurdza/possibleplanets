@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { fetchJson, canonicalScenario, nativeScenarioOf, scenarioDescription } from "../../../lib/clientApi";
+import { fetchJson, canonicalScenario, nativeScenarioOf, scenarioLede } from "../../../lib/clientApi";
 import { scenarioAssumptionsByLabel } from "../../../lib/assumptions";
 import { scenarioDriverSeries } from "../../../lib/scenarioDrivers";
 import { useChartSeries } from "../../../lib/useRunsData";
@@ -26,7 +26,7 @@ export default function ScenarioArticlePage() {
   }, []);
 
   const driver = scenarioDriverSeries(scenario);
-  const description = scenarioDescription(scenario);
+  const description = scenarioLede(scenario);
   const assumptions = scenarioAssumptionsByLabel(scenario);
   const runOnModels = models.filter((m) => m.scenarios.some((s) => canonicalScenario(s) === scenario)).map((m) => m.model);
   // Every actual run (any model, any params) submitted for this exact
@@ -66,8 +66,8 @@ export default function ScenarioArticlePage() {
         </h1>
         {description && (
           <p className="article-lede">
-            {description} The chart below plots its projected CO2 emissions (left axis) against each model&apos;s
-            actual temperature response to it (right axis).
+            {description} Every model that has run this scenario responds to the same emissions path, each
+            producing its own resulting temperature.
           </p>
         )}
 

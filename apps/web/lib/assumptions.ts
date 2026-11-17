@@ -82,7 +82,7 @@ export function modelAssumptions(model: string): AssumptionSection | null {
 export function scenarioAssumptions(model: string, nativeScenario: string, canonicalLabel: string): AssumptionSection {
   if (model === "dice") {
     return {
-      summary: "One of DICE's two named economic policy paths, not an emissions scenario.",
+      summary: "DICE uses its own two named economic policy paths instead of SSP or RCP emissions scenarios.",
       items: [
         nativeScenario === "base"
           ? "No carbon abatement policy is ever applied."
@@ -109,7 +109,7 @@ export function scenarioAssumptions(model: string, nativeScenario: string, canon
     items: [
       "Defined by a socioeconomic storyline (population, growth, technology) plus a forcing-level target.",
       "Emissions are derived from that storyline, not specified directly.",
-      "The number after the dash is the target forcing level in watts per square meter by 2100.",
+      "SSP labels end in their target forcing level in watts per square meter by 2100.",
       "The small chart on this card is the scenario's own projected CO2 emissions pathway, not a model's output.",
     ],
   };
