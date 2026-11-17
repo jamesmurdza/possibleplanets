@@ -1,0 +1,19 @@
+# This repo is a monorepo: the actual Next.js app lives in apps/web, with
+# the old Jekyll site's files (this file's siblings -- 404.html,
+# _config.yml, _posts/, etc.) still sitting at the repo root from before
+# the domain moved over. Without this file, Netlify had no way to know
+# the Next.js app wasn't at the repo root -- it fell back to serving the
+# root directory as a plain static site, which is why the live 404 page
+# was Jekyll's raw, un-rendered 404.html (front matter and all) instead
+# of this app's own not-found page.
+[build]
+  base = "apps/web"
+  command = "npm run build"
+
+# Netlify's Next.js Runtime auto-detects next.config.js in `base` and
+# handles SSR/API routes/etc. itself -- no `publish` directory needed,
+# and this plugin is normally auto-installed on detection, but pinning it
+# explicitly here makes the dependency visible in source rather than
+# relying on silent auto-detection.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
