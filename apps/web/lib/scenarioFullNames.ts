@@ -14,11 +14,11 @@
  * lib/scenarioDrivers.ts.
  */
 const SSP_NARRATIVE_NAMES: Record<string, string> = {
-  SSP1: "Sustainability -- Taking the Green Road",
+  SSP1: "Sustainability: Taking the Green Road",
   SSP2: "Middle of the Road",
-  SSP3: "Regional Rivalry -- A Rocky Road",
-  SSP4: "Inequality -- A Road Divided",
-  SSP5: "Fossil-Fueled Development -- Taking the Highway",
+  SSP3: "Regional Rivalry: A Rocky Road",
+  SSP4: "Inequality: A Road Divided",
+  SSP5: "Fossil-Fueled Development: Taking the Highway",
 };
 
 export function scenarioFullName(canonicalLabel: string): string {
