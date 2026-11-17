@@ -2,6 +2,20 @@
 
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import type { AssumptionSection } from "../lib/assumptions";
+
+export function AssumptionsModalBody({ section }: { section: AssumptionSection }) {
+  return (
+    <div>
+      <p className="assumptions-summary">{section.summary}</p>
+      <ul className="assumptions-list">
+        {section.items.map((item, i) => (
+          <li key={i}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 /**
  * Minimal modal dialog, portaled into document.body for the same reason

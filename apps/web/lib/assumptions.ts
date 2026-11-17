@@ -99,3 +99,20 @@ export function scenarioAssumptions(model: string, nativeScenario: string, canon
     ],
   };
 }
+
+/**
+ * Same framework classification as scenarioAssumptions, but for the
+ * Overview tab's scenario filter list, which shows one label pooled
+ * across whichever models reported it -- there's no single model to key
+ * off, so this infers the framework from the label's own shape instead
+ * (RCPnn / "base"|"optimal" / anything else falls through to SSP).
+ */
+export function scenarioAssumptionsByLabel(label: string): AssumptionSection {
+  if (label === "base" || label === "optimal") {
+    return scenarioAssumptions("dice", label, label);
+  }
+  if (/^RCP/i.test(label)) {
+    return scenarioAssumptions("magicc", label, label);
+  }
+  return scenarioAssumptions("hector", label, label);
+}

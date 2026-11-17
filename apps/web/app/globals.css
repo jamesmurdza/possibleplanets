@@ -648,13 +648,14 @@ a.icon-button {
 }
 
 .model-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
-  padding: 0.55rem 0.7rem;
+  padding: 0.55rem 0.7rem 1.4rem;
   cursor: pointer;
   transition: border-color 0.12s ease;
 }
@@ -669,7 +670,7 @@ a.icon-button {
      1px so the card's outer box size doesn't shift when selected. */
   border-width: 2px;
   border-color: var(--color-accent);
-  padding: calc(0.55rem - 1px) calc(0.7rem - 1px);
+  padding: calc(0.55rem - 1px) calc(0.7rem - 1px) calc(1.4rem - 1px);
 }
 
 .model-card-header {
@@ -710,20 +711,40 @@ a.icon-button {
   flex: 1;
 }
 
-/* (i) assumptions button on model/scenario cards -- smaller than the
-   toolbar's icon buttons since it sits inline with card text, not in the
-   toolbar. stopPropagation in the click handler keeps it from also
-   triggering the card's own onClick (model/scenario selection). */
+/* (i) assumptions glyph -- deliberately bare (no border/background/box),
+   reads as inline punctuation next to a name rather than a toolbar action.
+   stopPropagation in the click handler keeps it from also triggering an
+   ancestor card's own onClick (model/scenario selection). */
 .info-button {
-  width: 1.3rem;
-  height: 1.3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
   flex-shrink: 0;
-  border-radius: 999px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-text-faint);
+  cursor: pointer;
+}
+
+.info-button:hover {
+  color: var(--color-accent);
 }
 
 .info-button svg {
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
+}
+
+/* On model/scenario cards specifically, the (i) sits pinned to the
+   bottom-right corner rather than inline with the name, so it doesn't
+   compete with the card's title/icon/sparkline for space. */
+.card-info-button {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.5rem;
 }
 
 .model-card-link {
@@ -746,13 +767,14 @@ a.icon-button {
 }
 
 .scenario-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
-  padding: 0.55rem 0.7rem;
+  padding: 0.55rem 0.7rem 1.4rem;
   cursor: pointer;
   transition: border-color 0.12s ease;
 }
@@ -767,7 +789,7 @@ a.icon-button {
      1px so the card's outer box size doesn't shift when selected. */
   border-width: 2px;
   border-color: var(--color-accent);
-  padding: calc(0.55rem - 1px) calc(0.7rem - 1px);
+  padding: calc(0.55rem - 1px) calc(0.7rem - 1px) calc(1.4rem - 1px);
 }
 
 .scenario-card-header {

@@ -13,6 +13,9 @@ import {
   colorWithAlpha,
   averageSeries,
 } from "../lib/clientApi";
+import { modelAssumptions, scenarioAssumptionsByLabel, type AssumptionSection } from "../lib/assumptions";
+import Modal, { AssumptionsModalBody } from "./Modal";
+import InfoButton from "./InfoButton";
 import type { RunJob, RunListItem } from "../lib/clientTypes";
 
 // Canonical (not model-native) -- same reasoning as RunsPanel/ComparePanel's
@@ -92,6 +95,7 @@ export default function OverviewPanel() {
   // the same one again clears it, going back to whatever the checkboxes
   // say. Only one isolated value at a time, model or scenario.
   const [isolate, setIsolate] = useState<IsolateFilter>(null);
+  const [infoModal, setInfoModal] = useState<{ title: string; section: AssumptionSection } | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -382,6 +386,16 @@ export default function OverviewPanel() {
                       >
                         {m}
                       </span>
+                      {modelAssumptions(m) && (
+                        <InfoButton
+                          label={`${m} assumptions`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            const section = modelAssumptions(m);
+                            if (section) setInfoModal({ title: `${m}: assumptions`, section });
+                          }}
+                        />
+                      )}
                     </label>
                   ))}
                 </div>
@@ -409,10 +423,23 @@ export default function OverviewPanel() {
                       >
                         {s}
                       </span>
+                      <InfoButton
+                        label={`${s} assumptions`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setInfoModal({ title: `${s}: assumptions`, section: scenarioAssumptionsByLabel(s) });
+                        }}
+                      />
                     </label>
                   ))}
                 </div>
               </div>
+
+              {infoModal && (
+                <Modal title={infoModal.title} onClose={() => setInfoModal(null)}>
+                  <AssumptionsModalBody section={infoModal.section} />
+                </Modal>
+              )}
             </div>
           </section>
         </>
