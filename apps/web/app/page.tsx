@@ -11,6 +11,8 @@ import { fetchJson, canonicalScenario } from "../lib/clientApi";
 import { useRunsAndJobs } from "../lib/useRunsData";
 import TemperatureChart, { type HoverFilter } from "../components/TemperatureChart";
 import { PublicHeader, PublicFooter } from "../components/PublicChrome";
+import { modelAcronym, modelFullName } from "../lib/modelFullNames";
+import { scenarioFullName } from "../lib/scenarioFullNames";
 import type { ModelListItem } from "../lib/clientTypes";
 
 // SSPs are a socioeconomic-storyline scenario framework; RCPs (magicc) and
@@ -79,8 +81,8 @@ export default function HomePage() {
                 onMouseEnter={() => setHovered({ type: "model", value: m.model })}
                 onMouseLeave={() => setHovered(null)}
               >
-                <div className="public-card-title">{m.model}</div>
-                <p className="public-card-description">{m.description}</p>
+                <div className="public-card-title">{modelAcronym(m.model)}</div>
+                <p className="public-card-description">{modelFullName(m.model)}</p>
               </Link>
             ))}
           </div>
@@ -101,6 +103,7 @@ export default function HomePage() {
                 onMouseLeave={() => setHovered(null)}
               >
                 <div className="public-card-title">{s}</div>
+                <p className="public-card-description">{scenarioFullName(s)}</p>
               </Link>
             ))}
           </div>
