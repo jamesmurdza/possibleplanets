@@ -99,9 +99,16 @@ export default function TemperatureChart({
     return { datasets: [...perRun, average] };
   }, [plottable, jobs, hovered]);
 
+  // Creates the chart once per (windowMin/windowMax/aspectRatio/canvas
+  // presence) -- deliberately NOT re-run on every `hovered` change. A
+  // hover is purely a per-dataset color/width tweak (see chartData's own
+  // useMemo above); destroying and recreating the whole Chart.js instance
+  // for that briefly collapses and resizes the canvas, which on a chart
+  // sitting above the card grid shows up as the page jumping/scrolling
+  // under the cursor on every hover -- confirmed this was the real cause,
+  // not a CSS layout issue on the cards themselves.
   useEffect(() => {
     if (!chartData || !canvasRef.current) return;
-    if (chartRef.current) chartRef.current.destroy();
     chartRef.current = new Chart(canvasRef.current, {
       type: "line",
       data: { datasets: chartData.datasets as any },
@@ -130,7 +137,16 @@ export default function TemperatureChart({
       chartRef.current?.destroy();
       chartRef.current = null;
     };
-  }, [chartData, windowMin, windowMax, aspectRatio]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!chartData, windowMin, windowMax, aspectRatio]);
+
+  // Hover (and any other dataset-only change) updates the existing
+  // instance in place instead of recreating it -- no resize flash.
+  useEffect(() => {
+    if (!chartData || !chartRef.current) return;
+    chartRef.current.data.datasets = chartData.datasets as any;
+    chartRef.current.update();
+  }, [chartData]);
 
   if (!chartData) return <p className="public-chart-empty">No runs to plot yet.</p>;
 
