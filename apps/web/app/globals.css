@@ -1285,14 +1285,22 @@ a.icon-button {
   margin: 0 0 1rem;
 }
 
+/* One row, always -- cards divide the full row width evenly and shrink
+   together rather than wrapping to a second row (auto-fill grid would
+   wrap once cards got too narrow for their min-width). On genuinely
+   narrow viewports this lets the row scroll horizontally instead, so a
+   card's content is never crushed past readability. */
 .public-card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-  gap: 0.75rem;
+  display: flex;
+  gap: 0.6rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
 }
 
 .public-card {
   display: block;
+  flex: 1 1 0;
+  min-width: 7rem;
   border: 1px solid var(--pp-grey-light);
   border-radius: 4px;
   background: #fff;

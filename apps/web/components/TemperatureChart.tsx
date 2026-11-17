@@ -10,8 +10,23 @@
  */
 import { useEffect, useMemo, useRef } from "react";
 import Chart from "chart.js/auto";
-import { CHART_ADAPTERS, alignSeriesByYear, modelColor, colorWithAlpha, averageSeries } from "../lib/clientApi";
+import {
+  CHART_ADAPTERS,
+  alignSeriesByYear,
+  modelColor,
+  colorWithAlpha,
+  averageSeries,
+  nativeScenarioOf,
+  canonicalScenario,
+} from "../lib/clientApi";
 import type { RunJob, RunListItem } from "../lib/clientTypes";
+
+export type HoverFilter = { type: "model" | "scenario"; value: string } | null;
+
+function scenarioOf(params: Record<string, unknown>): string | undefined {
+  const native = nativeScenarioOf(params);
+  return native ? canonicalScenario(native) : undefined;
+}
 
 export default function TemperatureChart({
   runs,
@@ -19,6 +34,7 @@ export default function TemperatureChart({
   windowMin,
   windowMax,
   aspectRatio,
+  hovered,
 }: {
   runs: RunListItem[];
   jobs: Record<string, RunJob>;
@@ -31,6 +47,10 @@ export default function TemperatureChart({
    * component mostly renders inside .public-main's narrower 850px column,
    * where that ratio makes the chart look squashed/too short. */
   aspectRatio?: number;
+  /** Mirrors OverviewPanel.tsx's own hover-to-highlight -- when set,
+   * matching lines get full color/width and everything else fades,
+   * instead of every line always sitting at the same half-opacity. */
+  hovered?: HoverFilter;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -48,14 +68,19 @@ export default function TemperatureChart({
     const aligned = alignSeriesByYear(series);
 
     const perRun = aligned.datasets.map((d, i) => {
-      const model = plottable[i].model;
+      const run = plottable[i];
+      const model = run.model;
+      const scenario = scenarioOf(run.params);
+      const isMatch = !!hovered && (hovered.type === "model" ? hovered.value === model : hovered.value === scenario);
+      const dimmed = !!hovered && !isMatch;
       return {
         label: model,
         data: aligned.labels.map((year, idx) => ({ x: year, y: d.data[idx] })),
-        borderColor: colorWithAlpha(modelColor(model), 0.55),
-        borderWidth: 1.2,
+        borderColor: colorWithAlpha(modelColor(model), isMatch ? 0.95 : dimmed ? 0.12 : 0.55),
+        borderWidth: isMatch ? 2.5 : 1.2,
         pointRadius: 0,
         spanGaps: true,
+        order: 2,
       };
     });
 
@@ -72,7 +97,7 @@ export default function TemperatureChart({
     };
 
     return { datasets: [...perRun, average] };
-  }, [plottable, jobs]);
+  }, [plottable, jobs, hovered]);
 
   useEffect(() => {
     if (!chartData || !canvasRef.current) return;

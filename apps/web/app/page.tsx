@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { fetchJson, canonicalScenario } from "../lib/clientApi";
 import { useRunsAndJobs } from "../lib/useRunsData";
-import TemperatureChart from "../components/TemperatureChart";
+import TemperatureChart, { type HoverFilter } from "../components/TemperatureChart";
 import { PublicHeader, PublicFooter } from "../components/PublicChrome";
 import type { ModelListItem } from "../lib/clientTypes";
 
@@ -24,6 +24,7 @@ const NON_SSP_MODELS = new Set(["dice", "magicc"]);
 
 export default function HomePage() {
   const [models, setModels] = useState<ModelListItem[]>([]);
+  const [hovered, setHovered] = useState<HoverFilter>(null);
   const { plottableRuns, jobs, loading } = useRunsAndJobs();
 
   useEffect(() => {
@@ -60,14 +61,24 @@ export default function HomePage() {
         </section>
 
         <section className="public-chart-section">
-          {loading ? <p className="public-chart-empty">Loading runs...</p> : <TemperatureChart runs={plottableRuns} jobs={jobs} windowMin={2000} windowMax={2100} />}
+          {loading ? (
+            <p className="public-chart-empty">Loading runs...</p>
+          ) : (
+            <TemperatureChart runs={plottableRuns} jobs={jobs} windowMin={2000} windowMax={2100} hovered={hovered} />
+          )}
         </section>
 
         <section className="public-cards-section">
           <h2>Models</h2>
           <div className="public-card-grid">
             {models.map((m) => (
-              <Link key={m.model} href={`/models/${m.model}`} className="public-card">
+              <Link
+                key={m.model}
+                href={`/models/${m.model}`}
+                className="public-card"
+                onMouseEnter={() => setHovered({ type: "model", value: m.model })}
+                onMouseLeave={() => setHovered(null)}
+              >
                 <div className="public-card-title">{m.model}</div>
                 <p className="public-card-description">{m.description}</p>
               </Link>
@@ -82,7 +93,13 @@ export default function HomePage() {
           </p>
           <div className="public-card-grid">
             {sharedSsps.map((s) => (
-              <Link key={s} href={`/scenarios/${encodeURIComponent(s)}`} className="public-card">
+              <Link
+                key={s}
+                href={`/scenarios/${encodeURIComponent(s)}`}
+                className="public-card"
+                onMouseEnter={() => setHovered({ type: "scenario", value: s })}
+                onMouseLeave={() => setHovered(null)}
+              >
                 <div className="public-card-title">{s}</div>
               </Link>
             ))}
