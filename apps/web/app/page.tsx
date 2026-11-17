@@ -1,35 +1,96 @@
 "use client";
 
-import { useState } from "react";
-import Sidebar, { Tab } from "../components/Sidebar";
-import OverviewPanel from "../components/OverviewPanel";
-import NewRunPanel from "../components/NewRunPanel";
-import RunsPanel from "../components/RunsPanel";
-import ComparePanel from "../components/ComparePanel";
+/**
+ * Public home page -- no sidebar, no login. Unlike /dashboard (gated, see
+ * proxy.ts), this and everything under /models and /scenarios is meant for
+ * anyone to land on directly.
+ */
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { fetchJson, canonicalScenario } from "../lib/clientApi";
+import { useRunsAndJobs } from "../lib/useRunsData";
+import TemperatureChart from "../components/TemperatureChart";
+import type { ModelListItem } from "../lib/clientTypes";
 
-// A single-page app: switching tabs is plain React state, never a
-// navigation/page load -- each panel mounts once and keeps its own state
-// (e.g. a run still in flight in "New Run" keeps polling even while you're
-// looking at "Runs" or "Compare") rather than being torn down and rebuilt.
-export default function Page() {
-  const [tab, setTab] = useState<Tab>("overview");
+// SSPs are a socioeconomic-storyline scenario framework; RCPs (magicc) and
+// DICE's own named policies (base/optimal) are different frameworks
+// entirely (see lib/assumptions.ts's scenarioAssumptions) -- there's no
+// "canonical SSP shared by all models" to compute if those two are
+// included, so they're excluded from this intersection by name, the same
+// explicit distinction already made throughout lib/clientApi.ts/
+// lib/assumptions.ts.
+const NON_SSP_MODELS = new Set(["dice", "magicc"]);
+
+export default function HomePage() {
+  const [models, setModels] = useState<ModelListItem[]>([]);
+  const { plottableRuns, jobs, loading } = useRunsAndJobs();
+
+  useEffect(() => {
+    fetchJson("/v1/models")
+      .then((data) => setModels(data.models ?? []))
+      .catch(() => {});
+  }, []);
+
+  // The SSPs every SSP-framework model actually offers -- an intersection,
+  // not a union, so every scenario card shown here is guaranteed runnable
+  // on every one of those models (confirmed by construction: a scenario
+  // only makes this list if its canonical label appears in every SSP
+  // model's own native scenario list).
+  const sharedSsps = (() => {
+    const sspModels = models.filter((m) => !NON_SSP_MODELS.has(m.model));
+    if (sspModels.length === 0) return [];
+    const sets = sspModels.map((m) => new Set(m.scenarios.map(canonicalScenario)));
+    const [first, ...rest] = sets;
+    return Array.from(first).filter((s) => rest.every((set) => set.has(s))).sort();
+  })();
 
   return (
-    <div className="app-shell">
-      <Sidebar active={tab} onChange={setTab} />
-      <main className="main-area">
-        <div style={{ display: tab === "overview" ? "block" : "none" }}>
-          <OverviewPanel />
-        </div>
-        <div style={{ display: tab === "new" ? "block" : "none" }}>
-          <NewRunPanel />
-        </div>
-        <div style={{ display: tab === "runs" ? "block" : "none" }}>
-          <RunsPanel />
-        </div>
-        <div style={{ display: tab === "compare" ? "block" : "none" }}>
-          <ComparePanel />
-        </div>
+    <div className="public-page">
+      <header className="public-header">
+        <div className="public-header-title">Simple Climate Models</div>
+        <a href="/login" className="public-header-link">
+          Dashboard login
+        </a>
+      </header>
+
+      <main className="public-main">
+        <section className="public-hero">
+          <h1>How much will the world warm?</h1>
+          <p>
+            Five independent climate/economic models, run against the same published emissions scenarios. This chart
+            shows every model run on record, 2000-2100, with the average across all of them dashed.
+          </p>
+        </section>
+
+        <section className="public-chart-section">
+          {loading ? <p className="public-chart-empty">Loading runs...</p> : <TemperatureChart runs={plottableRuns} jobs={jobs} windowMin={2000} windowMax={2100} />}
+        </section>
+
+        <section className="public-cards-section">
+          <h2>Models</h2>
+          <div className="public-card-grid">
+            {models.map((m) => (
+              <Link key={m.model} href={`/models/${m.model}`} className="public-card">
+                <div className="public-card-title">{m.model}</div>
+                <p className="public-card-description">{m.description}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section className="public-cards-section">
+          <h2>Emissions scenarios</h2>
+          <p className="public-section-note">
+            The {sharedSsps.length} Shared Socioeconomic Pathways run by every SSP-framework model here.
+          </p>
+          <div className="public-card-grid">
+            {sharedSsps.map((s) => (
+              <Link key={s} href={`/scenarios/${encodeURIComponent(s)}`} className="public-card">
+                <div className="public-card-title">{s}</div>
+              </Link>
+            ))}
+          </div>
+        </section>
       </main>
     </div>
   );

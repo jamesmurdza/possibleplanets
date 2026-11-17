@@ -211,6 +211,7 @@ export const MODEL_COLORS: Record<string, string> = {
   oscar: "#e0862f",
   dice: "#9b51e0",
   magicc: "#e0415a",
+  twolayer: "#1b8f9e",
 };
 
 /** Falls back to a neutral gray for any model not in MODEL_COLORS, so a

@@ -58,6 +58,11 @@ function TabIcon({ id }: { id: Tab }) {
   );
 }
 
+async function logout() {
+  await fetch("/api/logout", { method: "POST" });
+  window.location.href = "/";
+}
+
 export default function Sidebar({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {
   return (
     <nav className="sidebar">
@@ -79,6 +84,14 @@ export default function Sidebar({ active, onChange }: { active: Tab; onChange: (
           </li>
         ))}
       </ul>
+      <div className="sidebar-footer">
+        <a href="/" className="sidebar-footer-link">
+          View public site
+        </a>
+        <button type="button" className="sidebar-footer-link" onClick={logout}>
+          Log out
+        </button>
+      </div>
     </nav>
   );
 }

@@ -1159,3 +1159,239 @@ a.icon-button {
 .assumptions-list li {
   color: var(--color-text-muted);
 }
+
+/* --- Public site (home + model/scenario articles) ---
+   Deliberately its own look, no .sidebar/.app-shell -- this is meant to
+   read as a plain public page, not the dashboard. */
+
+.public-page {
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
+.public-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.public-header-title {
+  font-weight: 700;
+  font-size: 1.0625rem;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.public-header-link {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.public-header-link:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.public-main {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+.public-hero h1 {
+  font-size: 1.75rem;
+  margin: 0 0 0.5rem;
+}
+
+.public-hero p {
+  color: var(--color-text-muted);
+  max-width: 42rem;
+  line-height: 1.5;
+}
+
+.public-chart-section {
+  margin: 1.5rem 0 3rem;
+}
+
+.public-chart {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+}
+
+.public-chart-empty {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.public-cards-section {
+  margin-bottom: 3rem;
+}
+
+.public-cards-section h2 {
+  font-size: 1.125rem;
+  margin-bottom: 0.25rem;
+}
+
+.public-section-note {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  margin: 0 0 1rem;
+}
+
+.public-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.75rem;
+}
+
+.public-card {
+  display: block;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  padding: 0.75rem 0.9rem;
+  text-decoration: none;
+  color: var(--color-text);
+  transition: border-color 0.12s ease;
+}
+
+.public-card:hover {
+  border-color: var(--color-accent);
+}
+
+.public-card-title {
+  font-weight: 600;
+  text-transform: capitalize;
+  margin-bottom: 0.25rem;
+}
+
+.public-card-description {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  line-height: 1.35;
+}
+
+/* --- Article pages (one model or one scenario) --- */
+
+.article-back-link {
+  display: inline-block;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  margin-bottom: 1rem;
+}
+
+.article-back-link:hover {
+  color: var(--color-accent);
+}
+
+.article-title {
+  font-size: 1.75rem;
+  text-transform: capitalize;
+  margin: 0 0 0.5rem;
+}
+
+.article-lede {
+  color: var(--color-text-muted);
+  max-width: 42rem;
+  line-height: 1.5;
+}
+
+.article-website-link {
+  display: inline-block;
+  font-size: 0.8125rem;
+  color: var(--color-accent);
+  text-decoration: none;
+  margin-bottom: 1rem;
+}
+
+.article-website-link:hover {
+  text-decoration: underline;
+}
+
+.article-section {
+  margin-top: 2rem;
+}
+
+.article-section h2 {
+  font-size: 1.0625rem;
+  margin-bottom: 0.5rem;
+}
+
+/* --- Login page --- */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg);
+}
+
+.login-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: 100%;
+  max-width: 22rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 2rem;
+}
+
+.login-title {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.login-subtitle {
+  margin: -0.5rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.login-back-link {
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.login-back-link:hover {
+  color: var(--color-accent);
+}
+
+/* --- Sidebar footer (dashboard-only: logout / back to public site) --- */
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 0.75rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.sidebar-footer-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sidebar-footer-link:hover {
+  color: var(--color-accent);
+}
