@@ -16,44 +16,44 @@ export interface AssumptionSection {
 
 const MODEL_ASSUMPTIONS: Record<string, AssumptionSection> = {
   hector: {
-    summary: "A simple physical climate model -- fast because it simplifies, not because it's less real.",
+    summary: "A simple physical climate model.",
     items: [
-      "Reduces the climate system to a small set of global carbon-cycle and energy-balance equations -- no spatial resolution (no regions, no ocean circulation detail), unlike a full GCM.",
-      "Climate sensitivity, ocean heat diffusivity, aerosol forcing scaling, CO2 fertilization, and soil respiration temperature-sensitivity (Q10) are each single global numbers here, not spatially or regionally varying.",
-      "Deterministic: given a scenario and parameters, there's exactly one answer, with no representation of internal variability or uncertainty.",
+      "No spatial resolution -- everything is a single global-average value, with no regions or ocean circulation detail.",
+      "Climate sensitivity, ocean heat uptake, aerosol forcing, CO2 fertilization, and soil respiration sensitivity are each one fixed global number.",
+      "Fully deterministic: the same scenario and parameters always give exactly the same answer, with no uncertainty range.",
     ],
   },
   fair: {
-    summary: "A calibrated emulator: it's built to reproduce the range of full climate models' behavior, not to simulate physics from first principles.",
+    summary: "A calibrated climate emulator.",
     items: [
-      "The temperature shown is the MEAN across an ensemble of 66 parameter sets, each independently calibrated to match a different CMIP6 model's behavior -- it represents a central estimate across structural climate-model uncertainty, not one model's physics.",
-      "Methane's radiative forcing is computed using one specific published method (Thornhill et al. 2021); other valid published methods exist and would shift CH4-driven warming slightly.",
-      "Like hector, it has no spatial resolution -- global-mean quantities only.",
+      "The temperature shown is the mean across an internal ensemble of 66 parameter sets, not a single physics run.",
+      "Methane's warming effect is computed with one specific published calculation method (Thornhill et al. 2021).",
+      "No spatial resolution -- only global-average quantities.",
     ],
   },
   oscar: {
-    summary: "A compact Earth-system model with Monte Carlo parameter uncertainty and simple regional structure.",
+    summary: "A compact Earth-system model.",
     items: [
-      "Aggregates the world into a small number of broad regions (5), not fine spatial detail -- a deliberate speed/complexity tradeoff versus a full Earth-system model.",
-      "A single run uses one Monte Carlo draw from OSCAR's parameter uncertainty distributions by default, so default output is one plausible trajectory, not a converged uncertainty range -- running more samples would reveal the spread around it.",
-      "Some scenario/parameter combinations are physically marginal enough that OSCAR's own internals produce non-finite values partway through -- a real limitation of the scenario for this model, not a data artifact.",
+      "Aggregates the world into 5 broad regions, not finer spatial detail.",
+      "A single run draws one Monte Carlo sample from its parameter uncertainty, so one run is one plausible trajectory, not a converged range.",
+      "Some scenarios can produce non-finite values partway through a run -- a real numerical limit, not a data artifact.",
     ],
   },
   dice: {
-    summary: "An integrated economic-climate model -- temperature here is a side effect of an economic optimization, not the primary target.",
+    summary: "An integrated economic-climate model.",
     items: [
-      "Couples a simplified climate module to an economic growth/damage model; its main purpose is computing the economically optimal carbon price and abatement path, with temperature as one downstream output among several.",
-      "Only two policy paths exist: \"base\" (no climate policy at all) and \"optimal\" (whatever path DICE's own cost-benefit optimizer picks under its built-in assumptions about discounting and damages) -- neither is a specific emissions scenario the way SSPs/RCPs are.",
-      "Those discounting and damage-function assumptions are highly consequential and contested in the economics literature (DICE is well-known for being sensitive to the discount rate chosen) -- this project uses its standard published defaults.",
-      "Reports in 5-year steps, reflecting the model's own economic planning horizon rather than a yearly physical simulation.",
+      "Temperature is a downstream output of an economic optimization, not the model's primary target.",
+      "Only two policy paths exist: a no-policy baseline and the path its own cost-benefit optimizer picks as economically best.",
+      "Its discount rate and damage-function assumptions drive the result and are a long-standing point of debate in the economics literature.",
+      "Reports in 5-year steps, matching its own economic planning horizon.",
     ],
   },
   magicc: {
-    summary: "A long-standing reduced-complexity climate model, run here on CMIP5-era scenarios rather than the newer CMIP6 ones.",
+    summary: "A long-standing reduced-complexity climate model.",
     items: [
-      "Scenarios are RCPs (Representative Concentration Pathways) -- the CMIP5-generation framework built around a target radiative forcing level, not the newer SSP socioeconomic narratives the other models here use. RCPs and SSPs are not interchangeable, even where a given RCP and SSP target similar forcing.",
-      "Only climate sensitivity is adjustable here; MAGICC's other internal physical parameters (e.g. ocean heat uptake, carbon cycle feedbacks) use its own built-in defaults.",
-      "Like hector and fair, it's a global/simple-regional reduced-complexity model, not a spatially resolved GCM.",
+      "Scenarios are RCPs: trajectories defined by a target radiative forcing level, not a socioeconomic narrative.",
+      "Only climate sensitivity is adjustable here -- its other internal physical parameters use built-in defaults.",
+      "No spatial resolution -- only global-average output.",
     ],
   },
 };
@@ -70,32 +70,33 @@ export function modelAssumptions(model: string): AssumptionSection | null {
 export function scenarioAssumptions(model: string, nativeScenario: string, canonicalLabel: string): AssumptionSection {
   if (model === "dice") {
     return {
-      summary: "Not an emissions scenario -- one of DICE's two named economic policy paths.",
+      summary: "One of DICE's two named economic policy paths, not an emissions scenario.",
       items: [
         nativeScenario === "base"
-          ? "\"base\": no carbon abatement policy is ever applied -- emissions follow the model's unconstrained economic growth path."
-          : "\"optimal\": the path DICE's own cost-benefit optimizer picks as economically best, under its built-in discounting and damage-function assumptions -- not a policy anyone has actually proposed or committed to.",
-        "Isn't comparable to the SSP/RCP scenarios the other models use -- those specify emissions trajectories directly, while DICE derives emissions as a byproduct of its economic optimization.",
+          ? "No carbon abatement policy is ever applied."
+          : "The path DICE's own cost-benefit optimizer picks as economically best.",
+        "Emissions are a byproduct of the economic optimization, not a direct input.",
       ],
     };
   }
 
   if (model === "magicc") {
     return {
-      summary: `${nativeScenario} is a CMIP5-era Representative Concentration Pathway, not an SSP.`,
+      summary: `${nativeScenario} is a Representative Concentration Pathway (RCP).`,
       items: [
-        "RCPs specify a target radiative forcing trajectory directly, without an underlying socioeconomic narrative -- SSPs (used by hector/fair/oscar) instead start from a socioeconomic storyline and derive emissions from it.",
-        "RCPs and SSPs with similar numbers (e.g. RCP4.5 and SSP2-4.5) are not the same scenario -- any resemblance is approximate, not an equivalence.",
+        "Defined by a target radiative forcing trajectory, not a socioeconomic narrative.",
+        "Emissions are back-derived to hit that forcing target.",
       ],
     };
   }
 
   // SSP-framework models (hector, fair, oscar).
   return {
-    summary: `${canonicalLabel} is a Shared Socioeconomic Pathway -- a socioeconomic storyline with emissions derived from it, not a directly specified forcing target.`,
+    summary: `${canonicalLabel} is a Shared Socioeconomic Pathway (SSP).`,
     items: [
-      "SSPs combine a narrative about future population, economic growth, and technology with a forcing-level target (the number after the dash) -- two scenarios with the same forcing target can still differ in how they get there.",
-      "The small chart on this card shows the scenario's actual projected CO2 emissions pathway, not any model's temperature output -- it's the same input every model here runs on for this scenario.",
+      "Defined by a socioeconomic storyline (population, growth, technology) plus a forcing-level target.",
+      "Emissions are derived from that storyline, not specified directly.",
+      "The small chart on this card is the scenario's own projected CO2 emissions pathway, not a model's output.",
     ],
   };
 }
