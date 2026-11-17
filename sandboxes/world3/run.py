@@ -30,6 +30,24 @@ Confirmed by direct testing (bare Debian 12 host): a full fast-mode run
 (year_min=1900, year_max=2100) completes in well under half a second,
 including import time -- no real intermediate progress signal exists to
 report (same situation as hector/magicc/dice).
+
+Two of init_world3_constants()'s ~80 constants are exposed as optional
+tunable params, same pattern as hector's config overrides -- confirmed by
+direct testing that passing each one's own documented default value
+explicitly reproduces bit-identical output to no override at all, and that
+a real change to either produces a real, substantial difference:
+  - nri (nonrenewable resources initial, default 1e12): dropping it to 2e11
+    moved 2100 population from ~3.98B to ~1.94B and nrfr from ~0.15 to
+    ~0.11.
+  - ppoli (persistent pollution initial, default 2.5e7): raising it to 1e9
+    moved 2100 population from ~3.98B to ~4.00B and the pollution index
+    from ~0.602 to ~0.630.
+Not every constant behaves this way -- e.g. pyear (the policy-shift year)
+is a documented no-op on its own with every other constant left at its
+default, since World3's default before/after-policy constant pairs
+(fioac1/fioac2, icor1/icor2, etc.) are already set equal to each other.
+Only knobs confirmed to actually move the output on their own are exposed
+here.
 """
 import json
 import os
@@ -68,8 +86,18 @@ def main():
         )
         sys.exit(1)
 
+    # Only pass along keys that were actually supplied -- never synthesize
+    # a value for an omitted key (same reasoning as hector/magicc's run.py:
+    # see apps/web/lib/models.ts's module docstring on why "omitted" and
+    # "explicit default" are kept distinct for caching).
+    constants = {}
+    if "nri" in params:
+        constants["nri"] = float(params["nri"])
+    if "ppoli" in params:
+        constants["ppoli"] = float(params["ppoli"])
+
     world3 = World3()
-    world3.init_world3_constants()
+    world3.init_world3_constants(**constants)
     world3.init_world3_variables()
     world3.set_world3_table_functions()
     world3.set_world3_delay_functions()

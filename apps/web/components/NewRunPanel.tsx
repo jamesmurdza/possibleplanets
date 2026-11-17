@@ -457,8 +457,8 @@ export default function NewRunPanel() {
         </div>
 
         <div className="form-field-block">
-          <span className="form-field-label">Scenario</span>
-          <div className="scenario-card-grid" role="radiogroup" aria-label="Scenario">
+          <span className="form-field-label">Emissions scenario</span>
+          <div className="scenario-card-grid" role="radiogroup" aria-label="Emissions scenario">
             {scenarios.map((s) => {
               const desc = scenarioDescription(s);
               const canonical = canonicalScenario(s);

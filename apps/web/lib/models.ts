@@ -411,6 +411,34 @@ export const MODELS: Record<string, ModelMeta> = {
     // fair/dice/magicc's cpu:2 settings, which came from controlled
     // multi-trial experiments) -- left at the platform default rather
     // than guessing a resources value with no measurement behind it.
+    //
+    // Two of init_world3_constants()'s ~80 constants, confirmed by direct
+    // testing (see sandboxes/world3/run.py's docstring) to be real knobs:
+    // passing each one's own documented default value explicitly
+    // reproduces bit-identical output to no override, and a real change to
+    // either moves the result substantially. Other constants exist (e.g.
+    // pyear) but aren't exposed here because they're a documented no-op on
+    // their own with every other constant left at its default.
+    parameters: [
+      {
+        key: "nri",
+        label: "Nonrenewable resources, initial (1970)",
+        type: "number",
+        default: 1e12,
+        min: 1e11,
+        max: 5e12,
+        step: 1e10,
+      },
+      {
+        key: "ppoli",
+        label: "Persistent pollution, initial (1970)",
+        type: "number",
+        default: 2.5e7,
+        min: 1e6,
+        max: 1e9,
+        step: 1e6,
+      },
+    ],
   },
 };
 
