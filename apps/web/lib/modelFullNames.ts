@@ -7,8 +7,7 @@
  * (confirmed against its own GitHub repo and the GMD journal paper that
  * introduced it) -- it's consistently just described as "a/the compact
  * Earth system model OSCAR", so that description is used here instead of
- * a fabricated letter-by-letter expansion. twolayer isn't an acronym at
- * all ("Two-Layer Model" is both its short and full name).
+ * a fabricated letter-by-letter expansion.
  */
 export const MODEL_FULL_NAMES: Record<string, string> = {
   hector: "The Hector Simple Climate Model",
@@ -16,11 +15,19 @@ export const MODEL_FULL_NAMES: Record<string, string> = {
   oscar: "A compact Earth system model",
   dice: "Dynamic Integrated Climate Economy model",
   magicc: "Model for the Assessment of Greenhouse Gas Induced Climate Change",
-  twolayer: "Two-Layer Model",
+  twolayer: "OpenSCM Two Layer Model",
+};
+
+// "twolayer" (the lib/models.ts registry key) isn't an acronym at all --
+// uppercasing it reads as a garbled "TWOLAYER" rather than a real short
+// name. Override just this one case; everything else still has a genuine
+// acronym as its registry key.
+const ACRONYM_OVERRIDES: Record<string, string> = {
+  twolayer: "Two Layer Model",
 };
 
 export function modelAcronym(model: string): string {
-  return model.toUpperCase();
+  return ACRONYM_OVERRIDES[model] ?? model.toUpperCase();
 }
 
 export function modelFullName(model: string): string {
