@@ -55,7 +55,14 @@ export default function ModelArticlePage() {
           <span className="article-subtitle"> &mdash; {modelFullName(model)}</span>
         </h1>
 
-        {meta && <p className="article-lede">{meta.description}</p>}
+        {meta && (
+          <p className="article-lede">
+            {meta.description} {meta.implementation}{" "}
+            <a href={meta.website} target="_blank" rel="noopener noreferrer" className="article-website-link">
+              Model website &rarr;
+            </a>
+          </p>
+        )}
 
         <section className="public-chart-section">
           {loading ? (
@@ -64,15 +71,6 @@ export default function ModelArticlePage() {
             <TemperatureChart series={ownSeries} windowMin={2000} windowMax={2100} colorBy="scenario" />
           )}
         </section>
-
-        {meta && (
-          <p className="article-implementation">
-            {meta.implementation}{" "}
-            <a href={meta.website} target="_blank" rel="noopener noreferrer" className="article-website-link">
-              Model website &rarr;
-            </a>
-          </p>
-        )}
 
         {assumptions && (
           <section className="article-section">

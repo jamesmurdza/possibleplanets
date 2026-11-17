@@ -1377,16 +1377,14 @@ a.icon-button {
   margin-bottom: 1.5rem;
 }
 
-.article-implementation {
-  color: var(--pp-grey);
-  font-size: 0.875rem;
-}
-
 .article-website-link {
-  display: inline-block;
-  font-size: 0.875rem;
+  /* Inline now -- part of the same .article-lede sentence as the
+     description/implementation text, not its own block below the chart
+     -- so no display/font-size override; it should read as part of that
+     paragraph, just colored as a link. */
   color: var(--pp-brand);
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .article-website-link:hover {
