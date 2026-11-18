@@ -1392,7 +1392,7 @@ a.icon-button {
   gap: 0.35rem;
   flex: 1 1 0;
   min-width: 4.5rem;
-  padding: 0.6rem 0.4rem;
+  padding: 0.9rem 0.4rem;
   border: 1px solid var(--pp-grey-light);
   border-radius: 4px;
   background: #fff;
@@ -1425,6 +1425,8 @@ a.icon-button {
   font-weight: 600;
   font-size: 0.8125rem;
   text-transform: uppercase;
+  text-align: center;
+  line-height: 1.25;
 }
 
 /* --- Article pages (one model or one scenario) --- */
