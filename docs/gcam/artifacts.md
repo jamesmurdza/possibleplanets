@@ -65,8 +65,14 @@ Same paths inside: `/app/gcam-core/exe/gcam.exe`,
 - `sandboxes/gcam/runtime/README.md` -- exact regeneration instructions
   for the gitignored files above, if ever needed.
 
-## What's NOT here yet
+## 4. App integration
 
-GCAM is not registered in `apps/web/lib/models.ts` or wired into
-`run.py` -- it doesn't show up in the app's model list yet. See
-`known-gaps.md`.
+`apps/web/lib/models.ts` registers `gcam` with `resources: {cpu:4,
+memory:8, disk:12}`, `exec_timeout_seconds: 3000`,
+`supports_progress: true`, and a single scenario, `"Reference"`.
+`sandboxes/gcam/run.py` is the entrypoint the gateway actually invokes
+(`python3 -u /app/run.py`) -- it shells out to `./gcam.exe -C
+configuration_ref.xml`, tees stdout for `"Period N: YYYY"` lines to
+report progress, and returns GCAM's internal Hector-output CSV as the
+native result. See `known-gaps.md` for what's still only partially
+exposed (just the one scenario, no tunable parameters yet).

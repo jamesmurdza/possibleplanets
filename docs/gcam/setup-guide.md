@@ -94,9 +94,11 @@ A successful run prints `"All model periods solved correctly."` /
 5. Optionally also push a Docker Hub backup -- see `artifacts.md` for
    why and how.
 
-## Step 5 (future, not yet done): wire into the app
+## Step 5: wire into the app
 
-Not part of this guide yet -- see `known-gaps.md`. The remaining work is
-reading `SCENARIO_PARAMS`, mapping to one of the `batch_SSP_*.xml`
-scenario files, and parsing `gcam.exe`'s output the way `run.py` does for
-every other model.
+Done -- `apps/web/lib/models.ts` registers `gcam`, and
+`sandboxes/gcam/run.py` is the real entrypoint (reads `SCENARIO_PARAMS`,
+shells out to `gcam.exe -C configuration_ref.xml`, parses its output,
+reports progress). Only the `"Reference"` scenario is exposed so far --
+see `known-gaps.md` for what it would take to add real SSP scenario
+selection on top of this.

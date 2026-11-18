@@ -411,6 +411,52 @@ export const MODELS: Record<string, ModelMeta> = {
       },
     ],
   },
+  gcam: {
+    family: "IAM",
+    // Wording adapted from ../../models.markdown's own style for other
+    // IAM entries (not a direct quote -- gcam isn't in that table yet).
+    description:
+      "GCAM is a large integrated assessment model coupling energy, agriculture/land-use, water, and climate (via an embedded Hector run) in a multi-region economic equilibrium.",
+    implementation: "It's implemented in C++17, licensed under the ECL-2.0 license.",
+    website: "https://github.com/JGCRI/gcam-core",
+    dockerfile: path.join(SANDBOXES_DIR, "gcam", "Dockerfile"),
+    // Only "Reference" -- see sandboxes/gcam/run.py's module docstring and
+    // docs/gcam/known-gaps.md ("Only configuration_ref.xml was actually
+    // run-tested"). The other shipped configs reference additional input
+    // files not yet confirmed present here and still have GCAM's own
+    // BaseX output database enabled (a separate, unsolved JVM-segfault
+    // problem configuration_ref.xml's patch works around) -- not exposed
+    // until validated the same way Reference was.
+    scenarios: ["Reference"],
+    params_shape: "scenario",
+    // Default run_command (python3 -u /app/run.py) applies -- gcam's own
+    // run.py is Python, same as every model except dice's Julia entrypoint.
+    // Confirmed by direct testing (docs/gcam/trial-log.md): a full
+    // 21-period run (1975-2100) takes ~30-31 minutes at cpu:4 -- two to
+    // three orders of magnitude longer than every other model here, since
+    // this is a real multi-region economic equilibrium solve, not a
+    // closed-form/ODE integration. 3000s gives a healthy buffer above the
+    // observed ~1860s.
+    exec_timeout_seconds: 3000,
+    // gcam.exe logs a "Period N: YYYY" line at the start of each of its 21
+    // periods (observed directly during this project's validation runs --
+    // see sandboxes/gcam/run.py), which run.py tees into /tmp/progress.json
+    // the same way sandboxes/oscar/run.py does for its own per-year prints.
+    supports_progress: true,
+    // Same resource profile as the gcam-production-v1 Daytona snapshot
+    // this image is built from (see docs/gcam/artifacts.md) -- confirmed
+    // sufficient by direct testing: gcam.exe itself only needs this
+    // account's normal 4 CPU/8GB tier. The expensive step (generating the
+    // input database) is a one-time, baked-in-at-build-time cost, not
+    // something this per-request sandbox ever repeats -- see
+    // docs/gcam/architecture.md. disk:12 because the image bakes in the
+    // full 5.2GB generated XML database plus the 294MB binary.
+    resources: { cpu: 4, memory: 8, disk: 12 },
+    // No tunable parameters exposed yet -- see sandboxes/gcam/run.py's
+    // module docstring for why (changing anything beyond the shipped
+    // Reference config either reopens the gcamdata memory problem or is
+    // simply untested).
+  },
 };
 
 export function getModelOrNull(model: string): ModelMeta | null {

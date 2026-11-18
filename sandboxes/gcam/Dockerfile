@@ -99,9 +99,16 @@ FROM debian:12-slim
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
     default-jre-headless \
     libtbb12 \
+    python3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+# run.py is the gateway's fixed entrypoint convention (same path every
+# model's image uses) -- it shells out to ./gcam.exe itself (see run.py's
+# own module docstring for why GCAM can't be called as a library like
+# every other model here).
+COPY run.py .
 
 # exe/ from the builder's own fresh clone first (the binary itself, its
 # bundled jars, default configs) -- not the build stage's .o files or

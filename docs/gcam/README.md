@@ -10,12 +10,14 @@ undertaking than any other model added so far, so it gets its own
 documentation set instead of a couple of lines in
 `docs/sandbox-resource-experiments.md`.
 
-**Status: works, not yet wired into the app.** GCAM builds, runs a full
-21-period scenario (1975-2100) to completion, and is packaged into a
-reusable Daytona snapshot (`gcam-production-v1`) and a public Docker Hub
-backup (`possibleplanets/gcam:v1`). It is **not** yet integrated into
-`apps/web/lib/models.ts`/`run.py` the way every other model is -- that's
-the remaining work (see `known-gaps.md`).
+**Status: wired into the app.** GCAM builds, runs a full 21-period
+scenario (1975-2100) to completion, is packaged into a reusable Daytona
+snapshot (`gcam-production-v1`) and a public Docker Hub backup
+(`possibleplanets/gcam:v1`), and is now registered in
+`apps/web/lib/models.ts` with a real `sandboxes/gcam/run.py` entrypoint,
+the same way every other model is. Only one scenario (`"Reference"`) is
+exposed so far -- see `known-gaps.md` for why, and what's left to widen
+that.
 
 ## Files in this folder
 

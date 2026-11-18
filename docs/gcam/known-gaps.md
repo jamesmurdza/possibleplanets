@@ -3,24 +3,32 @@
 Things left unsolved or unintegrated on purpose, so nobody re-discovers
 the same dead end or re-does already-settled work.
 
-## Not integrated into the app yet
+## Integrated, but only one scenario exposed
 
-GCAM is not in `apps/web/lib/models.ts` or `run.py`. The hard
-infrastructure problem (generating its input data within this account's
-sandbox limits) is solved and the result is packaged and reusable (see
-`artifacts.md`), but the actual app-level integration -- reading
-`SCENARIO_PARAMS`, mapping to one of the five `batch_SSP_*.xml` scenario
-files, parsing `gcam.exe`'s output into whatever shape the app expects --
-has not been done.
+GCAM is now registered in `apps/web/lib/models.ts` and has a real
+`sandboxes/gcam/run.py` entrypoint (reads `SCENARIO_PARAMS`, shells out
+to `gcam.exe`, parses its Hector-output CSV, reports progress). But only
+`"Reference"` is exposed as a scenario -- not the fuller SSP taxonomy
+other models here expose. That's because only `configuration_ref.xml`
+was ever run-tested end-to-end (see "Only configuration_ref.xml was
+actually run-tested" below); using `configuration_ssp.xml` to add real
+SSP scenario selection would need its own validation pass first
+(confirming its additional referenced input files exist in
+`runtime/input/`, and either shipping BaseX's jars or patching its
+`write-output` flag the same way `configuration_ref.xml` was patched).
 
-Open question this raises, not yet resolved: will the eventual
-integration only expose **scenario selection** (free, no data refresh
-ever needed -- see `architecture.md`), or actual tunable parameters that
-would require new source data per request? If it's the latter, the
-`gcamdata` memory problem reopens on a per-request basis, which the
-current "bake it once" architecture does not solve. This needs to be
-decided before integration starts, since it changes the shape of the
-work substantially.
+Once that validation is done, adding more scenarios is cheap -- it's
+just mapping a scenario name to one of the already-shipped
+`batch_SSP_*.xml` files (see `sandboxes/gcam/runtime/exe/`), not a
+repeat of the expensive `gcamdata` generation step (per
+`architecture.md`'s scenario-independence finding).
+
+No tunable parameters are exposed either, for the same reason
+`architecture.md` flags: GCAM has no equivalent of hector's config-dict
+overrides reachable without either regenerating `gcamdata`'s database
+per request (reopens the memory problem) or editing
+`configuration_ref.xml`'s own values, which hasn't been tested against
+anything but what's already shipped.
 
 ## `ceds_ghg_en_R_S_T_Y` OOM -- intentionally unpatched
 
