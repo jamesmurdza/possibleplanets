@@ -1370,11 +1370,14 @@ a.icon-button {
 
 /* "Models" section: a single row, always -- no wrapping to a second row
    and no truncation like .public-card-grid above. Each card is just an
-   icon + acronym (no description), so even with every model this
-   project has it's still narrow enough to fit in one row at this
-   section's content width -- if a future model ever pushes it past
-   that width, overflow-x lets the row scroll horizontally rather than
-   wrapping or shrinking cards past legibility. */
+   icon + acronym (no description); cards divide the full row width
+   evenly (flex: 1 1 0, same approach .public-card-grid's old flex
+   version used before it switched to a fixed-column grid -- that
+   problem doesn't apply here since there's no "..." indicator card to
+   keep a consistent width against) and shrink together on narrow
+   viewports rather than wrapping. min-width + overflow-x is the
+   fallback once they'd shrink past legibility, so the row scrolls
+   horizontally instead of cramming. */
 .public-model-row {
   display: flex;
   gap: 0.5rem;
@@ -1387,8 +1390,8 @@ a.icon-button {
   flex-direction: column;
   align-items: center;
   gap: 0.35rem;
-  flex: 0 0 auto;
-  width: 4.5rem;
+  flex: 1 1 0;
+  min-width: 4.5rem;
   padding: 0.6rem 0.4rem;
   border: 1px solid var(--pp-grey-light);
   border-radius: 4px;
