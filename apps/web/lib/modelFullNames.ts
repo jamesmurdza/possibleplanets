@@ -24,7 +24,7 @@ export const MODEL_FULL_NAMES: Record<string, string> = {
 // name. Override just this one case; everything else still has a genuine
 // acronym as its registry key.
 const ACRONYM_OVERRIDES: Record<string, string> = {
-  twolayer: "2 Layer",
+  twolayer: "TWO LAYER",
 };
 
 export function modelAcronym(model: string): string {
