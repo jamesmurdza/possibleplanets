@@ -993,6 +993,10 @@ a.icon-button {
     overflow-x: auto;
   }
 
+  .public-card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .main-area {
     padding: 1.25rem 1rem 2.5rem;
   }
@@ -1299,25 +1303,24 @@ a.icon-button {
   margin: 0 0 1rem;
 }
 
-/* Fixed-width cards that wrap into rows (at this section's ~870px
-   content width, that's 4 per row, so 7 models -- as of GCAM's addition
-   -- lay out as 4+3). A single always-on-one-line row (shrinking cards
-   to fit, or scrolling horizontally past that) stopped being readable
-   once a 7th model card pushed the row past this section's width, and a
-   stretch-to-fill-the-row approach (cards sized as a % of row width)
-   made every card's size depend on how many happened to be in that row
-   -- fixed width keeps every card the same size regardless of row
-   count or how many models there are in total. */
+/* A fixed-column grid (4 columns), so 7 models -- as of GCAM's addition
+   -- lay out as a full 4-card row plus a second row of 3, each card
+   under the same column tracks as the row above rather than stretching
+   to fill whatever's left in its own row. That's the difference from a
+   flexbox approach: flex sizes each row's items based on what's in that
+   row (so a ragged last row's cards end up a different width than a
+   full row's), while a grid's column tracks are fixed by the
+   container, so every card is the same width and the grid still fills
+   the full row width evenly -- a short last row just leaves its unused
+   columns empty instead of stretching to fill them. */
 .public-card-grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.6rem;
 }
 
 .public-card {
   display: block;
-  flex: 0 0 9rem;
-  width: 9rem;
   border: 1px solid var(--pp-grey-light);
   border-radius: 4px;
   background: #fff;
