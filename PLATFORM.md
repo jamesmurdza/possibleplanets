@@ -2,9 +2,16 @@
 
 This document specs a platform that exposes the climate/economic models cataloged on
 this site (DICE, FAIR, HECTOR, MAGICC, OSCAR) as a uniform API, plus a minimal
-dashboard on top. It reflects findings from manually testing the models in a sandbox
-(see guides in `guides/`), where install friction and environment mismatches were the
-main barrier to accessibility — not the models themselves.
+dashboard on top. It reflects findings from manually testing the models in a sandbox,
+where install friction and environment mismatches were the main barrier to
+accessibility — not the models themselves.
+
+Note: this is an early planning doc and is now stale in several ways -- it predates
+the move to `apps/web` (a Next.js app, superseding the `apps/gateway`/`apps/dashboard`
+split described below) and the old Jekyll site's `guides/` directory this doc
+originally pointed to (retired once the Jekyll site itself was retired in favor of
+`apps/web`). Kept for historical context on *why* things are shaped the way they are,
+not as a current map of the repo.
 
 Status: **in progress.** HECTOR, FAIR, OSCAR, and DICE sandbox images are
 built and tested against real Daytona sandboxes; a minimal gateway and
@@ -30,8 +37,13 @@ sandboxes/        model sandbox images (Dockerfile + run.py), shared build
 apps/
   gateway/         the API gateway (FastAPI) -- see Architecture below
   dashboard/       the minimal frontend -- see Minimal dashboard below
-guides/            the site's existing per-model how-to guides
 ```
+
+(As of this note, `apps/web` is the real, live app -- see its own
+`lib/runs.ts`, which re-implements `apps/gateway/jobs.py`'s job logic
+directly in Next.js API routes rather than calling out to a separate
+FastAPI service. `guides/` no longer exists -- see the stale-doc note
+above.)
 
 ## Background
 
