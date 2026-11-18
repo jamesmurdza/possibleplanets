@@ -1,5 +1,5 @@
 import { advanceRun } from "../../../../lib/runs";
-import { corsJson, corsOptions } from "../../../../lib/cors";
+import { corsJson, corsOptions, corsGatewayError } from "../../../../lib/cors";
 import { hasValidApiKey } from "../../../../lib/apiKey";
 
 export async function OPTIONS() {
@@ -24,6 +24,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ runId: s
     }
     return corsJson(view);
   } catch (err) {
-    return corsJson({ detail: `gateway_error: ${String((err as Error)?.message ?? err)}` }, { status: 502 });
+    return corsGatewayError(err, `GET /v1/runs/${runId}`);
   }
 }

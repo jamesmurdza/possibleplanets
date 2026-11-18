@@ -40,8 +40,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ runId: 
   } catch (err) {
     // Deliberately still a well-formed response, not an uncaught throw --
     // the sandbox's own urllib/Downloads call wraps this in a try/except
-    // and ignores the result either way (see buildWrappedCommand), but a
-    // clean 502 here still makes this endpoint debuggable from logs.
+    // and ignores the result either way (see buildWrappedCommand). Logged
+    // server-side (see corsGatewayError's own comment on why that matters
+    // -- this route's failures are especially easy to miss otherwise,
+    // since nothing is ever watching its response body the way a browser
+    // would) even though this route skips corsJson itself for CORS
+    // reasons (see this file's top comment).
+    console.error(`[POST /v1/internal/runs/${runId}/complete]`, err);
     return Response.json({ detail: `gateway_error: ${String((err as Error)?.message ?? err)}` }, { status: 502 });
   }
 }

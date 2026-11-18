@@ -1,5 +1,5 @@
 import { getLatestSucceededRuns } from "../../../../lib/db";
-import { corsJson, corsOptions } from "../../../../lib/cors";
+import { corsJson, corsOptions, corsGatewayError } from "../../../../lib/cors";
 import { CHART_ADAPTERS } from "../../../../lib/clientApi";
 import { MODELS } from "../../../../lib/models";
 
@@ -71,6 +71,6 @@ export async function GET() {
     });
     return corsJson({ series }, { headers: { "Cache-Control": "s-maxage=60, stale-while-revalidate=300" } });
   } catch (err) {
-    return corsJson({ detail: `gateway_error: ${String((err as Error)?.message ?? err)}` }, { status: 502 });
+    return corsGatewayError(err, "GET /v1/runs/latest");
   }
 }

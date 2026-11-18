@@ -1,5 +1,5 @@
 import { listRuns } from "../../../lib/db";
-import { corsJson, corsOptions } from "../../../lib/cors";
+import { corsJson, corsOptions, corsGatewayError } from "../../../lib/cors";
 
 export async function OPTIONS() {
   return corsOptions();
@@ -21,6 +21,6 @@ export async function GET(req: Request) {
     const runs = await listRuns(limit);
     return corsJson({ runs });
   } catch (err) {
-    return corsJson({ detail: `gateway_error: ${String((err as Error)?.message ?? err)}` }, { status: 502 });
+    return corsGatewayError(err, "GET /v1/runs");
   }
 }
