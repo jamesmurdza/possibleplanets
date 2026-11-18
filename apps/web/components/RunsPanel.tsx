@@ -62,7 +62,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps
 
   async function refreshList() {
     try {
-      const data = await fetchJson("/v1/runs?limit=50");
+      const data = await fetchJson("/v1/runs");
       setRuns(data.runs ?? []);
       setLoadErr(null);
     } catch (err: any) {
@@ -122,8 +122,8 @@ export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps
 
   // Dropped from `checkedIds` whenever the list is refreshed and a
   // previously-checked run has disappeared from it (deleted by someone
-  // else, or aged out past the limit=50 cap) -- otherwise "N selected"
-  // could silently count rows that no longer exist.
+  // else) -- otherwise "N selected" could silently count rows that no
+  // longer exist.
   useEffect(() => {
     setCheckedIds((prev) => {
       const stillPresent = new Set(runs.map((r) => r.run_id));

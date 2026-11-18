@@ -15,7 +15,9 @@ export async function OPTIONS() {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const limitParam = Number(url.searchParams.get("limit"));
-  const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 200) : 50;
+  // No default/max cap -- the dashboard's Runs tab wants every run, not a
+  // capped page. A caller can still pass ?limit= for a bounded page.
+  const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : undefined;
 
   try {
     const runs = await listRuns(limit);
