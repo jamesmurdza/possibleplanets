@@ -13,6 +13,30 @@ import { modelAcronym, modelFullName } from "../../../lib/modelFullNames";
 import { runGuide } from "../../../lib/runGuides";
 import type { ModelListItem } from "../../../lib/clientTypes";
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+// Hover-to-reveal "#" anchor link, like blog.jamesmurdza.com's headers --
+// gives every section a stable, shareable URL (#how-to-run-x-locally)
+// without cluttering the heading when you're not hovering it. The whole
+// heading (not just the "#") is clickable -- it's the same link, just a
+// bigger, more discoverable target.
+function SectionHeading({ children }: { children: string }) {
+  const slug = slugify(children);
+  return (
+    <h2 id={slug}>
+      <a href={`#${slug}`} className="heading-link" aria-label={`Link to "${children}"`}>
+        <span className="heading-anchor">#</span>
+        {children}
+      </a>
+    </h2>
+  );
+}
+
 export default function ModelArticlePage() {
   const params = useParams<{ model: string }>();
   const model = params.model;
@@ -77,7 +101,7 @@ export default function ModelArticlePage() {
 
         {assumptions && (
           <section className="article-section">
-            <h2>What this model assumes</h2>
+            <SectionHeading>What this model assumes</SectionHeading>
             {/* assumptions.summary (e.g. "A calibrated climate emulator.") is
                 a generic one-liner that mostly restates the lede/title --
                 not shown here; this section's heading already supplies the
@@ -95,7 +119,7 @@ export default function ModelArticlePage() {
         {guide &&
           guide.map((section, si) => (
             <section className="article-section" key={si}>
-              <h2>{section.heading}</h2>
+              <SectionHeading>{section.heading}</SectionHeading>
               <ol className="run-guide-steps">
                 {section.steps.map((step, i) => (
                   <li key={i} className="run-guide-step">

@@ -47,9 +47,10 @@ const DAYTONA_VCPU_PER_SECOND = 0.0504 / 3600;
 const DAYTONA_GIB_MEMORY_PER_SECOND = 0.0162 / 3600;
 const DAYTONA_GIB_DISK_PER_SECOND = 0.000108 / 3600;
 
+// Only ever called with amount >= 0.01 (see apiCostStep's ternary below),
+// so no need to branch on smaller magnitudes here.
 function formatUsd(amount: number): string {
-  const cents = amount * 100;
-  return `$${amount.toFixed(amount < 0.001 ? 6 : 5)} (~${cents.toFixed(cents < 0.01 ? 4 : 3)}¢)`;
+  return `$${amount.toFixed(3)} (~${(amount * 100).toFixed(1)}¢)`;
 }
 
 // Below $0.01/run, "per run" reads as a string of leading zeros -- scaling
@@ -62,12 +63,18 @@ function formatUsdPer1000(amount: number): string {
 // Rounds to a whole number of seconds -- these are real measured medians,
 // but "19.63 seconds" reads as more precise than a single real run
 // actually is (run-to-run variance is easily a second either way), so
-// "about 20 seconds" is the honest level of precision to show.
+// "about 20 seconds" is the honest level of precision to show. Past a
+// minute, drop seconds entirely and round to the nearest minute --
+// showing "522 seconds (around 9 minutes)" pairs an exact-looking
+// number with a rounded one for no reason once minutes are the unit a
+// reader actually cares about.
 function formatDuration(seconds: number): string {
   const rounded = Math.round(seconds);
-  return seconds >= 60
-    ? `${rounded} seconds (around ${Math.round(seconds / 60)} minutes)`
-    : `${rounded} second${rounded === 1 ? "" : "s"}`;
+  if (seconds >= 60) {
+    const minutes = Math.round(seconds / 60);
+    return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  }
+  return `${rounded} second${rounded === 1 ? "" : "s"}`;
 }
 
 /**
@@ -81,18 +88,30 @@ function formatDuration(seconds: number): string {
  * billable) but isn't called out in the sentence itself -- it's a minor
  * contributor next to CPU/memory/time.
  */
-function apiCostStep(model: string, cpu: number, memoryGiB: number, seconds: number, billableDiskGiB = 0): RunGuideStep {
+function apiCostStep(
+  model: string,
+  cpu: number,
+  memoryGiB: number,
+  seconds: number,
+  billableDiskGiB = 0,
+  // Overrides the displayed duration phrase (still charged using the
+  // real `seconds` below) -- for models like twolayer where `seconds`
+  // is a conservative round-up ceiling rather than a real measured
+  // median, so "about 1 second" would overstate precision that isn't
+  // there. Omit to use the real measured number.
+  durationPhrase?: string,
+): RunGuideStep {
   const cost =
     cpu * DAYTONA_VCPU_PER_SECOND * seconds +
     memoryGiB * DAYTONA_GIB_MEMORY_PER_SECOND * seconds +
     billableDiskGiB * DAYTONA_GIB_DISK_PER_SECOND * seconds;
   const costPhrase = cost >= 0.01 ? `${formatUsd(cost)} per run` : `${formatUsdPer1000(cost)} per 1,000 runs`;
+  const duration = durationPhrase ?? `about ${formatDuration(seconds)}`;
   return {
     label: "Cost",
     text:
-      `This model runs on ${cpu} vCPU${cpu === 1 ? "" : "s"} and ${memoryGiB} GiB of memory for about ` +
-      `${formatDuration(seconds)} per run, which costs roughly ${costPhrase} on Daytona. Results that are ` +
-      `already cached are free, since no new sandbox is created.`,
+      `This model runs on ${cpu} vCPU${cpu === 1 ? "" : "s"} and ${memoryGiB} GiB of memory for ` +
+      `${duration} per run, which costs roughly ${costPhrase} on Daytona. Results that are already cached are free.`,
   };
 }
 
@@ -129,7 +148,6 @@ function restApiStep(model: string, params: string, resultValue: string, resultN
     .join("\n");
 
   return {
-    label: "Call it over HTTP",
     text: "Submit a run with your API key, then poll it until it finishes.",
     code:
       `curl -X POST ${SITE_ORIGIN}/v1/models/${model}/runs \\\n` +
@@ -161,7 +179,7 @@ export interface RunGuideStep {
   code?: string;
   // Prism.js language id for `code`, when present.
   language?: "bash" | "python" | "julia";
-  // Secondary aside: provenance, an edge case -- kept short and rare.
+  // Secondary aside, kept short -- e.g. the REST step's caching caveat.
   note?: string;
 }
 
@@ -183,13 +201,11 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "fair",
     [
       {
-        label: "Install",
         text: "FAIR is a plain Python package. It needs no compiled extension and no system packages.",
         code: "pip install fair",
         language: "bash",
       },
       {
-        label: "Run a minimal example",
         text:
           "Define a scenario, configure it, and run it. This is the shortest version that runs end to end, using " +
           "illustrative (not calibrated) climate parameters -- see FAIR's own docs (linked above) for the full " +
@@ -222,13 +238,11 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "oscar",
     [
       {
-        label: "Install",
         text: "OSCAR is distributed as a Git repository managed with Poetry, not a pip package.",
         code: "git clone https://github.com/jamesmurdza/OSCAR.git\ncd OSCAR\npoetry install",
         language: "bash",
       },
       {
-        label: "Run a minimal example",
         text: "Run one of its own example scripts directly through Poetry, from inside that cloned directory.",
         code: "poetry run python run_scripts/basic_example_1.py",
         language: "bash",
@@ -247,7 +261,7 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           '    "mean_D_Tg": [0.0, -0.0028, ..., 2.517, 2.521],\n' +
           '    "std_D_Tg": [0.0, 0.0, ..., 0.0, 0.0]  // 0 at nMC=1 -- only one sample, nothing to vary\n' +
           '  }',
-        "mean_D_Tg at year 2100 = 2.521°C",
+        "mean_D_Tg at year 2100 = 2.52°C",
         522,
       ),
       apiCostStep("oscar", 4, 8, 522, 5),
@@ -257,7 +271,6 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "dice",
     [
       {
-        label: "Install",
         text:
           "Add the pinned Ipopt solver and the DICE.jl package directly from its repository. These exact " +
           "versions avoid a real segfault in a newer Ipopt/DICE.jl combination.",
@@ -266,7 +279,6 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
         language: "julia",
       },
       {
-        label: "Run a minimal example",
         text: "Solve a named policy path and read its atmospheric temperature series back out.",
         code:
           "using DICE\nresult = solve(OptimalPrice, v2016R2())\nresult.results.Tₐₜ\n# [0.85, 1.016, 1.184, 1.354, 1.524, ..., 4.001, 3.997, 3.993, 3.989]  (°C, from ~1900)\n# 100 values total, years 2015-2510 in 5-year steps",
@@ -287,7 +299,7 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           '    "T_atmos": [0.85, 1.016, 1.184, ..., 3.993, 3.989],  // same real run as above\n' +
           '    "scc": [...], "forcing": [...], "utility": [...]  // also real fields, see run.jl\n' +
           '  }',
-        "T_atmos at year 2100 = 3.4814°C, peaking at 4.1519°C around year 2240",
+        "T_atmos at year 2100 = 3.48°C, peaking at 4.15°C around year 2240",
         19.63,
       ),
       apiCostStep("dice", 2, 1, 19.63),
@@ -297,7 +309,6 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "hector",
     [
       {
-        label: "Build and run",
         text:
           "Build and run this repo's own sandboxes/hector/Dockerfile, which installs the system packages pyhector " +
           "needs to compile its C++ core from source -- a plain `pip install pyhector` fails on a bare machine " +
@@ -324,7 +335,7 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           '      "forcing.RF_tot": [0.0, 0.0, ..., 3.9049, 3.8998]\n' +
           '    }\n' +
           '  }',
-        "year 2100: temperature.global_tas = 2.7214°C",
+        "year 2100: temperature.global_tas = 2.72°C",
         1.25,
       ),
       apiCostStep("hector", 2, 1, 1.25),
@@ -334,7 +345,6 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "magicc",
     [
       {
-        label: "Build and run",
         text:
           "Build and run this repo's own sandboxes/magicc/Dockerfile, which installs Wine (pymagicc wraps a real " +
           "Windows MAGICC6.exe binary via it) and pins xarray to a version confirmed to work -- pymagicc's current " +
@@ -366,7 +376,6 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "twolayer",
     [
       {
-        label: "Build and run",
         text:
           "Build and run this repo's own sandboxes/twolayer/Dockerfile, which patches a 2-line pandas API call " +
           "openscm-twolayermodel==0.2.3 makes that pandas>=2.0 removed -- no pandas version compatible with both " +
@@ -387,10 +396,10 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           '    "years": [1750, 1751, 1752, ..., 2499, 2500],  // 751 years\n' +
           '    "T_atmos": [0.0, 0.0392, 0.0637, ..., 3.485, 3.4847]\n' +
           '  }',
-        "year 2100: T_atmos = 2.8367°C",
+        "year 2100: T_atmos = 2.84°C",
         1,
       ),
-      apiCostStep("twolayer", 1, 1, 1),
+      apiCostStep("twolayer", 1, 1, 1, 0, "under a second"),
     ],
   ),
 };
