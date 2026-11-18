@@ -80,10 +80,29 @@ export interface ModelMeta {
   // `dockerfile` above still documents/exercises the real build (useful
   // locally, where that directory DOES exist), but a production
   // deployment's own checkout never has it -- Image.fromDockerfile would
-  // fail there with a missing COPY source. When this is set, lib/runs.ts
-  // uses Image.base(prebuilt_image) instead, pulling the already-built,
-  // already-validated image straight from Docker Hub (no build at all).
-  prebuilt_image?: string;
+  // fail there with a missing COPY source.
+  //
+  // When this is set, lib/runs.ts creates the sandbox FROM THIS DAYTONA
+  // SNAPSHOT (daytona.create({ snapshot: ... })) instead of building or
+  // pulling anything -- confirmed by direct testing to take well under a
+  // second (0.5s observed), vs. minutes for either a Dockerfile build or
+  // a `docker pull` of the equivalent ~5.6GB image from a registry. That
+  // speed difference isn't cosmetic here: a serverless function's own
+  // execution timeout (Netlify's included) is measured in seconds, so
+  // anything slower than this straight-up CAN'T finish inside a request
+  // -- the platform kills it first, surfacing as a bare 502 from the edge
+  // itself, before this app's own code ever gets to run its catch block
+  // (confirmed: this is exactly what using Image.base() to pull
+  // possibleplanets/gcam:v1 from Docker Hub hit in production, even
+  // though it eventually succeeded if given unlimited time locally).
+  // `gcam-production-v1` is this same project's own already-validated
+  // snapshot (see docs/gcam/trial-log.md) -- only usable from THIS
+  // Daytona organization, which is exactly why possibleplanets/gcam:v1 on
+  // Docker Hub still exists and stays published as the portable fallback
+  // (e.g. for someone cloning this repo into their own Daytona account,
+  // or running the guide's plain `docker run` command) -- just not what
+  // this app's own submitRun() uses for a real request anymore.
+  daytona_snapshot?: string;
   scenarios: string[];
   params_shape: ParamsShape;
   // Default is "python3 /app/run.py" (DEFAULT_RUN_COMMAND in lib/runs.ts);
@@ -432,14 +451,16 @@ export const MODELS: Record<string, ModelMeta> = {
     implementation: "It's implemented in C++17, licensed under the ECL-2.0 license.",
     website: "https://github.com/JGCRI/gcam-core",
     dockerfile: path.join(SANDBOXES_DIR, "gcam", "Dockerfile"),
-    // See prebuilt_image's own doc comment above -- this repo's checkout
-    // (including in production) never has
+    // See daytona_snapshot's own doc comment above -- this repo's
+    // checkout (including in production) never has
     // sandboxes/gcam/runtime/input/gcamdata/xml/ (gitignored, 5.2GB), so
-    // Image.fromDockerfile(dockerfile) would fail there at the COPY step.
-    // possibleplanets/gcam:v1 is the exact same validated build (see
-    // docs/gcam/artifacts.md/trial-log.md), already pushed to Docker Hub
-    // specifically to survive this.
-    prebuilt_image: "possibleplanets/gcam:v1",
+    // Image.fromDockerfile(dockerfile) would fail there at the COPY step,
+    // and pulling the equivalent possibleplanets/gcam:v1 image from
+    // Docker Hub instead is too slow (minutes) to fit inside a serverless
+    // function's own execution timeout. This is the Daytona snapshot
+    // saved from that same validated build (see docs/gcam/trial-log.md)
+    // -- confirmed 0.5s to create a sandbox from, in this org.
+    daytona_snapshot: "gcam-production-v1",
     // Only "Reference" -- see sandboxes/gcam/run.py's module docstring and
     // docs/gcam/known-gaps.md ("Only configuration_ref.xml was actually
     // run-tested"). The other shipped configs reference additional input
