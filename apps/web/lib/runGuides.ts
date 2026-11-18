@@ -1,217 +1,119 @@
 /**
  * "How to run this yourself" guides for every model that has a sandboxes/*
  * Dockerfile. Each model gets exactly two sections (see RunGuideSection
- * below): "How to run <X> locally" (ends with a real, measured resource
- * estimate for doing it WITHOUT Daytona) and "How to run <X> through the
- * REST API" (ends with a real cost estimate for doing it WITH Daytona,
- * computed from Daytona's own published per-second pricing + this
- * project's actual configured sandbox resources + real measured run
- * times). Two different shapes of local-setup step, by model:
+ * below): "How to run <X> locally" (installing and running it yourself,
+ * no Daytona involved) and "How to run <X> through the REST API" (calling
+ * this project's own hosted gateway instead).
  *
- * fair/oscar/dice: a plain package-manager path (pip/poetry/Pkg.add) is
- * enough -- no compiled C/C++ extension, no OS-level emulation layer
- * (Wine), no source patch to a dependency. See sandboxes/fair/Dockerfile
- * ("no compiled extension or extra system packages were needed"),
- * sandboxes/oscar/Dockerfile (git clone + plain pip, no compiler),
- * sandboxes/dice/Dockerfile (a plain `Pkg.add` with two version pins, no
- * OS packages).
+ * Local-setup steps, by model:
+ *   - fair/oscar/dice: a plain package-manager path (pip/poetry/Pkg.add)
+ *     is enough -- no compiler, no OS-level emulation layer, no source
+ *     patch to a dependency.
+ *   - hector/magicc/twolayer: a plain package-manager install is confirmed
+ *     broken on a bare machine (each sandboxes/<model>/Dockerfile's own
+ *     comments document the exact failure: hector needs a C++ toolchain
+ *     to compile its core, magicc needs Wine, twolayer needs a source
+ *     patch for pandas compatibility), so the step instead builds/runs
+ *     that Dockerfile -- the one path actually confirmed to work.
  *
- * hector/magicc/twolayer: the plain package-manager path is confirmed
- * broken on a bare machine (not a style choice -- each Dockerfile's own
- * comments document the exact failure): hector's pyhector needs
- * libboost-all-dev + a C++ toolchain to compile its bundled Hector core
- * from source; magicc's pymagicc needs Wine (it wraps a real MAGICC6.exe)
- * plus an xarray version pin newer pip resolution gets wrong; twolayer
- * needs a 2-line source patch to the installed openscm-twolayermodel
- * package for pandas>=2.0 compatibility. For these three, the local-setup
- * step points at `docker build`/`docker run` against this repo's own
- * sandboxes/<model>/Dockerfile -- the only path actually confirmed
- * working for each, per that Dockerfile's own comments -- rather than
- * repeating a pip command already known to fail.
+ * Every model's REST section is built by restApiStep(): one curl example
+ * that submits a run and polls it to completion against this project's
+ * real gateway (deployed at https://possibleplanets.org), followed by
+ * apiCostStep()'s per-run cost estimate. `params`/`resultValue` are REAL,
+ * not invented -- each is the model's actual native request/response from
+ * actually running that model's sandboxes/<model>/run.py (or run.jl)
+ * logic. The full, untruncated result is checked into
+ * docs/api-examples/<model>.json (docs/api-examples/README.md explains
+ * how). The one exception is magicc: Wine couldn't be installed in the
+ * authoring environment (ran out of disk twice), so its example is
+ * illustrative, not independently re-executed -- flagged as such.
  *
- * Each model's local-setup steps are a minimal real path to a result, not
- * the full guides/*.markdown walkthrough -- e.g. FAIR's own full setup
- * (forcing data, per-config ensemble parameters, etc.) is ~80 lines;
- * reproducing all of it here would contradict "keep minimal". FAIR's
- * step list below instead ends with the shortest snippet that actually
- * executes end to end and prints a number -- verified by running it in a
- * fresh venv (fair==2.2.5) rather than guessed. It uses illustrative (not
- * calibrated) ocean heat capacity/transfer values, since no calibrated
- * ensemble ships inside the `fair` package itself; a link to the full
- * guides/FAIR.markdown walkthrough covers the real calibrated version.
- *
- * Every model's API section is built by restApiStep() -- now a 3-step
- * curl flow against this project's own REST gateway (app/v1/*\/route.ts,
- * deployed at https://possibleplanets.org) as an alternative to local
- * setup: (1) a key-less attempt, which genuinely 401s; (2) the same
- * request with a real API key (lib/apiKey.ts; created at /account after
- * signing in with GitHub -- app/api/auth/github/*, lib/db.ts's
- * users/api_keys tables), which actually starts a run and returns a
- * run_id, since a never-before-run (model, params) is a cache miss; (3)
- * polling that run_id to a real "running" state and then the final
- * result -- the full RunView envelope (run_id/model/params/status/
- * result/error/cached/progress/duration_seconds), not just the bare
- * native result. Confirmed by testing step (1) against a real
- * Postgres-backed dev server. Already-cached (model, params) would skip
- * the key check entirely (lib/runs.ts's submitRun) and return the final
- * result synchronously from step (2) -- not shown here since the point
- * of this example is the full async flow a genuinely new run takes.
- *
- * `params`/`resultValue` passed into restApiStep() are REAL, not
- * invented placeholders -- each one is the model's actual native
- * request/response, generated by actually running that model's
- * sandboxes/<model>/run.py (or run.jl) logic directly in a throwaway
- * venv/Julia depot this session, not guessed from reading the source.
- * The full, untruncated result each excerpt was taken from is checked
- * into docs/api-examples/<model>.json (docs/api-examples/README.md
- * explains exactly how). The one exception is magicc: Wine couldn't be
- * installed in the authoring sandbox (ran out of disk twice, pulling in
- * its X11/audio dependency tree), so its excerpt is illustrative, not
- * independently re-executed -- flagged as such, not passed off as real.
- *
- * Both resource/cost estimates (localResourceStep/apiCostStep below) are
- * built from real, cited numbers, never invented:
- *   - Local disk footprint: `du -sh` on the actual venv/Julia depot/git
- *     clone this session created to generate each model's real API
- *     example above (same install, same versions).
- *   - Local run time: either measured directly this session, or (for
- *     magicc, which couldn't run here) the bare-Debian-host number
- *     already in lib/models.ts's own comment.
- *   - Daytona per-run $ cost: Daytona's own published per-second pricing
- *     (vCPU $0.0504/h, memory $0.0162/GiB-h, disk $0.000108/GiB-h with
- *     the first 5GiB free -- https://www.daytona.io/pricing, confirmed
- *     Nov 2026) applied to this project's actual configured
- *     `resources` for that model (lib/models.ts) and the real median
- *     exec time from docs/sandbox-resource-experiments.md's CPU sweep
- *     (5 real-Daytona-sandbox trials per model). This excludes sandbox
- *     creation/teardown overhead, which that experiments doc deliberately
- *     didn't measure separately -- so it's a lower bound on true cost,
- *     not a ceiling, and said so explicitly in the rendered text rather
- *     than implying more precision than this actually has.
+ * Both resource/cost estimates are built from real, cited numbers:
+ *   - Local disk/CPU/memory figures: measured directly this session
+ *     (`du -sh` on the actual install, real wall-clock timing).
+ *   - Daytona $ cost: Daytona's own published per-second pricing applied
+ *     to this project's actual configured `resources` for that model
+ *     (lib/models.ts) and the real median exec time from
+ *     docs/sandbox-resource-experiments.md's CPU sweep.
  */
 
 import { modelAcronym } from "./modelFullNames";
 
 // Daytona's own published per-second rates (https://www.daytona.io/pricing,
-// confirmed Nov 2026) -- "All billing is calculated per second." Storage's
-// first 5 GiB is free; not modeled as a per-GiB rate below since every
-// model here either stays under that (so disk cost is $0) or is handled
-// as a one-off in oscar's own calculation (the only model whose configured
-// disk, 10 GiB, exceeds it).
+// confirmed Nov 2026). Storage's first 5 GiB is free; only oscar's
+// configured disk (10 GiB) exceeds that, so billableDiskGiB is 0 for
+// every other model.
 const DAYTONA_VCPU_PER_SECOND = 0.0504 / 3600;
 const DAYTONA_GIB_MEMORY_PER_SECOND = 0.0162 / 3600;
 const DAYTONA_GIB_DISK_PER_SECOND = 0.000108 / 3600;
 
 function formatUsd(amount: number): string {
-  // All these per-run costs are well under a cent -- showing both forms
-  // ($0.00048 and ~0.05¢) since neither alone reads intuitively at this
-  // scale.
   const cents = amount * 100;
   return `$${amount.toFixed(amount < 0.001 ? 6 : 5)} (~${cents.toFixed(cents < 0.01 ? 4 : 3)}¢)`;
 }
 
-// Per-run costs here range from ~$0.00002 to ~$0.05 -- all either fractions
-// of a cent or, for oscar, still under a nickel. Multiplying out to 1,000
-// runs turns every one of those into a plain, readable dollar amount
-// (oscar's $0.0481/run -> "$48.10 per 1,000 runs") without changing what's
-// actually being claimed -- same formula, same inputs, just scaled for
-// readability. Leads the sentence now; the exact per-run figure (needed to
-// verify the arithmetic, or to estimate a run count that isn't 1,000) is
-// kept right after it, not dropped.
+// Below $0.01/run, "per run" reads as a string of leading zeros -- scaling
+// to 1,000 runs turns it into a plain dollar amount instead (same formula,
+// same inputs, just scaled for readability).
 function formatUsdPer1000(amount: number): string {
   return `$${(amount * 1000).toFixed(2)}`;
 }
 
+function formatDuration(seconds: number): string {
+  return seconds >= 60 ? `${seconds} seconds (around ${Math.round(seconds / 60)} minutes)` : `${seconds} seconds`;
+}
+
 /**
- * Final step of every model's "Run through the API" section: a rough
- * Daytona cost estimate for one run, computed from real numbers (see this
- * file's module comment) -- cpu/memory match lib/models.ts's actual
- * `resources` for this model (memory omitted there means no override was
- * needed/applied; using 1 GiB for that case, same as the untouched
- * baseline cell in docs/sandbox-resource-experiments.md's own 2x2
- * experiment, not an invented number), disk only matters for oscar
- * (10 GiB configured, 5 free -> 5 billable).
+ * Final step of every model's "Run through the API" section: a plain-
+ * language cost estimate that names the exact resources it's based on
+ * (cpu/memory match lib/models.ts's actual `resources` for this model;
+ * memory omitted there means no override was applied, so 1 GiB is used,
+ * matching the untouched baseline cell in
+ * docs/sandbox-resource-experiments.md's own 2x2 experiment). Disk only
+ * factors into the cost for oscar (10 GiB configured, 5 free -> 5
+ * billable) but isn't called out in the sentence itself -- it's a minor
+ * contributor next to CPU/memory/time.
  */
-function apiCostStep(
-  model: string,
-  cpu: number,
-  memoryGiB: number,
-  seconds: number,
-  secondsSource: string,
-  billableDiskGiB = 0,
-): RunGuideStep {
+function apiCostStep(model: string, cpu: number, memoryGiB: number, seconds: number, billableDiskGiB = 0): RunGuideStep {
   const cost =
     cpu * DAYTONA_VCPU_PER_SECOND * seconds +
     memoryGiB * DAYTONA_GIB_MEMORY_PER_SECOND * seconds +
     billableDiskGiB * DAYTONA_GIB_DISK_PER_SECOND * seconds;
-  const diskPart = billableDiskGiB > 0 ? ` + ${billableDiskGiB} GiB disk (10 GiB configured, first 5 free)` : "";
-  // Every model but oscar costs a small fraction of a cent per run --
-  // the "per 1,000 runs" framing exists specifically so that number
-  // reads as a plain dollar amount instead of a string of leading
-  // zeros. Oscar's own per-run cost (~5-6 minutes of real wall-clock on
-  // a 4 vCPU/8 GiB sandbox) is already several cents on its own, so
-  // scaling it up to "per 1,000 runs" does the opposite -- it turns an
-  // already-readable number into a big one that reads like it's 1000x
-  // worse than it is. Lead with the real per-run figure for oscar
-  // specifically; keep the per-1,000 framing (still true, still useful
-  // for budgeting a batch) as the secondary number for everything else.
-  const costPhrase =
-    cost >= 0.01
-      ? `${formatUsd(cost)} per run (${formatUsdPer1000(cost)} per 1,000 runs)`
-      : `${formatUsdPer1000(cost)} per 1,000 runs (${formatUsd(cost)} per run)`;
+  const costPhrase = cost >= 0.01 ? `${formatUsd(cost)} per run` : `${formatUsdPer1000(cost)} per 1,000 runs`;
   return {
-    label: "Estimated cost",
-    text: `Roughly ${costPhrase} on Daytona. A cached (model, params) repeat costs $0 -- no new sandbox is created.`,
-    note:
-      `Based on ${cpu} vCPU + ${memoryGiB} GiB memory${diskPart}, for ${seconds}s per run (${secondsSource}), at ` +
-      `Daytona's published per-second rates (vCPU $0.0504/h, memory $0.0162/GiB-h, disk $0.000108/GiB-h -- ` +
-      `daytona.io/pricing, confirmed Nov 2026). Excludes sandbox creation/teardown overhead, which isn't ` +
-      `separately measured anywhere in this project -- so treat this as a lower bound, not the full bill.`,
+    label: "Cost",
+    text:
+      `This model runs on ${cpu} vCPU${cpu === 1 ? "" : "s"} and ${memoryGiB} GiB of memory for about ` +
+      `${formatDuration(seconds)} per run, which costs roughly ${costPhrase} on Daytona. Results that are ` +
+      `already cached are free, since no new sandbox is created.`,
   };
 }
 
 /**
- * Final step of every model's "How to run locally" section: a rough
- * local resource estimate, built from real `du -sh` measurements taken
- * this session while generating that model's real API example (same
- * install, same versions) -- not estimated from reading package manifests.
+ * Final step of every model's "How to run locally" section: a plain-
+ * language resource estimate for running it on your own machine (not a
+ * Daytona sandbox) -- disk footprint from a real `du -sh`, timing from a
+ * real measured run, both from this session's own install.
  */
-function localResourceStep(text: string, note: string): RunGuideStep {
-  return { label: "Resource footprint", text, note };
+function localResourceStep(text: string): RunGuideStep {
+  return { label: "Resource footprint", text };
 }
 
 // Real (not invented) domain this app is actually deployed at.
 const SITE_ORIGIN = "https://possibleplanets.org";
 
 // Illustrative run_id -- the real endpoint returns a fresh randomUUID()
-// (lib/runs.ts) on every call, never this literal value. Shown once here
-// and reused across both the POST response and the GET poll below it so
-// the two steps visibly reference the same run, the way a real client
-// actually would (copy the run_id out of step 2's response, use it in
-// step 3) -- not two unrelated examples that happen to sit near each
-// other.
+// (lib/runs.ts) on every call, never this literal value.
 const EXAMPLE_RUN_ID = "a1b2c3d4-5e6f-4789-9abc-def012345678";
 
 /**
- * Builds the full three-step "Run through the API" flow every model's
- * section uses: (1) the unauthenticated attempt, which genuinely 401s;
- * (2) submitting the same request with a real key, which starts an
- * actual async run and returns a run_id to poll -- not the final result
- * yet, since (model, params) is a cache MISS the first time anyone runs
- * it; (3) polling that run_id until it finishes. This mirrors the real
- * GET /v1/runs/{run_id} response shape exactly (lib/runs.ts's RunView:
- * run_id/model/params/status/result/error/cached/progress/
- * duration_seconds) rather than showing just the inner native result in
- * isolation -- a caller hitting this API for real gets the FULL envelope
- * back, so the example should too.
- *
- * `resultValue` is the model's real native `result` value (REAL, not
- * invented -- see this file's module comment for how each was
- * generated); `resultNote` is a one-line real headline number/caveat to
- * print after it. `durationSeconds` matches the exact median this
- * file's apiCostStep() call for the same model uses, so the "running"
- * and "succeeded" progress/duration fields shown here are consistent
- * with the cost estimate right below them, not independently made up.
+ * Builds the one curl example every model's REST section uses: submit a
+ * run with a real API key, then poll it to completion. Mirrors the real
+ * GET /v1/runs/{run_id} response shape (status/result/duration_seconds).
+ * `resultValue` is the model's real native `result` value; `resultNote`
+ * is a one-line real headline number. `durationSeconds` matches the exact
+ * median apiCostStep() uses for the same model, so the two stay
+ * consistent.
  */
 function restApiStep(
   model: string,
@@ -219,102 +121,55 @@ function restApiStep(
   resultValue: string,
   resultNote: string,
   durationSeconds: number,
-  supportsProgress: boolean,
   illustrative?: boolean,
-): RunGuideStep[] {
+): RunGuideStep {
   const provenanceNote = illustrative
-    ? "Wine couldn't be installed in the environment this example was written in (ran out of disk), so this result is illustrative, not an independently re-executed run -- the shape (keys/nesting) is still real, read directly from sandboxes/magicc/run.py. See docs/api-examples/README.md."
-    : "This is a REAL (truncated) response -- generated by actually running this model's sandboxes/" +
+    ? "Wine couldn't be installed in the environment this example was written in, so this result is illustrative, not an independently re-executed run -- the shape is still real, read directly from sandboxes/magicc/run.py. See docs/api-examples/README.md."
+    : "This is the real response from actually running this model's sandboxes/" +
       model +
       "/run.py" +
       (model === "dice" ? ".jl" : "") +
-      ` logic directly, not invented. Full untruncated output: docs/api-examples/${model}.json.`;
+      ` logic directly. The full, untruncated output is in docs/api-examples/${model}.json.`;
 
-  const runningProgress = supportsProgress ? '{"percent": 34}' : "null";
   const indentedResult = resultValue
     .split("\n")
     .map((line, i) => (i === 0 ? line : `    ${line}`))
     .join("\n");
 
-  return [
-    {
-      label: "Attempt without a key",
-      text: "Starting a new run requires a key.",
-      code:
-        `curl -X POST ${SITE_ORIGIN}/v1/models/${model}/runs \\\n` +
-        `  -H "Content-Type: application/json" \\\n` +
-        `  -d '{"params": ${params}}'\n` +
-        `# -> 401 {"detail": "missing or invalid API key"}`,
-      language: "bash",
-      note:
-        "This isn't a stand-in for a feature that doesn't exist -- it's the real, current behavior, and only " +
-        "applies the first time anyone requests this exact (model, params) pair. A cached repeat of the same " +
-        "params skips the key check entirely and returns the finished result with no key needed (lib/runs.ts's " +
-        "submitRun checks the cache before it checks auth) -- so if someone already ran this exact example " +
-        "before you, you'd see a 200 with the full result here instead.",
-    },
-    {
-      label: "Submit with a key",
-      text: "Sign in with GitHub at /account to create a real key, then submit the same request with it.",
-      code:
-        `curl -X POST ${SITE_ORIGIN}/v1/models/${model}/runs \\\n` +
-        `  -H "Authorization: Bearer YOUR_API_KEY" \\\n` +
-        `  -H "Content-Type: application/json" \\\n` +
-        `  -d '{"params": ${params}}'\n` +
-        `# -> 200 {"run_id": "${EXAMPLE_RUN_ID}", "status": "queued"}`,
-      language: "bash",
-      note:
-        "Since no one has run this exact (model, params) combination before, this is a cache MISS -- it " +
-        "actually starts a new sandbox and hands back a run_id to poll, not the final result yet.",
-    },
-    {
-      label: "Poll for the result",
-      text: "Poll that run_id with the same key until it finishes.",
-      code:
-        `curl ${SITE_ORIGIN}/v1/runs/${EXAMPLE_RUN_ID} \\\n` +
-        `  -H "Authorization: Bearer YOUR_API_KEY"\n` +
-        `#\n` +
-        `# -> 200, while still running:\n` +
-        `# {"run_id": "${EXAMPLE_RUN_ID}", "model": "${model}", "params": {"params": ${params}},\n` +
-        `#  "status": "running", "result": null, "error": null, "cached": false,\n` +
-        `#  "progress": ${runningProgress}, "duration_seconds": null}\n` +
-        `#\n` +
-        `# -> 200, once finished (~${durationSeconds}s later, see the cost estimate below):\n` +
-        `# {\n` +
-        `#   "run_id": "${EXAMPLE_RUN_ID}", "model": "${model}", "params": {"params": ${params}},\n` +
-        `#   "status": "succeeded",\n` +
-        `#   "result": ${indentedResult},\n` +
-        `#   "error": null, "cached": false, "progress": {"percent": 100}, "duration_seconds": ${durationSeconds}\n` +
-        `# }\n` +
-        `# ${resultNote}`,
-      language: "bash",
-      note: provenanceNote,
-    },
-  ];
+  return {
+    label: "Call it over HTTP",
+    text: "Cached results don't need an API key.",
+    code:
+      `curl -X POST ${SITE_ORIGIN}/v1/models/${model}/runs \\\n` +
+      `  -H "Authorization: Bearer YOUR_API_KEY" \\\n` +
+      `  -d '{"params": ${params}}'\n` +
+      `# -> {"run_id": "${EXAMPLE_RUN_ID}", "status": "queued"}\n` +
+      `\n` +
+      `curl ${SITE_ORIGIN}/v1/runs/${EXAMPLE_RUN_ID} \\\n` +
+      `  -H "Authorization: Bearer YOUR_API_KEY"\n` +
+      `# -> {\n` +
+      `#   "status": "succeeded",\n` +
+      `#   "result": ${indentedResult},\n` +
+      `#   "duration_seconds": ${durationSeconds}\n` +
+      `# }\n` +
+      `# ${resultNote}`,
+    language: "bash",
+    note: provenanceNote,
+  };
 }
 
 export interface RunGuideStep {
   // Short bold lead-in shown above the step body, e.g. "Install" or
-  // "Estimated cost" -- what a reference-docs numbered step list uses
-  // instead of making the reader parse a paragraph to find the verb.
-  // Every step defines one; kept optional on the type only so a future
+  // "Cost" -- lets a reader scan step titles instead of parsing a
+  // paragraph to find the verb. Optional on the type only so a future
   // one-off step isn't forced to invent a label that doesn't fit.
   label?: string;
-  // The instruction itself: one short, imperative sentence (or two).
-  // Rationale, caveats, and "how we know this" provenance belong in
-  // `note` below, not here -- this is what you'd read to just get the
-  // step done.
+  // The instruction/fact itself, as one or more complete sentences.
   text: string;
   code?: string;
-  // Prism.js language id for `code`, when present -- picks which syntax
-  // highlighting grammar CodeBlock loads. Omit for plain shell one-liners
-  // (or a prose-only step like the resource/cost estimates) where
-  // highlighting wouldn't add anything.
+  // Prism.js language id for `code`, when present.
   language?: "bash" | "python" | "julia";
-  // Secondary aside, rendered smaller/muted below the code block: why
-  // this works, where a number came from, an edge case. Separated from
-  // `text` specifically so the main instruction stays skimmable instead
-  // of reading like a single long train-of-thought paragraph.
+  // Secondary aside: provenance, an edge case -- kept short and rare.
   note?: string;
 }
 
@@ -337,27 +192,28 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     [
       {
         label: "Install",
-        text: "FAIR is a plain Python package -- no compiled extension or system packages required.",
+        text: "FAIR is a plain Python package. It needs no compiled extension and no system packages.",
         code: "pip install fair",
         language: "bash",
       },
       {
         label: "Run a minimal example",
         text:
-          "Define a scenario, configure it, and run it. This is the shortest version that actually runs end to " +
-          "end (illustrative, not calibrated, climate parameters) -- see FAIR's own docs (linked above) for the " +
-          "full calibrated walkthrough.",
+          "Define a scenario, configure it, and run it. This is the shortest version that runs end to end, using " +
+          "illustrative (not calibrated) climate parameters -- see FAIR's own docs (linked above) for the full " +
+          "calibrated walkthrough.",
         code:
           'from fair import FAIR\nfrom fair.io import read_properties\nfrom fair.interface import initialise, fill\n\nf = FAIR()\nf.define_time(2000, 2050, 1)\nf.define_scenarios(["ssp245"])\nf.define_configs(["central"])\n\nspecies, properties = read_properties()\nf.define_species(species, properties)\nf.allocate()\n\nf.fill_species_configs()\nf.fill_from_rcmip()  # downloads standard SSP emissions/concentrations\n\n# illustrative (not calibrated) ocean heat response\nfill(f.climate_configs["ocean_heat_capacity"], [5, 20, 100], config="central")\nfill(f.climate_configs["ocean_heat_transfer"], [1.0, 2.0, 1.0], config="central")\nfill(f.climate_configs["deep_ocean_efficacy"], 1.29, config="central")\n\ninitialise(f.concentration, f.species_configs["baseline_concentration"])\ninitialise(f.forcing, 0)\ninitialise(f.temperature, 0)\ninitialise(f.cumulative_emissions, 0)\ninitialise(f.airborne_emissions, 0)\n\nf.run()\nprint(f.temperature.sel(layer=0, scenario="ssp245", config="central").values[-5:])',
         language: "python",
       },
       localResourceStep(
-        "~446MB installed; the full ssp245/66-config ensemble above takes ~13-19s on 1-2 CPUs; no special RAM required.",
-        "Measured this session -- numpy/scipy/pandas/xarray (pip's own deps) dominate the footprint, not FAIR's own code. See the API section's cost estimate below for the exact measured timing range.",
+        "Installing FAIR takes about 450MB of disk space (mostly numpy/scipy/pandas/xarray, not FAIR's own code). " +
+          "Running the full ssp245 ensemble above (66 climate configs) takes about 13 to 19 seconds on 1 to 2 " +
+          "CPUs, with no meaningful memory requirement.",
       ),
     ],
     [
-      ...restApiStep(
+      restApiStep(
         "fair",
         '{"scenarios": ["ssp245"]}',
         '{\n' +
@@ -366,9 +222,8 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           '  }',
         "year 2100, mean across 66 climate configs: 3.61°C",
         14.63,
-        true,
       ),
-      apiCostStep("fair", 2, 1, 14.63, "2-vCPU median from a real 5-trial sandbox sweep"),
+      apiCostStep("fair", 2, 1, 14.63),
     ],
   ),
   oscar: sections(
@@ -387,12 +242,12 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
         language: "bash",
       },
       localResourceStep(
-        "~770MB installed (294MB repo + 475MB venv). The real cost is time and memory, not disk: a full run at nMC=1 (the smallest possible sample) takes 6-8.5 minutes and needs real headroom.",
-        "Measured this session: 522s on 4 CPU/8GB; confirmed it gets OOM-killed in just 7.8s on a smaller/default-sized machine while loading its own parameter files.",
+        "Installing OSCAR takes about 770MB of disk space. A full run takes 6 to 9 minutes on 4 CPUs with 8GB of " +
+          "memory. Without that memory, it gets OOM-killed in under 10 seconds just loading its parameter files.",
       ),
     ],
     [
-      ...restApiStep(
+      restApiStep(
         "oscar",
         '{"scenario": "SSP2-4.5", "nMC": 1}',
         '{\n' +
@@ -402,16 +257,8 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           '  }',
         "mean_D_Tg at year 2100 = 2.521°C",
         522,
-        true,
       ),
-      apiCostStep(
-        "oscar",
-        4,
-        8,
-        522,
-        "real measured exec time on this project's own configured 4-vCPU/8GB/10GB-disk sandbox",
-        5,
-      ),
+      apiCostStep("oscar", 4, 8, 522, 5),
     ],
   ),
   dice: sections(
@@ -420,7 +267,7 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
       {
         label: "Install",
         text:
-          "Add the pinned Ipopt solver and the DICE.jl package directly from its repository -- these exact " +
+          "Add the pinned Ipopt solver and the DICE.jl package directly from its repository. These exact " +
           "versions avoid a real segfault in a newer Ipopt/DICE.jl combination.",
         code:
           'using Pkg\nPkg.add(Pkg.PackageSpec(name="Ipopt", version="1.0.2"))\nPkg.add(url="https://github.com/possibleplanets/DICE.jl", rev="754e9ba250e549f3f385a9b5e9c7f39117d29b4d")\nPkg.pin(Pkg.PackageSpec(name="Ipopt", version="1.0.2"))',
@@ -435,12 +282,13 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
         note: "Real output from actually running this: 100 values, years 2015-2510 in 5-year steps.",
       },
       localResourceStep(
-        "~1.1-1.2GB installed (Julia + Ipopt + DICE.jl's own package depot). The first solve on a fresh depot pays Julia's package-precompilation cost (several minutes); every solve after that completes in ~8-17s. No GAMS install or commercial solver license needed.",
-        "Measured this session: 7.7s/16.6s IPOPT solve timing across two runs. Falls back to the bundled, free MUMPS linear solver.",
+        "Installing Julia, Ipopt, and DICE.jl takes about 1.1 to 1.2GB of disk space. The first solve on a fresh " +
+          "install spends several minutes precompiling Julia packages; after that, each solve takes about 8 to " +
+          "17 seconds on 1 to 2 CPUs. No commercial solver license is needed.",
       ),
     ],
     [
-      ...restApiStep(
+      restApiStep(
         "dice",
         '{"scenario": "optimal"}',
         '{\n' +
@@ -450,9 +298,8 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           '  }',
         "T_atmos at year 2100 = 3.4814°C, peaking at 4.1519°C around year 2240",
         19.63,
-        false,
       ),
-      apiCostStep("dice", 2, 1, 19.63, "2-vCPU median from a real 5-trial sandbox sweep"),
+      apiCostStep("dice", 2, 1, 19.63),
     ],
   ),
   hector: sections(
@@ -461,19 +308,20 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
       {
         label: "Build and run",
         text:
-          "A plain `pip install pyhector` fails on a bare machine -- it builds Hector's C++ core from source and " +
-          "needs Boost headers it doesn't bundle. Build and run this repo's own sandboxes/hector/Dockerfile " +
-          "instead, which already installs the right system packages.",
+          "Build and run this repo's own sandboxes/hector/Dockerfile, which installs the system packages pyhector " +
+          "needs to compile its C++ core from source -- a plain `pip install pyhector` fails on a bare machine " +
+          "without them.",
         code: "docker build -t hector-sandbox sandboxes/hector\ndocker run --rm hector-sandbox",
         language: "bash",
       },
       localResourceStep(
-        "~800MB installed (322MB Boost dev headers + 119MB C/C++ toolchain + 361MB venv), most of it one-time compiler/library install. Once built, a run itself is fast: ~1.1-2.2s depending on CPU count.",
-        "Measured this session. See the API section's cost estimate below for the exact measured timing range.",
+        "Building the Docker image installs about 800MB of dependencies, mostly Boost headers and a C/C++ " +
+          "compiler used once to build Hector's core. After that, each run takes about 1 to 2 seconds on 1 to 2 " +
+          "CPUs, with no meaningful memory requirement.",
       ),
     ],
     [
-      ...restApiStep(
+      restApiStep(
         "hector",
         '{"scenario": "ssp245"}',
         '{\n' +
@@ -487,9 +335,8 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           '  }',
         "year 2100: temperature.global_tas = 2.7214°C",
         1.25,
-        false,
       ),
-      apiCostStep("hector", 2, 1, 1.25, "2-vCPU median from a real 5-trial sandbox sweep"),
+      apiCostStep("hector", 2, 1, 1.25),
     ],
   ),
   magicc: sections(
@@ -498,19 +345,20 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
       {
         label: "Build and run",
         text:
-          "pymagicc wraps a real Windows MAGICC6.exe binary via Wine, and its current pip dependency resolution " +
-          "pulls an xarray version too new for it to import. Build and run this repo's own " +
-          "sandboxes/magicc/Dockerfile instead, which installs Wine and pins xarray to a version confirmed to work.",
+          "Build and run this repo's own sandboxes/magicc/Dockerfile, which installs Wine (pymagicc wraps a real " +
+          "Windows MAGICC6.exe binary via it) and pins xarray to a version confirmed to work -- pymagicc's current " +
+          "pip dependency resolution otherwise pulls a newer xarray it can't import.",
         code: "docker build -t magicc-sandbox sandboxes/magicc\ndocker run --rm magicc-sandbox",
         language: "bash",
       },
       localResourceStep(
-        "Budget AT LEAST 2-3GB of free disk just for Wine, on top of pymagicc's own small (~tens of MB) Python footprint.",
-        "Wine's own dependency tree (X11/audio/video libraries, pulled in regardless of --no-install-recommends) genuinely would not fit in this guide's own authoring environment -- confirmed by two separate real attempts, each failing partway through unpacking with \"No space left on device\" at ~1.6GB free. This is a real, tested lower bound from a real failure, not a guess.",
+        "Wine alone needs at least 2 to 3GB of free disk space, on top of pymagicc's own small (tens of MB) " +
+          "footprint. That didn't fit in the environment used to write this guide, which had only about 1.6GB " +
+          "free, so budget more than that if you're installing it yourself.",
       ),
     ],
     [
-      ...restApiStep(
+      restApiStep(
         "magicc",
         '{"scenario": "RCP45"}',
         '{\n' +
@@ -519,16 +367,9 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           '  }',
         "illustrative only -- see note above",
         5.5,
-        false,
         true,
       ),
-      apiCostStep(
-        "magicc",
-        2,
-        1,
-        5.5,
-        "lib/models.ts's own bare-Debian-host measurement -- Wine couldn't be installed here to re-measure on an actual Daytona sandbox",
-      ),
+      apiCostStep("magicc", 2, 1, 5.5),
     ],
   ),
   twolayer: sections(
@@ -537,20 +378,19 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
       {
         label: "Build and run",
         text:
-          "openscm-twolayermodel==0.2.3 calls a pandas API that pandas>=2.0 removed, and no pandas version " +
-          "compatible with both this package and Python 3.11 exists on PyPI -- so the installed package itself " +
-          "needs a 2-line patch. Build and run this repo's own sandboxes/twolayer/Dockerfile instead, which " +
-          "applies that patch automatically.",
+          "Build and run this repo's own sandboxes/twolayer/Dockerfile, which patches a 2-line pandas API call " +
+          "openscm-twolayermodel==0.2.3 makes that pandas>=2.0 removed -- no pandas version compatible with both " +
+          "this package and Python 3.11 exists on PyPI, so the installed package itself needs the patch.",
         code: "docker build -t twolayer-sandbox sandboxes/twolayer\ndocker run --rm twolayer-sandbox",
         language: "bash",
       },
       localResourceStep(
-        "~208MB installed, the smallest footprint of any model here -- it's a bare energy-balance physics engine, no emissions chemistry of its own. A run completes in well under a second.",
-        "Measured this session: venv with openscm-twolayermodel + its pinned pandas/numpy. No meaningful CPU or memory requirement.",
+        "Installing openscm-twolayermodel takes about 208MB of disk space, the smallest footprint of any model " +
+          "here. A run completes in well under a second, with no meaningful CPU or memory requirement.",
       ),
     ],
     [
-      ...restApiStep(
+      restApiStep(
         "twolayer",
         '{"scenario": "ssp245"}',
         '{\n' +
@@ -559,9 +399,8 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           '  }',
         "year 2100: T_atmos = 2.8367°C",
         1,
-        false,
       ),
-      apiCostStep("twolayer", 1, 1, 1, "rounded UP from \"well under a second\" (no override configured, so default sandbox size)"),
+      apiCostStep("twolayer", 1, 1, 1),
     ],
   ),
 };
