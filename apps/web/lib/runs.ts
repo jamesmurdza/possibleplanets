@@ -476,7 +476,11 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
     sandbox = await daytona.get(row.sandbox_id);
   } catch (err) {
     // Sandbox vanished unexpectedly -- surface as a failure rather than
-    // polling forever against something that no longer exists.
+    // polling forever against something that no longer exists. Logged
+    // server-side too (see lib/cors.ts's corsGatewayError comment) --
+    // this failure otherwise only ever lives in the `runs` row's own
+    // `error` column, never anywhere that'd get noticed proactively.
+    console.error(`[advanceRun ${runId}] sandbox lookup failed`, err);
     const claimed = await claimRunForFinalize(runId);
     if (claimed) {
       await finishRunFailed(runId, { code: "gateway_error", message: `sandbox lookup failed: ${String(err)}` }, 0);

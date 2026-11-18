@@ -1,6 +1,6 @@
 import { getModelOrNull } from "../../../../../lib/models";
 import { checkRun } from "../../../../../lib/runs";
-import { corsJson, corsOptions } from "../../../../../lib/cors";
+import { corsJson, corsOptions, corsGatewayError } from "../../../../../lib/cors";
 
 export async function OPTIONS() {
   return corsOptions();
@@ -38,6 +38,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ model: 
       cached_duration_seconds: result.cached_duration_seconds,
     });
   } catch (err) {
-    return corsJson({ detail: `gateway_error: ${String((err as Error)?.message ?? err)}` }, { status: 502 });
+    return corsGatewayError(err, `POST /v1/models/${model}/check`);
   }
 }

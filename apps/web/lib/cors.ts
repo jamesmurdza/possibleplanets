@@ -23,3 +23,21 @@ export function corsJson(body: unknown, init?: { status?: number; headers?: Reco
 export function corsOptions(): NextResponse {
   return withCors(new NextResponse(null, { status: 204 }));
 }
+
+/**
+ * The standard "something unexpected blew up" response every /v1/* route's
+ * catch block returns -- e.g. a Daytona/Postgres call throwing. Previously
+ * each route just folded `err.message` into the response body and moved on
+ * -- nothing was ever logged server-side, so the ONLY record of a failure
+ * was whatever reached the caller's browser. That's exactly how GCAM's
+ * sandbox-build failure (missing gitignored input -- see lib/models.ts's
+ * prebuilt_image comment) went unnoticed for a while: it 502'd for every
+ * single request, with zero visibility on Netlify's own side, until
+ * someone happened to check devtools. `console.error` here lands in
+ * Netlify's function logs regardless of whether anyone's looking at the
+ * response body -- the first place to check for a 502 going forward.
+ */
+export function corsGatewayError(err: unknown, context: string): NextResponse {
+  console.error(`[${context}]`, err);
+  return corsJson({ detail: `gateway_error: ${String((err as Error)?.message ?? err)}` }, { status: 502 });
+}

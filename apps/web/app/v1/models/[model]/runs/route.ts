@@ -1,6 +1,6 @@
 import { getModelOrNull } from "../../../../../lib/models";
 import { submitRun } from "../../../../../lib/runs";
-import { corsJson, corsOptions } from "../../../../../lib/cors";
+import { corsJson, corsOptions, corsGatewayError } from "../../../../../lib/cors";
 import { hasValidApiKey } from "../../../../../lib/apiKey";
 
 export async function OPTIONS() {
@@ -46,6 +46,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ model: 
     }
     return corsJson({ run_id, status: "queued" });
   } catch (err) {
-    return corsJson({ detail: `gateway_error: ${String((err as Error)?.message ?? err)}` }, { status: 502 });
+    return corsGatewayError(err, `POST /v1/models/${model}/runs`);
   }
 }
