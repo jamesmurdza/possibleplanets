@@ -1482,38 +1482,19 @@ a.icon-button {
   color: var(--pp-grey-dark);
 }
 
-/* Numbered-doc-style step list: a small circular badge per <li> (via a
-   CSS counter, not literal "1."/"2." text in the content) instead of a
-   wall of plain paragraphs -- reads like a reference doc's numbered
-   steps rather than a train-of-thought narrative. */
+/* Doc-style step list: a bold label per step (see .run-guide-step-label)
+   is what makes each one scannable -- no numbered badge, since these
+   steps aren't a strict do-this-before-that sequence (e.g. the final
+   "Resource footprint"/"Estimated cost" step is a summary, not a next
+   action). */
 .run-guide-steps {
   list-style: none;
-  counter-reset: run-guide-step;
   margin: 0;
   padding: 0;
 }
 
 .run-guide-step {
-  position: relative;
-  counter-increment: run-guide-step;
-  padding-left: 2.25rem;
   margin-bottom: 1.5rem;
-}
-
-.run-guide-step::before {
-  content: counter(run-guide-step);
-  position: absolute;
-  left: 0;
-  top: 0.1rem;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 50%;
-  background: var(--pp-brand);
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1.5rem;
-  text-align: center;
 }
 
 .run-guide-step-label {
