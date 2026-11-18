@@ -47,6 +47,7 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
     git \
     curl \
     ca-certificates \
+    python3 \
     default-jdk-headless \
     libcurl4-openssl-dev \
     libssl-dev \
@@ -78,9 +79,13 @@ WORKDIR /app
 RUN git clone --depth 1 --filter=blob:none --sparse https://github.com/JGCRI/gcam-core.git /app/gcam-core \
     && cd /app/gcam-core && git sparse-checkout set input/gcamdata
 
-COPY patches/employment.patch patches/population-hist.patch /tmp/
-RUN cd /app/gcam-core && patch -p1 < /tmp/employment.patch \
-    && patch -p1 < /tmp/population-hist.patch
+# Applied directly (not via patches/*.patch -- those are for human reading;
+# this is the exact live-tested fix, byte-for-byte).
+RUN sed -i '0,/left_join_error_no_match(ILO_country_iso_mapping, by = "country")/{s/left_join_error_no_match(ILO_country_iso_mapping, by = "country")/left_join(ILO_country_iso_mapping, by = "country") %>% filter(!is.na(iso))/}' \
+    /app/gcam-core/input/gcamdata/R/zsocio_L100.Employment.R
+
+COPY patch_population_hist.py /tmp/
+RUN python3 /tmp/patch_population_hist.py
 
 WORKDIR /app/gcam-core/input/gcamdata
 
