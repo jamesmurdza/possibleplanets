@@ -47,9 +47,10 @@ const DAYTONA_VCPU_PER_SECOND = 0.0504 / 3600;
 const DAYTONA_GIB_MEMORY_PER_SECOND = 0.0162 / 3600;
 const DAYTONA_GIB_DISK_PER_SECOND = 0.000108 / 3600;
 
+// Only ever called with amount >= 0.01 (see apiCostStep's ternary below),
+// so no need to branch on smaller magnitudes here.
 function formatUsd(amount: number): string {
-  const cents = amount * 100;
-  return `$${amount.toFixed(amount < 0.001 ? 5 : 3)} (~${cents.toFixed(cents < 0.01 ? 3 : 1)}¢)`;
+  return `$${amount.toFixed(3)} (~${(amount * 100).toFixed(1)}¢)`;
 }
 
 // Below $0.01/run, "per run" reads as a string of leading zeros -- scaling
@@ -167,7 +168,7 @@ export interface RunGuideStep {
   code?: string;
   // Prism.js language id for `code`, when present.
   language?: "bash" | "python" | "julia";
-  // Secondary aside: provenance, an edge case -- kept short and rare.
+  // Secondary aside, kept short -- e.g. the REST step's caching caveat.
   note?: string;
 }
 
