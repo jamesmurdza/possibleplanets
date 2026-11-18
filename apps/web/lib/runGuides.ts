@@ -115,22 +115,7 @@ const EXAMPLE_RUN_ID = "a1b2c3d4-5e6f-4789-9abc-def012345678";
  * median apiCostStep() uses for the same model, so the two stay
  * consistent.
  */
-function restApiStep(
-  model: string,
-  params: string,
-  resultValue: string,
-  resultNote: string,
-  durationSeconds: number,
-  illustrative?: boolean,
-): RunGuideStep {
-  const provenanceNote = illustrative
-    ? "Wine couldn't be installed in the environment this example was written in, so this result is illustrative, not an independently re-executed run -- the shape is still real, read directly from sandboxes/magicc/run.py. See docs/api-examples/README.md."
-    : "This is the real response from actually running this model's sandboxes/" +
-      model +
-      "/run.py" +
-      (model === "dice" ? ".jl" : "") +
-      ` logic directly. The full, untruncated output is in docs/api-examples/${model}.json.`;
-
+function restApiStep(model: string, params: string, resultValue: string, resultNote: string, durationSeconds: number): RunGuideStep {
   const indentedResult = resultValue
     .split("\n")
     .map((line, i) => (i === 0 ? line : `    ${line}`))
@@ -154,7 +139,6 @@ function restApiStep(
       `# }\n` +
       `# ${resultNote}`,
     language: "bash",
-    note: provenanceNote,
   };
 }
 
@@ -363,11 +347,10 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
         '{"scenario": "RCP45"}',
         '{\n' +
           '    "years": [1765, 1766, ..., 2499, 2500],\n' +
-          '    "T_atmos": [0.0, 0.01, ..., 2.6, 2.6]  // ILLUSTRATIVE, see note below\n' +
+          '    "T_atmos": [0.0, 0.01, ..., 2.6, 2.6]  // ILLUSTRATIVE -- see docs/api-examples/README.md\n' +
           '  }',
-        "illustrative only -- see note above",
+        "illustrative data, not an independently re-executed run -- see docs/api-examples/README.md",
         5.5,
-        true,
       ),
       apiCostStep("magicc", 2, 1, 5.5),
     ],
