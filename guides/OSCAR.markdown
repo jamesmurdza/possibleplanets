@@ -25,6 +25,21 @@ To run an example, run:
 poetry run python run_scripts/basic_example_1.py
 ```
 
+## Run with Docker
+
+If necessary, download and install Docker: [Link](https://www.docker.com/products/docker-desktop/).
+
+A prebuilt image is published on Docker Hub, so this doesn't require
+cloning any repository or using Poetry -- just pull and run it directly:
+
+```
+docker pull possibleplanets/oscar
+docker run --rm possibleplanets/oscar
+```
+
+Note: OSCAR is noticeably slower than the other models here -- expect
+the smallest possible run to take a few minutes, not seconds.
+
 ## Video
 
 (Coming soon.)

@@ -20,6 +20,17 @@ docker build -t dice-notebooks .
 docker run -p 8888:8888 dice-notebooks
 ```
 
+### Headless, without Jupyter
+
+A prebuilt image of just the underlying DICE.jl package (no notebook
+server) is also published on Docker Hub, so this doesn't require cloning
+or building anything -- just pull and run it directly:
+
+```
+docker pull possibleplanets/dice
+docker run --rm possibleplanets/dice
+```
+
 ## Run natively
 
 (This method is not fully tested. We recommend using the Docker method above.)

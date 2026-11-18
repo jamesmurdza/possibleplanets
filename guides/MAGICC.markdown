@@ -47,6 +47,19 @@ plt.title("Global Mean Temperature Projection")
 plt.ylabel("°C over pre-industrial (1850-1900 mean)");
 ```
 
+## Run with Docker
+
+If necessary, download and install Docker: [Link](https://www.docker.com/products/docker-desktop/).
+
+A prebuilt image (with Wine/i386 already installed, the heaviest part of
+the Colab setup above) is published on Docker Hub, so this doesn't
+require cloning any repository -- just pull and run it directly:
+
+```
+docker pull possibleplanets/magicc
+docker run --rm possibleplanets/magicc
+```
+
 ## Video
 
 (Coming soon.)

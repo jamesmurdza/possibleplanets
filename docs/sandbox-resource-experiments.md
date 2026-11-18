@@ -418,3 +418,56 @@ down earlier from the GPU sandbox (`sandboxes/gcam/runtime/exe/gcam.exe`
 exact binary that already passed the full 21-period validation run) and
 built a single-stage image straight from `runtime/` with no compilation
 step at all. Verified with `gcam.exe --help` before pushing.
+
+### Follow-up: Docker Hub images for every model, not just GCAM
+
+GCAM needed a Docker Hub backup because its Dockerfile depends on
+gitignored files (the generated XML database, the compiled binary) that
+simply don't exist in a fresh clone -- no amount of cloning this repo
+fixes that for GCAM specifically. Initially assumed that didn't apply to
+the other five models (hector/fair/oscar/dice/magicc/twolayer), since
+their Dockerfiles `COPY` only small, already-committed files and build
+cleanly from a fresh clone with nothing missing.
+
+That reasoning missed the actual point, corrected directly by the user:
+this repo backs a **public website** (`jamesmurdza.github.io`-style
+Jekyll site via GitHub Pages) whose visitors don't know this repo exists
+at all, let alone that `sandboxes/<model>/Dockerfile` is sitting in it.
+"Can a visitor build it if they clone the repo" was the wrong question --
+the real comparison is "clone a repo they don't know exists, then build"
+vs. "one `docker pull` + `docker run`, no repo knowledge needed at all."
+Docker Hub wins that for every model, not just the one that's literally
+unbuildable without it.
+
+Built and pushed all six remaining model images to Docker Hub:
+`possibleplanets/{hector,fair,oscar,dice,magicc,twolayer}` (`:v1` and
+`:latest`). All built cleanly except two real gotchas hit along the way
+(same local-build-environment class of issue as GCAM's own Docker Hub
+push, not upstream bugs):
+
+- `sandboxes/twolayer/Dockerfile`'s `RUN python3 - <<'PATCH' ... PATCH`
+  heredoc instruction isn't supported by this local Docker install
+  (20.10, legacy builder, no BuildKit/buildx available, and the
+  Dockerfile has no `# syntax=docker/dockerfile:1.4` directive) -- it
+  parsed the heredoc's Python source as literal Dockerfile instructions
+  (`unknown instruction: IMPORT`). Worked around by building from a
+  scratch-only local copy of the Dockerfile with the same patch expressed
+  as a single-line `python3 -c "..."` instead of a heredoc -- the
+  committed `sandboxes/twolayer/Dockerfile` itself was **not changed**,
+  since Daytona's own build pipeline (confirmed working previously) does
+  support the heredoc form.
+- `docker push` for the larger images (oscar's netCDF4/scipy stack,
+  magicc's Wine layers) exceeded the 2-minute default command timeout in
+  this environment -- not a real failure, just a slow upload; re-run in
+  the background with output redirected to a log file and polled instead.
+
+Verified all 7 images (including gcam) are live via Docker Hub's API
+(`GET /v2/repositories/possibleplanets/<model>/tags/`) after pushing.
+Added a "Run with Docker" section (pointing at the new
+`possibleplanets/<model>` image) to `guides/HECTOR.markdown`,
+`FAIR.markdown`, `MAGICC.markdown`, and `OSCAR.markdown`, and a
+no-notebook-needed headless option to `guides/DICE.markdown` (which
+already had a Docker section, just pointed at a separate repo + the
+Jupyter notebook server rather than a plain prebuilt image).
+`twolayer` doesn't have a public guide page yet, so its image is pushed
+and ready but not yet linked from anywhere on the site.
