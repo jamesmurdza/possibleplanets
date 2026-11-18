@@ -317,15 +317,80 @@ model output in a way that wouldn't show up as an error -- a materially
 different risk than the `Population_hist`/`Employment` fixes, which were
 provably redundant intermediate steps with an identical end result.
 
-**Conclusion:** GCAM remains **not added** to `sandboxes/` (beyond the
-already-committed build-only `Dockerfile`) or `lib/models.ts`. The C++
-build is fully solved. The R data-generation step is now substantially
-further along than before -- two real upstream bugs found and fixed,
-127 of the pipeline's XML outputs confirmed generatable within 8GB using
-`driver_drake()`'s checkpoint/resume mechanism -- but one more
-memory-heavy chunk remains unresolved, and fixing it safely would need
-either genuine GCAM/R domain expertise (to rewrite the emissions grid
-construction without changing its output) or to just run the pipeline on
-a machine with more memory outside this project's sandbox budget
-entirely. 8GB is a confirmed hard ceiling on this account for CPU
-sandboxes; there's no higher tier available to request.
+**Status as of the write-up above:** GCAM was **not added** to
+`sandboxes/` or `lib/models.ts`. 8GB was confirmed a hard ceiling for
+plain CPU sandboxes on this account, and `ceds_ghg_en_R_S_T_Y` needed
+more than that to complete.
+
+### Follow-up: solved via GPU-attached memory, not GPU compute
+
+Re-confirmed the 8GB/4-CPU ceiling directly (tested 9-32GB memory
+requests, checked `available-sandbox-classes`, tried a swapfile --
+disabled at the cgroup level, `memory.swap.max = 0`). The one real
+lever found: **attaching a GPU unlocks a much higher memory ceiling**
+(`memory: 96` accepted with `gpu: 1`), purely because GPU-class sandboxes
+aren't subject to the same 8GB cap -- the GPU itself does nothing for
+this workload (R's dplyr/tidyr joins are CPU-only). GPU sandboxes must be
+ephemeral (`autoDeleteInterval: 0`) and bill at GPU rates ($1.99/hr for
+an L40S, ~$2.58/hr all-in with this config), but since gcamdata's output
+is a one-time, non-scenario-specific artifact (confirmed by diffing
+`configuration_ref.xml` against `configuration_ssp.xml` -- both read the
+exact same `input/gcamdata/xml/` files, scenario variation lives in small
+separate `batch_*.xml` files), paying that rate once is a one-time cost,
+not a per-request one.
+
+Ran `driver_drake(jobs=1, memory_strategy="autoclean")` in a
+`cpu:4, memory:24, gpu:1 (L40S)` sandbox: **completed successfully** --
+"All done." / exit 0 -- generating all 221 XML files, peak memory ~13.5GB
+(comfortably under 24GB, nowhere near the old 8GB wall). Total pipeline
+runtime: ~75 minutes.
+
+Then, in the same sandbox (already had `git`/`g++`/`make` from the R
+build's system deps), compiled `gcam.exe` from source the same way
+`sandboxes/gcam/Dockerfile`'s builder stage does, and ran it against the
+freshly-generated database:
+
+- First attempt: JVM segfault trying to write GCAM's own BaseX-backed
+  XML output database (`SEVERE ERROR: Failed to find Java class
+  XMLDBDriver`) -- this project doesn't ship BaseX's jars, a separate,
+  unsolved problem. Fixed by disabling that one output stream
+  (`xmldb-location`'s `write-output` flipped from `"1"` to `"0"` in
+  `configuration_ref.xml`) -- we don't need it; the restart file and CSV
+  outputs still write normally.
+- Second attempt: missing `input/solution/`, `input/policy/`,
+  `input/climate/` directories (never part of any sparse-checkout so
+  far) -- GCAM's solver config and Hector's own `.ini` file live there.
+  Added them.
+- Third attempt: **ran clean, all 21 periods, 1975 through 2100,
+  "All model periods solved correctly." / "Model exiting successfully." /
+  exit 0.** First time any scenario has actually run end-to-end in this
+  project's GCAM investigation.
+
+Snapshotted the sandbox's filesystem directly (`sandbox.createSnapshot()`)
+to preserve this result independent of the sandbox's own lifecycle, then
+downloaded the generated XML (5.2GB, compresses to ~430MB as a tarball)
+out via `sandbox.fs.downloadFile()` and committed the small supporting
+files (`sandboxes/gcam/runtime/exe/`, `input/{solution,policy,climate}/`
+-- ~1.6MB total, including the patched `configuration_ref.xml`) into the
+repo. The 5.2GB XML database itself is gitignored (see
+`sandboxes/gcam/runtime/README.md` for exactly how to regenerate it) and
+baked directly into `sandboxes/gcam/Dockerfile`'s final image via `COPY`.
+
+Built a `gcam-production-v1` Daytona snapshot from that Dockerfile with
+plain `cpu:4, memory:8, disk:12` -- **no GPU at all** -- and verified a
+fresh sandbox created from it (`memory.max` confirmed at the normal 8GB
+cgroup limit, not 24GB) runs `gcam.exe -C configuration_ref.xml` and
+solves periods identically to the GPU-sandbox test. The GPU was never
+needed for *running* GCAM -- only for the one-time step of generating its
+input database within this account's memory limits.
+
+**Conclusion:** GCAM is now fully working end-to-end within this
+project's normal per-request sandbox budget (no GPU, no special
+resources beyond the already-standard `cpu:4, memory:8`). Not yet wired
+into `lib/models.ts`/`run.py` -- that's the remaining integration work
+(reading `SCENARIO_PARAMS`, mapping to one of the five `batch_SSP_*.xml`
+scenario files, parsing `gcam.exe`'s output) -- but the hard infra
+problem (an R data pipeline needing more memory than this account's
+sandboxes allow) is solved, and the solution (one-time GPU-assisted data
+generation, baked into a reusable snapshot) is documented and reusable if
+the data ever needs regenerating.
