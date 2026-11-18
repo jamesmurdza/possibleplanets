@@ -443,7 +443,11 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
         code:
           "docker pull possibleplanets/gcam\n" +
           "docker run --rm possibleplanets/gcam\n" +
-          '# -> {"status": "succeeded", "scenario": "Reference", "result": {"rows": [...]}}',
+          '# -> {"status": "succeeded", "scenario": "Reference", "result": {"rows": [...]}}\n\n' +
+          '# SCENARIO_PARAMS works the same way as every other model here, but "Reference" is\n' +
+          '# the only scenario currently supported (see docs/gcam/known-gaps.md), so this is\n' +
+          '# equivalent to the bare command above, not a different result:\n' +
+          'docker run --rm -e SCENARIO_PARAMS=\'{"scenario": "Reference"}\' possibleplanets/gcam',
         language: "bash",
       },
       localResourceStep(
