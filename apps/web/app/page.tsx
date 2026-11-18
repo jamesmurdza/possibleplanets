@@ -11,8 +11,9 @@ import { fetchJson, canonicalScenario } from "../lib/clientApi";
 import { useChartSeries } from "../lib/useRunsData";
 import TemperatureChart, { type HoverFilter } from "../components/TemperatureChart";
 import { PublicHeader, PublicFooter } from "../components/PublicChrome";
-import { modelAcronym, modelFullName } from "../lib/modelFullNames";
+import { modelAcronym } from "../lib/modelFullNames";
 import { scenarioFullName } from "../lib/scenarioFullNames";
+import ModelIcon from "../components/ModelIcon";
 import type { ModelListItem } from "../lib/clientTypes";
 
 // Matches .public-card-grid's own grid-template-columns (4 columns) and
@@ -83,7 +84,6 @@ export default function HomePage() {
     return Array.from(first).filter((s) => rest.every((set) => set.has(s))).sort();
   })();
 
-  const visibleModels = truncateToRows(models, columnsPerRow);
   const visibleScenarios = truncateToRows(sharedSsps, columnsPerRow);
 
   return (
@@ -110,24 +110,21 @@ export default function HomePage() {
 
         <section className="public-cards-section">
           <h2>Models</h2>
-          <div className="public-card-grid">
-            {visibleModels.visible.map((m) => (
+          <div className="public-model-row">
+            {models.map((m) => (
               <Link
                 key={m.model}
                 href={`/models/${m.model}`}
-                className="public-card"
+                className="public-model-card"
                 onMouseEnter={() => setHovered({ type: "model", value: m.model })}
                 onMouseLeave={() => setHovered(null)}
               >
-                <div className="public-card-title">{modelAcronym(m.model)}</div>
-                <p className="public-card-description">{modelFullName(m.model)}</p>
+                <span className="public-model-card-icon">
+                  <ModelIcon model={m.model} />
+                </span>
+                <span className="public-model-card-acronym">{modelAcronym(m.model)}</span>
               </Link>
             ))}
-            {visibleModels.truncated && (
-              <div className="public-card public-card-more">
-                <div className="public-card-title">...</div>
-              </div>
-            )}
           </div>
         </section>
 

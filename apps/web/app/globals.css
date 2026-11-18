@@ -1303,10 +1303,12 @@ a.icon-button {
   margin: 0 0 1rem;
 }
 
-/* A fixed-column grid (4 columns), so 7 models -- as of GCAM's addition
-   -- lay out as a full 4-card row plus a second row of 3, each card
-   under the same column tracks as the row above rather than stretching
-   to fill whatever's left in its own row. That's the difference from a
+/* Used by the "Emissions scenarios" section below (the "Models" section
+   has its own, smaller .public-model-row/.public-model-card instead --
+   see below). A fixed-column grid (4 columns), so a scenario list past
+   8 items wraps to a second row of however many remain, each card under
+   the same column tracks as the row above rather than stretching to
+   fill whatever's left in its own row. That's the difference from a
    flexbox approach: flex sizes each row's items based on what's in that
    row (so a ragged last row's cards end up a different width than a
    full row's), while a grid's column tracks are fixed by the
@@ -1364,6 +1366,62 @@ a.icon-button {
   text-transform: none;
   font-weight: 400;
   letter-spacing: 0.15em;
+}
+
+/* "Models" section: a single row, always -- no wrapping to a second row
+   and no truncation like .public-card-grid above. Each card is just an
+   icon + acronym (no description), so even with every model this
+   project has it's still narrow enough to fit in one row at this
+   section's content width -- if a future model ever pushes it past
+   that width, overflow-x lets the row scroll horizontally rather than
+   wrapping or shrinking cards past legibility. */
+.public-model-row {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.public-model-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+  width: 4.5rem;
+  padding: 0.6rem 0.4rem;
+  border: 1px solid var(--pp-grey-light);
+  border-radius: 4px;
+  background: #fff;
+  text-decoration: none;
+  color: var(--pp-text);
+  transition: border-color 0.12s ease;
+}
+
+.public-model-card:hover {
+  border-color: var(--pp-brand);
+}
+
+.public-model-card-icon {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  color: var(--pp-grey);
+}
+
+.public-model-card:hover .public-model-card-icon {
+  color: var(--pp-brand);
+}
+
+.public-model-card-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.public-model-card-acronym {
+  font-weight: 600;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
 }
 
 /* --- Article pages (one model or one scenario) --- */
