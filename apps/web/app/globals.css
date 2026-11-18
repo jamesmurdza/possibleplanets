@@ -1299,22 +1299,23 @@ a.icon-button {
   margin: 0 0 1rem;
 }
 
-/* One row, always -- cards divide the full row width evenly and shrink
-   together rather than wrapping to a second row (auto-fill grid would
-   wrap once cards got too narrow for their min-width). On genuinely
-   narrow viewports this lets the row scroll horizontally instead, so a
-   card's content is never crushed past readability. */
+/* Wraps into rows (4 per row at this section's ~870px content width, so
+   7 models -- as of GCAM's addition -- lay out as 4+3) instead of a
+   single row. A single always-on-one-line row (the previous approach,
+   shrinking cards to fit or scrolling horizontally past that) stopped
+   being readable once a 7th model card pushed the row past this
+   section's width -- wrapping keeps every card at a legible size
+   instead of cramming or requiring horizontal scroll to see them all. */
 .public-card-grid {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.6rem;
-  overflow-x: auto;
-  padding-bottom: 0.25rem;
 }
 
 .public-card {
   display: block;
-  flex: 1 1 0;
-  min-width: 7rem;
+  flex: 1 1 calc(25% - 0.45rem);
+  min-width: 9rem;
   border: 1px solid var(--pp-grey-light);
   border-radius: 4px;
   background: #fff;

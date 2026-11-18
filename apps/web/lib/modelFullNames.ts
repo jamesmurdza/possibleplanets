@@ -16,6 +16,7 @@ export const MODEL_FULL_NAMES: Record<string, string> = {
   dice: "Dynamic Integrated Climate Economy model",
   magicc: "Model for the Assessment of Greenhouse Gas Induced Climate Change",
   twolayer: "OpenSCM Two Layer Model",
+  gcam: "Global Change Analysis Model",
 };
 
 // "twolayer" (the lib/models.ts registry key) isn't an acronym at all --
