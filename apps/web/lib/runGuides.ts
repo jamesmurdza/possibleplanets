@@ -49,7 +49,7 @@ const DAYTONA_GIB_DISK_PER_SECOND = 0.000108 / 3600;
 
 function formatUsd(amount: number): string {
   const cents = amount * 100;
-  return `$${amount.toFixed(amount < 0.001 ? 6 : 5)} (~${cents.toFixed(cents < 0.01 ? 4 : 3)}¢)`;
+  return `$${amount.toFixed(amount < 0.001 ? 5 : 3)} (~${cents.toFixed(cents < 0.01 ? 3 : 1)}¢)`;
 }
 
 // Below $0.01/run, "per run" reads as a string of leading zeros -- scaling
@@ -247,7 +247,7 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           '    "mean_D_Tg": [0.0, -0.0028, ..., 2.517, 2.521],\n' +
           '    "std_D_Tg": [0.0, 0.0, ..., 0.0, 0.0]  // 0 at nMC=1 -- only one sample, nothing to vary\n' +
           '  }',
-        "mean_D_Tg at year 2100 = 2.521°C",
+        "mean_D_Tg at year 2100 = 2.52°C",
         522,
       ),
       apiCostStep("oscar", 4, 8, 522, 5),
@@ -287,7 +287,7 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           '    "T_atmos": [0.85, 1.016, 1.184, ..., 3.993, 3.989],  // same real run as above\n' +
           '    "scc": [...], "forcing": [...], "utility": [...]  // also real fields, see run.jl\n' +
           '  }',
-        "T_atmos at year 2100 = 3.4814°C, peaking at 4.1519°C around year 2240",
+        "T_atmos at year 2100 = 3.48°C, peaking at 4.15°C around year 2240",
         19.63,
       ),
       apiCostStep("dice", 2, 1, 19.63),
@@ -324,7 +324,7 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           '      "forcing.RF_tot": [0.0, 0.0, ..., 3.9049, 3.8998]\n' +
           '    }\n' +
           '  }',
-        "year 2100: temperature.global_tas = 2.7214°C",
+        "year 2100: temperature.global_tas = 2.72°C",
         1.25,
       ),
       apiCostStep("hector", 2, 1, 1.25),
@@ -387,7 +387,7 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           '    "years": [1750, 1751, 1752, ..., 2499, 2500],  // 751 years\n' +
           '    "T_atmos": [0.0, 0.0392, 0.0637, ..., 3.485, 3.4847]\n' +
           '  }',
-        "year 2100: T_atmos = 2.8367°C",
+        "year 2100: T_atmos = 2.84°C",
         1,
       ),
       apiCostStep("twolayer", 1, 1, 1),
