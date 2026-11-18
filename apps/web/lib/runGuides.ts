@@ -62,12 +62,18 @@ function formatUsdPer1000(amount: number): string {
 // Rounds to a whole number of seconds -- these are real measured medians,
 // but "19.63 seconds" reads as more precise than a single real run
 // actually is (run-to-run variance is easily a second either way), so
-// "about 20 seconds" is the honest level of precision to show.
+// "about 20 seconds" is the honest level of precision to show. Past a
+// minute, drop seconds entirely and round to the nearest minute --
+// showing "522 seconds (around 9 minutes)" pairs an exact-looking
+// number with a rounded one for no reason once minutes are the unit a
+// reader actually cares about.
 function formatDuration(seconds: number): string {
   const rounded = Math.round(seconds);
-  return seconds >= 60
-    ? `${rounded} seconds (around ${Math.round(seconds / 60)} minutes)`
-    : `${rounded} second${rounded === 1 ? "" : "s"}`;
+  if (seconds >= 60) {
+    const minutes = Math.round(seconds / 60);
+    return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  }
+  return `${rounded} second${rounded === 1 ? "" : "s"}`;
 }
 
 /**
