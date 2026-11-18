@@ -1414,11 +1414,33 @@ a.icon-button {
 }
 
 .article-section h2 {
+  position: relative;
   font-size: 1.375rem;
   margin: 0 0 0.75rem;
   font-weight: 600;
   color: var(--pp-text);
   letter-spacing: -0.3px;
+  scroll-margin-top: 1.5rem;
+}
+
+/* Hover-to-reveal "#" anchor, like blog.jamesmurdza.com's headers -- sits
+   just left of the heading, invisible until the heading is hovered (or
+   focused, for keyboard users), so it doesn't clutter the page by
+   default. */
+.heading-anchor {
+  position: absolute;
+  left: -1.25rem;
+  top: 0;
+  color: var(--pp-brand);
+  text-decoration: none;
+  font-weight: 400;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.article-section h2:hover .heading-anchor,
+.heading-anchor:focus {
+  opacity: 1;
 }
 
 /* --- Site footer (matches ../_includes/footer.html's 3-column layout) --- */
