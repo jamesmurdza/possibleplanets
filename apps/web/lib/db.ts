@@ -48,6 +48,7 @@ CREATE INDEX IF NOT EXISTS run_cache_cache_key_idx ON run_cache (cache_key);
 CREATE TABLE IF NOT EXISTS runs (
     run_id TEXT PRIMARY KEY,
     model TEXT NOT NULL,
+    model_version TEXT,
     params JSONB NOT NULL,
     status TEXT NOT NULL,
     result JSONB,
@@ -113,6 +114,7 @@ CREATE INDEX IF NOT EXISTS api_keys_user_id_idx ON api_keys (user_id);
 const MIGRATION = `
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS supports_progress BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMPTZ;
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS model_version TEXT;
 `;
 
 // ensureDb() is called at the top of every exported function below rather
@@ -232,6 +234,12 @@ function round3(n: unknown): number {
 export interface RunRow {
   run_id: string;
   model: string;
+  // The exact model_version this run was submitted with (see
+  // lib/models.ts's own doc comment) -- frozen at submit time, so it
+  // stays accurate for this run even if that model's pinned version
+  // later changes and a new snapshot is built. Null only for a row
+  // written before this column existed.
+  model_version: string | null;
   params: unknown;
   status: "queued" | "running" | "finalizing" | "succeeded" | "failed";
   result: unknown | null;
@@ -250,6 +258,7 @@ export interface RunRow {
 export async function insertRun(row: {
   run_id: string;
   model: string;
+  model_version: string;
   params: unknown;
   status: string;
   sandbox_id: string | null;
@@ -260,11 +269,12 @@ export async function insertRun(row: {
 }): Promise<void> {
   await ensureDb();
   await getPool().query(
-    `INSERT INTO runs (run_id, model, params, status, sandbox_id, session_id, cmd_id, supports_progress, deadline_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    `INSERT INTO runs (run_id, model, model_version, params, status, sandbox_id, session_id, cmd_id, supports_progress, deadline_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
     [
       row.run_id,
       row.model,
+      row.model_version,
       JSON.stringify(row.params),
       row.status,
       row.sandbox_id,
@@ -276,6 +286,15 @@ export async function insertRun(row: {
   );
 }
 
+/** Best-effort delete of a run row -- used by the Runs tab's delete
+ * button. Does NOT touch any still-live sandbox/session (the caller,
+ * lib/runs.ts's deleteRunAndCleanup, handles that first when the run
+ * isn't already terminal) -- this just removes the bookkeeping row. */
+export async function deleteRunRow(runId: string): Promise<void> {
+  await ensureDb();
+  await getPool().query("DELETE FROM runs WHERE run_id = $1", [runId]);
+}
+
 export async function getRun(runId: string): Promise<RunRow | null> {
   await ensureDb();
   const { rows } = await getPool().query("SELECT * FROM runs WHERE run_id = $1", [runId]);
@@ -285,6 +304,7 @@ export async function getRun(runId: string): Promise<RunRow | null> {
 export interface RunListItem {
   run_id: string;
   model: string;
+  model_version: string | null;
   params: unknown;
   status: string;
   cached: boolean;
@@ -303,7 +323,7 @@ export interface RunListItem {
 export async function listRuns(limit = 50): Promise<RunListItem[]> {
   await ensureDb();
   const { rows } = await getPool().query(
-    `SELECT run_id, model, params, status, cached, progress, duration_seconds, started_at, updated_at
+    `SELECT run_id, model, model_version, params, status, cached, progress, duration_seconds, started_at, updated_at
      FROM runs ORDER BY started_at DESC LIMIT $1`,
     [limit],
   );
@@ -346,6 +366,29 @@ export async function getLatestSucceededRuns(): Promise<LatestRunItem[]> {
      ORDER BY model, params, started_at DESC`,
   );
   return rows as LatestRunItem[];
+}
+
+/**
+ * The real `runs` row behind a run_cache hit -- powers the New Run
+ * form's "View cached" button (see NewRunPanel.tsx): a cache hit's own
+ * inline result never gets its own `runs` row (see lib/runs.ts's
+ * submitRun doc comment), so there's no run_id to open in the Runs tab's
+ * drawer without looking one up this way. `params = $2::jsonb` relies on
+ * the same key-order-independent JSONB equality getLatestSucceededRuns's
+ * own comment already documents, so this doesn't need the client to
+ * reproduce the exact key order of whichever request originally wrote
+ * that row. Null if no succeeded run with this exact (model, params) is
+ * in the table (either it's aged out, or run_cache's own history
+ * predates per-run tracking entirely).
+ */
+export async function findLatestSucceededRun(model: string, params: unknown): Promise<string | null> {
+  await ensureDb();
+  const { rows } = await getPool().query(
+    `SELECT run_id FROM runs WHERE model = $1 AND params = $2::jsonb AND status = 'succeeded'
+     ORDER BY started_at DESC LIMIT 1`,
+    [model, JSON.stringify(params)],
+  );
+  return rows.length ? rows[0].run_id : null;
 }
 
 export async function updateRunProgress(runId: string, progress: { percent: number }): Promise<void> {

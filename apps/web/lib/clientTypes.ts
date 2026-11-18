@@ -18,6 +18,7 @@ export interface ParameterSpec {
 export interface ModelMeta {
   model: string;
   family: string;
+  model_version: string;
   scenarios: string[];
   params_shape?: "scenario" | "scenarios";
   parameters?: ParameterSpec[];
@@ -30,6 +31,7 @@ export interface ModelMeta {
 export interface ModelListItem {
   model: string;
   family: string;
+  model_version: string;
   scenarios: string[];
   description: string;
   implementation: string;
@@ -52,6 +54,7 @@ export interface ChartSeries {
 export interface RunJob {
   run_id: string;
   model: string;
+  model_version: string | null;
   params: Record<string, unknown>;
   status: "queued" | "running" | "succeeded" | "failed";
   result: any;
@@ -64,6 +67,7 @@ export interface RunJob {
 export interface RunListItem {
   run_id: string;
   model: string;
+  model_version: string | null;
   params: Record<string, unknown>;
   status: "queued" | "running" | "succeeded" | "failed";
   cached: boolean;
@@ -86,4 +90,7 @@ export interface CheckResult {
   cacheable: boolean;
   cached: boolean;
   cached_duration_seconds: number | null;
+  // The real runs.run_id behind a cache hit -- used by the "View cached"
+  // button to open that run's drawer. Null unless `cached` is true.
+  cached_run_id: string | null;
 }

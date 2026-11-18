@@ -121,6 +121,20 @@ export interface ModelMeta {
   // `docker run` command -- just not what this app's own submitRun()
   // uses for a real request anymore.
   daytona_snapshot: string;
+  // Exactly what this model's own Dockerfile pins (see the pip/Pkg.add/
+  // git-clone line each model's Dockerfile comments reference), so a
+  // run can be attributed to the real version that produced it even
+  // after that pin changes and the snapshot above gets rebuilt --
+  // rebuilding a snapshot never updates history for runs already stored
+  // in run_cache/runs under the old version. For a model whose
+  // Dockerfile clones a git repo WITHOUT pinning a commit (currently
+  // oscar, gcam -- `git clone --depth 1` off the default branch, a real,
+  // still-open gap noted in each Dockerfile's own comments), this says
+  // so plainly rather than inventing a version number that doesn't
+  // exist: the code that actually ran is still fixed (frozen into
+  // whichever Daytona snapshot build happened to pull), it's only
+  // re-building that snapshot later that could silently change it.
+  model_version: string;
   scenarios: string[];
   params_shape: ParamsShape;
   // Default is "python3 /app/run.py" (DEFAULT_RUN_COMMAND in lib/runs.ts);
@@ -163,6 +177,7 @@ export const MODELS: Record<string, ModelMeta> = {
     // until this. Snapshot built+pushed from this same repo's
     // sandboxes/hector/Dockerfile.
     daytona_snapshot: "hector-production-v1",
+    model_version: "pyhector==3.2.0.0",
     scenarios: ["ssp119", "ssp126", "ssp245", "ssp370", "ssp585"],
     params_shape: "scenario",
     exec_timeout_seconds: 60,
@@ -251,6 +266,7 @@ export const MODELS: Record<string, ModelMeta> = {
     dockerfile: path.join(SANDBOXES_DIR, "fair", "Dockerfile"),
     // See hector's daytona_snapshot comment for why every model uses one.
     daytona_snapshot: "fair-production-v1",
+    model_version: "fair==2.2.5",
     scenarios: [
       "ssp119",
       "ssp126",
@@ -306,6 +322,7 @@ export const MODELS: Record<string, ModelMeta> = {
     dockerfile: path.join(SANDBOXES_DIR, "oscar", "Dockerfile"),
     // See hector's daytona_snapshot comment for why every model uses one.
     daytona_snapshot: "oscar-production-v1",
+    model_version: "unpinned: jamesmurdza/OSCAR@main (as of this snapshot's build -- see sandboxes/oscar/Dockerfile)",
     scenarios: [
       "SSP1-1.9",
       "SSP1-2.6",
@@ -374,6 +391,7 @@ export const MODELS: Record<string, ModelMeta> = {
     dockerfile: path.join(SANDBOXES_DIR, "dice", "Dockerfile"),
     // See hector's daytona_snapshot comment for why every model uses one.
     daytona_snapshot: "dice-production-v1",
+    model_version: "possibleplanets/DICE.jl@754e9ba2",
     // Only base/optimal -- confirmed by testing that DICE.jl only implements
     // these two for the v2016R2 version run.jl uses.
     scenarios: ["base", "optimal"],
@@ -400,6 +418,7 @@ export const MODELS: Record<string, ModelMeta> = {
     dockerfile: path.join(SANDBOXES_DIR, "magicc", "Dockerfile"),
     // See hector's daytona_snapshot comment for why every model uses one.
     daytona_snapshot: "magicc-production-v1",
+    model_version: "pymagicc==2.1.5",
     // pymagicc's own four RCP scenarios -- confirmed via
     // `pymagicc.rcps["scenario"].unique()`. A different, smaller taxonomy
     // than the SSP names hector/fair/oscar use; no cross-model mapping
@@ -448,6 +467,7 @@ export const MODELS: Record<string, ModelMeta> = {
     dockerfile: path.join(SANDBOXES_DIR, "twolayer", "Dockerfile"),
     // See hector's daytona_snapshot comment for why every model uses one.
     daytona_snapshot: "twolayer-production-v1",
+    model_version: "openscm-twolayermodel==0.2.3",
     // Same 8 SSPs sandboxes/fair exposes -- confirmed present as rows in
     // the bundled rcmip-erf.csv (RCMIP v4.0.0, trimmed). Unlike hector/
     // fair/oscar, this model has no scenario handling of its own: it's
@@ -497,6 +517,7 @@ export const MODELS: Record<string, ModelMeta> = {
     // for git -- see sandboxes/gcam/runtime/README.md) and only ever
     // exists on the one machine that originally generated it.
     daytona_snapshot: "gcam-production-v1",
+    model_version: "unpinned: JGCRI/gcam-core@main (as of this snapshot's build -- see sandboxes/gcam/Dockerfile)",
     // Only "Reference" -- see sandboxes/gcam/run.py's module docstring and
     // docs/gcam/known-gaps.md ("Only configuration_ref.xml was actually
     // run-tested"). The other shipped configs reference additional input

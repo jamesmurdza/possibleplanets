@@ -36,6 +36,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ model: 
       cacheable: result.cacheable,
       cached: result.cached,
       cached_duration_seconds: result.cached_duration_seconds,
+      cached_run_id: result.cached_run_id,
     });
   } catch (err) {
     return corsGatewayError(err, `POST /v1/models/${model}/check`);

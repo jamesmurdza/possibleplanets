@@ -17,6 +17,16 @@ import ComparePanel from "../../components/ComparePanel";
 // app/page.tsx) and has no sidebar at all.
 export default function DashboardPage() {
   const [tab, setTab] = useState<Tab>("overview");
+  // Which run's drawer is open on the Runs tab -- lifted up here (not
+  // RunsPanel's own local state) so New Run can set it directly:
+  // submitting a run (or clicking "View cached") switches to the Runs
+  // tab AND opens that run's drawer in one move, see onRunSubmitted.
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+
+  function onRunSubmitted(runId: string) {
+    setSelectedRunId(runId);
+    setTab("runs");
+  }
 
   return (
     <div className="app-shell">
@@ -26,10 +36,10 @@ export default function DashboardPage() {
           <OverviewPanel />
         </div>
         <div style={{ display: tab === "new" ? "block" : "none" }}>
-          <NewRunPanel />
+          <NewRunPanel onRunSubmitted={onRunSubmitted} />
         </div>
         <div style={{ display: tab === "runs" ? "block" : "none" }}>
-          <RunsPanel />
+          <RunsPanel selectedRunId={selectedRunId} onSelectRun={setSelectedRunId} />
         </div>
         <div style={{ display: tab === "compare" ? "block" : "none" }}>
           <ComparePanel />

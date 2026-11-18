@@ -1,9 +1,27 @@
-import { advanceRun } from "../../../../lib/runs";
+import { advanceRun, deleteRunAndCleanup } from "../../../../lib/runs";
 import { corsJson, corsOptions, corsGatewayError } from "../../../../lib/cors";
 import { hasValidApiKey } from "../../../../lib/apiKey";
 
 export async function OPTIONS() {
   return corsOptions();
+}
+
+/**
+ * Powers the Runs tab's delete button/checkboxes. Same auth as GET/POST
+ * on this run surface (dashboard_auth cookie or a personal API key) --
+ * never exposed to the public, read-only pages.
+ */
+export async function DELETE(req: Request, { params }: { params: Promise<{ runId: string }> }) {
+  const { runId } = await params;
+  try {
+    if (!(await hasValidApiKey(req))) {
+      return corsJson({ detail: "missing or invalid API key" }, { status: 401 });
+    }
+    await deleteRunAndCleanup(runId);
+    return corsJson({ run_id: runId, deleted: true });
+  } catch (err) {
+    return corsGatewayError(err, `DELETE /v1/runs/${runId}`);
+  }
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ runId: string }> }) {

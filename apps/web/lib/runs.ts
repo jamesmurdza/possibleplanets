@@ -51,6 +51,8 @@ import {
   claimRunForFinalize,
   finishRunSucceeded,
   finishRunFailed,
+  deleteRunRow,
+  findLatestSucceededRun,
   RunRow,
 } from "./db";
 
@@ -275,6 +277,13 @@ export interface CheckResult {
   // or if there is one but it predates this column existing. Never an
   // estimate -- see lib/db.ts's getCachedMeta.
   cached_duration_seconds: number | null;
+  // The real `runs` row id behind this cache hit, for the New Run form's
+  // "View cached" button -- a cache hit itself never gets its own row (see
+  // submitRun's doc comment), so the UI needs this to know which run_id to
+  // open in the Runs tab's drawer. Null whenever `cached` is false, or
+  // (rare) if run_cache has an entry but the backing `runs` row aged
+  // out/predates per-run tracking entirely -- see findLatestSucceededRun.
+  cached_run_id: string | null;
 }
 
 /**
@@ -288,20 +297,33 @@ export interface CheckResult {
 export async function checkRun(modelName: string, params: Record<string, unknown>): Promise<CheckResult> {
   const model = getModelOrNull(modelName);
   if (!model) {
-    return { error: `unknown model '${modelName}'`, cacheable: false, cached: false, cached_duration_seconds: null };
+    return {
+      error: `unknown model '${modelName}'`,
+      cacheable: false,
+      cached: false,
+      cached_duration_seconds: null,
+      cached_run_id: null,
+    };
   }
 
   const validationError = validateParams(model, params);
   if (validationError) {
-    return { error: validationError, cacheable: false, cached: false, cached_duration_seconds: null };
+    return { error: validationError, cacheable: false, cached: false, cached_duration_seconds: null, cached_run_id: null };
   }
 
   if (!isCacheable(model, params)) {
-    return { error: null, cacheable: false, cached: false, cached_duration_seconds: null };
+    return { error: null, cacheable: false, cached: false, cached_duration_seconds: null, cached_run_id: null };
   }
 
   const meta = await getCachedMeta(modelName, params);
-  return { error: null, cacheable: true, cached: meta.exists, cached_duration_seconds: meta.duration_seconds };
+  const cachedRunId = meta.exists ? await findLatestSucceededRun(modelName, params) : null;
+  return {
+    error: null,
+    cacheable: true,
+    cached: meta.exists,
+    cached_duration_seconds: meta.duration_seconds,
+    cached_run_id: cachedRunId,
+  };
 }
 
 export async function submitRun(
@@ -348,6 +370,7 @@ export async function submitRun(
         inline: {
           run_id: runId,
           model: modelName,
+          model_version: model.model_version,
           params,
           status: "succeeded",
           result: cached,
@@ -403,6 +426,7 @@ export async function submitRun(
   await insertRun({
     run_id: runId,
     model: modelName,
+    model_version: model.model_version,
     params,
     status: "running",
     sandbox_id: sandbox.id,
@@ -418,6 +442,9 @@ export async function submitRun(
 export interface RunView {
   run_id: string;
   model: string;
+  // See lib/models.ts's own model_version doc comment and RunRow's --
+  // null only for a row written before this column existed.
+  model_version: string | null;
   // Exactly the params object this run was submitted with -- no defaults
   // filled in (see models.ts's module docstring). Surfaced so a caller can
   // see/record precisely what reproduces this result, e.g. for the
@@ -435,6 +462,7 @@ function toView(row: RunRow): RunView {
   return {
     run_id: row.run_id,
     model: row.model,
+    model_version: row.model_version,
     params: row.params,
     // "finalizing" is an internal-only state (see claimRunForFinalize) --
     // surfaced to API consumers as "running" so it isn't a fifth status
@@ -665,6 +693,34 @@ async function finalizeOutcome(runId: string, row: RunRow, exitCode: number, std
     }
   }
   await finishRunSucceeded(runId, parsed, runSeconds, false);
+}
+
+/**
+ * Powers the Runs tab's delete button/checkboxes. If the run is still
+ * in flight (sandbox potentially still running), best-effort tears that
+ * down too -- same cleanup helper the normal finalize path uses -- so
+ * deleting a run someone's bored of doesn't leave a billable sandbox
+ * running forever. Always deletes the `runs` row regardless of whether
+ * that cleanup succeeds (e.g. the sandbox already vanished on its own);
+ * there's nothing else worth keeping once the row itself is gone.
+ */
+export async function deleteRunAndCleanup(runId: string): Promise<void> {
+  const row = await getRun(runId);
+  if (!row) return;
+
+  const stillLive = row.status !== "succeeded" && row.status !== "failed";
+  if (stillLive && row.sandbox_id) {
+    try {
+      const daytona = getDaytonaClient();
+      const sandbox = await daytona.get(row.sandbox_id);
+      await cleanupSandboxAndSession(daytona, sandbox, row.session_id ?? "");
+    } catch {
+      // Already gone, or the lookup itself failed -- nothing left to clean
+      // up either way; the row still needs to go.
+    }
+  }
+
+  await deleteRunRow(runId);
 }
 
 async function cleanupSandboxAndSession(daytona: ReturnType<typeof getDaytonaClient>, sandbox: any, sessionId: string) {
