@@ -72,36 +72,47 @@ export interface ModelMeta {
   implementation: string;
   website: string;
   dockerfile: string;
-  // Set only for a model whose Dockerfile can't actually be built from
-  // this repo's own git checkout -- currently just gcam, whose final
-  // stage COPYs a 5.2GB generated XML database that's deliberately
-  // gitignored (see sandboxes/gcam/runtime/README.md: too large for git,
-  // baked in locally once and pushed as a pre-built image instead).
-  // `dockerfile` above still documents/exercises the real build (useful
-  // locally, where that directory DOES exist), but a production
-  // deployment's own checkout never has it -- Image.fromDockerfile would
-  // fail there with a missing COPY source.
+  // Every model sets this now (`<model>-production-v1`) -- lib/runs.ts's
+  // submitRun() creates the sandbox FROM THIS DAYTONA SNAPSHOT
+  // (daytona.create({ snapshot: ... })) instead of building or pulling
+  // anything at request time. `dockerfile` above is kept only as a
+  // fallback (used if this is ever unset) and to document/exercise the
+  // real build locally -- it is NOT what a real production request uses.
   //
-  // When this is set, lib/runs.ts creates the sandbox FROM THIS DAYTONA
-  // SNAPSHOT (daytona.create({ snapshot: ... })) instead of building or
-  // pulling anything -- confirmed by direct testing to take well under a
-  // second (0.5s observed), vs. minutes for either a Dockerfile build or
-  // a `docker pull` of the equivalent ~5.6GB image from a registry. That
-  // speed difference isn't cosmetic here: a serverless function's own
-  // execution timeout (Netlify's included) is measured in seconds, so
-  // anything slower than this straight-up CAN'T finish inside a request
-  // -- the platform kills it first, surfacing as a bare 502 from the edge
-  // itself, before this app's own code ever gets to run its catch block
-  // (confirmed: this is exactly what using Image.base() to pull
-  // possibleplanets/gcam:v1 from Docker Hub hit in production, even
-  // though it eventually succeeded if given unlimited time locally).
-  // `gcam-production-v1` is this same project's own already-validated
-  // snapshot (see docs/gcam/trial-log.md) -- only usable from THIS
-  // Daytona organization, which is exactly why possibleplanets/gcam:v1 on
-  // Docker Hub still exists and stays published as the portable fallback
-  // (e.g. for someone cloning this repo into their own Daytona account,
-  // or running the guide's plain `docker run` command) -- just not what
-  // this app's own submitRun() uses for a real request anymore.
+  // This replaced building from `dockerfile` directly for two separate,
+  // both-confirmed-by-testing reasons:
+  //   1. Next.js's build-time file tracing can't follow the dynamically
+  //      constructed path (path.join(SANDBOXES_DIR, modelName,
+  //      "Dockerfile")) that Image.fromDockerfile(dockerfile) reads --
+  //      confirmed by inspecting a real `next build`'s own
+  //      route.js.nft.json: zero sandboxes/ files were traced for any
+  //      model before outputFileTracingIncludes (next.config.js) was
+  //      added. Without that, Netlify's deployed function never had
+  //      sandboxes/ at all, so EVERY model's non-cached run 502'd in
+  //      production, not just gcam's -- this went unnoticed locally
+  //      because `next dev` reads straight from the full source tree,
+  //      with no tracing/bundling step to expose the gap.
+  //   2. Even with that fixed, building (or pulling an equivalent
+  //      pre-built image from a registry) still measures in seconds to
+  //      minutes depending on the model -- gcam's own ~5.6GB image took
+  //      120-280s to pull from Docker Hub in direct testing. A
+  //      serverless function's own execution timeout (Netlify's
+  //      included) is measured in seconds, so anything that slow CAN'T
+  //      finish inside a request; the platform kills it first, surfacing
+  //      as a bare 502 from the edge itself, before this app's own code
+  //      ever gets to run its catch block.
+  // Creating from a Daytona snapshot sidesteps both: it needs nothing
+  // from this app's own deployed filesystem, and took well under a
+  // second in direct testing for every model (gcam: 0.5s single sample;
+  // the rest weren't independently re-timed after creation, but use the
+  // exact same snapshot mechanism).
+  //
+  // Snapshots are only usable from THIS Daytona organization, which is
+  // exactly why Docker Hub backups (possibleplanets/<model>) stay
+  // published for the models that have one -- for someone cloning this
+  // repo into their own Daytona account, or running a guide's plain
+  // `docker run` command -- just not what this app's own submitRun()
+  // uses for a real request anymore.
   daytona_snapshot?: string;
   scenarios: string[];
   params_shape: ParamsShape;
@@ -135,6 +146,16 @@ export const MODELS: Record<string, ModelMeta> = {
     implementation: "It's implemented in C++, licensed under the GPLv3.",
     website: "https://jgcri.github.io/hector/",
     dockerfile: path.join(SANDBOXES_DIR, "hector", "Dockerfile"),
+    // See daytona_snapshot's own doc comment (gcam's entry) -- every
+    // model now creates from its own Daytona snapshot rather than
+    // building/reading its Dockerfile at request time. Confirmed by
+    // direct testing: this app's production deployment never actually
+    // had sandboxes/ available to it at all (Next.js's build-time file
+    // tracing can't follow a dynamically-constructed fs path), so every
+    // non-cached run of every model but gcam was 502ing in production
+    // until this. Snapshot built+pushed from this same repo's
+    // sandboxes/hector/Dockerfile.
+    daytona_snapshot: "hector-production-v1",
     scenarios: ["ssp119", "ssp126", "ssp245", "ssp370", "ssp585"],
     params_shape: "scenario",
     exec_timeout_seconds: 60,
@@ -221,6 +242,8 @@ export const MODELS: Record<string, ModelMeta> = {
     implementation: "It's implemented in Python, licensed under the Apache-2.0 license.",
     website: "https://docs.fairmodel.net/",
     dockerfile: path.join(SANDBOXES_DIR, "fair", "Dockerfile"),
+    // See hector's daytona_snapshot comment for why every model uses one.
+    daytona_snapshot: "fair-production-v1",
     scenarios: [
       "ssp119",
       "ssp126",
@@ -274,6 +297,8 @@ export const MODELS: Record<string, ModelMeta> = {
     implementation: "It's implemented in Python, licensed under the CeCILL-2.1 license.",
     website: "https://github.com/tgasser/OSCAR",
     dockerfile: path.join(SANDBOXES_DIR, "oscar", "Dockerfile"),
+    // See hector's daytona_snapshot comment for why every model uses one.
+    daytona_snapshot: "oscar-production-v1",
     scenarios: [
       "SSP1-1.9",
       "SSP1-2.6",
@@ -340,6 +365,8 @@ export const MODELS: Record<string, ModelMeta> = {
     implementation: "It's implemented in GAMS.",
     website: "https://williamnordhaus.com/dicerice-models",
     dockerfile: path.join(SANDBOXES_DIR, "dice", "Dockerfile"),
+    // See hector's daytona_snapshot comment for why every model uses one.
+    daytona_snapshot: "dice-production-v1",
     // Only base/optimal -- confirmed by testing that DICE.jl only implements
     // these two for the v2016R2 version run.jl uses.
     scenarios: ["base", "optimal"],
@@ -364,6 +391,8 @@ export const MODELS: Record<string, ModelMeta> = {
     implementation: "Its source code is closed-source, not publicly available.",
     website: "https://magicc.org/",
     dockerfile: path.join(SANDBOXES_DIR, "magicc", "Dockerfile"),
+    // See hector's daytona_snapshot comment for why every model uses one.
+    daytona_snapshot: "magicc-production-v1",
     // pymagicc's own four RCP scenarios -- confirmed via
     // `pymagicc.rcps["scenario"].unique()`. A different, smaller taxonomy
     // than the SSP names hector/fair/oscar use; no cross-model mapping
@@ -410,6 +439,8 @@ export const MODELS: Record<string, ModelMeta> = {
     implementation: "It's implemented in Python, licensed under the BSD-3-Clause license.",
     website: "https://github.com/openscm/openscm-twolayermodel",
     dockerfile: path.join(SANDBOXES_DIR, "twolayer", "Dockerfile"),
+    // See hector's daytona_snapshot comment for why every model uses one.
+    daytona_snapshot: "twolayer-production-v1",
     // Same 8 SSPs sandboxes/fair exposes -- confirmed present as rows in
     // the bundled rcmip-erf.csv (RCMIP v4.0.0, trimmed). Unlike hector/
     // fair/oscar, this model has no scenario handling of its own: it's
@@ -451,15 +482,13 @@ export const MODELS: Record<string, ModelMeta> = {
     implementation: "It's implemented in C++17, licensed under the ECL-2.0 license.",
     website: "https://github.com/JGCRI/gcam-core",
     dockerfile: path.join(SANDBOXES_DIR, "gcam", "Dockerfile"),
-    // See daytona_snapshot's own doc comment above -- this repo's
-    // checkout (including in production) never has
-    // sandboxes/gcam/runtime/input/gcamdata/xml/ (gitignored, 5.2GB), so
-    // Image.fromDockerfile(dockerfile) would fail there at the COPY step,
-    // and pulling the equivalent possibleplanets/gcam:v1 image from
-    // Docker Hub instead is too slow (minutes) to fit inside a serverless
-    // function's own execution timeout. This is the Daytona snapshot
-    // saved from that same validated build (see docs/gcam/trial-log.md)
-    // -- confirmed 0.5s to create a sandbox from, in this org.
+    // See hector's daytona_snapshot comment for why every model uses one.
+    // gcam's own build additionally could never succeed from
+    // `dockerfile` alone even locally-equivalent tracing fixed, since its
+    // final stage COPYs sandboxes/gcam/runtime/input/gcamdata/xml/, a
+    // 5.2GB generated database that's deliberately gitignored (too large
+    // for git -- see sandboxes/gcam/runtime/README.md) and only ever
+    // exists on the one machine that originally generated it.
     daytona_snapshot: "gcam-production-v1",
     // Only "Reference" -- see sandboxes/gcam/run.py's module docstring and
     // docs/gcam/known-gaps.md ("Only configuration_ref.xml was actually
