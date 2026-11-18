@@ -1414,9 +1414,11 @@ a.icon-button {
 }
 
 .article-section h2 {
-  font-size: 1.0625rem;
-  margin-bottom: 0.5rem;
-  font-weight: 400;
+  font-size: 1.375rem;
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+  color: var(--pp-text);
+  letter-spacing: -0.3px;
 }
 
 /* --- Site footer (matches ../_includes/footer.html's 3-column layout) --- */
@@ -1498,9 +1500,12 @@ a.icon-button {
 }
 
 .run-guide-step-label {
-  font-weight: 600;
-  color: var(--pp-text);
-  margin: 0 0 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--pp-grey-dark);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.35rem;
 }
 
 .run-guide-step p {
