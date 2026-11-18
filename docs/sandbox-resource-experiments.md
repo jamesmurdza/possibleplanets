@@ -394,3 +394,27 @@ problem (an R data pipeline needing more memory than this account's
 sandboxes allow) is solved, and the solution (one-time GPU-assisted data
 generation, baked into a reusable snapshot) is documented and reusable if
 the data ever needs regenerating.
+
+### Backup copy on Docker Hub
+
+The `gcam-production-v1` Daytona snapshot above is the primary artifact,
+but it only exists inside Daytona's own registry -- confirmed
+inaccessible from outside (a direct `skopeo`/`Image.base()` pull against
+its `cr.app.daytona.io` ref returns `401 Unauthorized`; Daytona doesn't
+expose pull credentials for it). Pushed a second copy to
+**`possibleplanets/gcam:v1`** (also tagged `:latest`) on Docker Hub,
+public, as an independent backup that survives even if the Daytona
+snapshot is ever lost or expires.
+
+Built with plain `docker build`/`docker push` from this machine rather
+than through Daytona at all -- this machine's own cgroup caps at 3GB
+memory, well under what compiling GCAM's C++ from source needs (the same
+single file, `calc_base_price.o`, OOM-killed `cc1plus` under `-O3` at
+both `-j4` and `-j1`; this isn't a parallelism problem, one translation
+unit alone needs more than 3GB to compile). Rather than fight that,
+reused the already-compiled, already-verified `gcam.exe` binary pulled
+down earlier from the GPU sandbox (`sandboxes/gcam/runtime/exe/gcam.exe`
+-- gitignored, 294MB, not committed, but kept locally since it's the
+exact binary that already passed the full 21-period validation run) and
+built a single-stage image straight from `runtime/` with no compilation
+step at all. Verified with `gcam.exe --help` before pushing.

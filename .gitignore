@@ -16,3 +16,4 @@ apps/web/tsconfig.tsbuildinfo
 # (see docs/sandbox-resource-experiments.md). Only needs to exist locally
 # as Docker build context at snapshot-build time, not committed.
 sandboxes/gcam/runtime/input/gcamdata/xml/
+sandboxes/gcam/runtime/exe/gcam.exe
