@@ -261,9 +261,8 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
         label: "Run a minimal example",
         text: "Solve a named policy path and read its atmospheric temperature series back out.",
         code:
-          "using DICE\nresult = solve(OptimalPrice, v2016R2())\nresult.results.Tₐₜ\n# [0.85, 1.016, 1.184, 1.354, 1.524, ..., 4.001, 3.997, 3.993, 3.989]  (°C, from ~1900)",
+          "using DICE\nresult = solve(OptimalPrice, v2016R2())\nresult.results.Tₐₜ\n# [0.85, 1.016, 1.184, 1.354, 1.524, ..., 4.001, 3.997, 3.993, 3.989]  (°C, from ~1900)\n# 100 values total, years 2015-2510 in 5-year steps",
         language: "julia",
-        note: "Real output from actually running this: 100 values, years 2015-2510 in 5-year steps.",
       },
       localResourceStep(
         "Installing Julia, Ipopt, and DICE.jl takes about 1.1 to 1.2GB of disk space. The first solve on a fresh " +
