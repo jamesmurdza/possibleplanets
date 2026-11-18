@@ -47,6 +47,25 @@ comment -- its response *shape* is still real (read directly from
 `sandboxes/magicc/run.py`'s source), just not independently re-executed
 the way the other five are.
 
+## gcam is also NOT here
+
+Same situation as magicc, for a different reason: GCAM isn't a pip/Julia
+package at all -- `sandboxes/gcam/run.py` shells out to a compiled
+`gcam.exe` binary that needs its full 5.2GB generated input database
+present on disk (see `docs/gcam/artifacts.md`), which doesn't exist
+outside the `possibleplanets/gcam` image/the `gcam-production-v1`
+Daytona snapshot. A real, complete 21-period run of that exact
+`gcam.exe`+database combination *has* been independently verified
+end-to-end (see `docs/sandbox-resource-experiments.md`'s GCAM section) --
+but that was a plain successful exit and log output, not this specific
+`run.py` wrapper's JSON output captured and saved here. The REST example
+on GCAM's model page is labeled illustrative for that reason: its
+response *shape* is real (Hector's own standard long-format output,
+which is what `gcam-hector-outputstream.csv` actually is -- GCAM runs
+Hector internally for its climate component), just not independently
+re-executed through this wrapper and saved to a file here the way the
+other five are.
+
 ## Headline numbers (year 2100, for the params above)
 
 - **fair**: mean temperature anomaly across 66 climate configs = 3.61°C

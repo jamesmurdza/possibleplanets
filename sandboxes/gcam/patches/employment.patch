@@ -1,0 +1,12 @@
+--- a/input/gcamdata/R/zsocio_L100.Employment.R
++++ b/input/gcamdata/R/zsocio_L100.Employment.R
+@@ -92,7 +92,8 @@
+       mutate(
+         ISIC_division = gsub("^Economic activity \\(ISIC-Rev.4\\), 2 digit level: ",
+                              "ISIC4_", ISIC_division),
+         ISIC_division = gsub("^Economic activity \\(ISIC-Rev.3.1\\), 2 digit level: ",
+                              "ISIC3.1_", ISIC_division)  ) %>%
+-      left_join_error_no_match(ILO_country_iso_mapping, by = "country") ->
++      left_join(ILO_country_iso_mapping, by = "country") %>%
++      filter(!is.na(iso)) ->
+       L100.Emp_ILOLFS_PartialISO_ISIC2D_Yh_thouspers

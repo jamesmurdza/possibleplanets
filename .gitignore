@@ -9,3 +9,11 @@ node_modules/
 .next/
 
 apps/web/tsconfig.tsbuildinfo
+
+# gcamdata's generated XML input database -- 5.2GB, too large for git.
+# Baked into the gcam-production-* Daytona snapshot instead; regenerated
+# via sandboxes/gcam/gcamdata.Dockerfile + a GPU-memory-unlocked sandbox
+# (see docs/sandbox-resource-experiments.md). Only needs to exist locally
+# as Docker build context at snapshot-build time, not committed.
+sandboxes/gcam/runtime/input/gcamdata/xml/
+sandboxes/gcam/runtime/exe/gcam.exe

@@ -13,8 +13,15 @@
  *     broken on a bare machine (each sandboxes/<model>/Dockerfile's own
  *     comments document the exact failure: hector needs a C++ toolchain
  *     to compile its core, magicc needs Wine, twolayer needs a source
- *     patch for pandas compatibility), so the step instead builds/runs
- *     that Dockerfile -- the one path actually confirmed to work.
+ *     patch for pandas compatibility). The step points at the prebuilt
+ *     `possibleplanets/<model>` image on Docker Hub (built from that same
+ *     Dockerfile) rather than asking the reader to build it themselves --
+ *     a `docker pull`+`run` skips the compile/Wine-install/patch step
+ *     entirely. This page is public-facing and readers have no reason to
+ *     know this repo (or its sandboxes/<model>/Dockerfile) exists at all,
+ *     so there's deliberately no "or build it yourself from this repo's
+ *     Dockerfile" fallback mentioned here -- that instruction would be
+ *     meaningless to someone who's never heard of this repo.
  *
  * Every model's REST section is built by restApiStep(): one curl example
  * that submits a run and polls it to completion against this project's
@@ -310,16 +317,22 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     [
       {
         text:
-          "Build and run this repo's own sandboxes/hector/Dockerfile, which installs the system packages pyhector " +
-          "needs to compile its C++ core from source -- a plain `pip install pyhector` fails on a bare machine " +
-          "without them.",
-        code: "docker build -t hector-sandbox sandboxes/hector\ndocker run --rm hector-sandbox",
+          "A plain `pip install pyhector` fails on a bare machine -- it needs a C/C++ toolchain and Boost headers " +
+          "to compile Hector's core from source. Pull the prebuilt image instead of building it yourself; it " +
+          "already has all of that baked in. This runs the ssp126 scenario by default and prints the result as " +
+          "JSON. To run a different one, pass `SCENARIO_PARAMS` as an environment variable (supported scenarios: " +
+          "ssp119, ssp126, ssp245, ssp370, ssp585).",
+        code:
+          "docker pull possibleplanets/hector\n" +
+          "docker run --rm possibleplanets/hector\n" +
+          '# -> {"temperature.global_tas": [...], "simpleNbox.CO2_concentration": [...], ...}\n\n' +
+          'docker run --rm -e SCENARIO_PARAMS=\'{"scenario": "ssp585"}\' possibleplanets/hector',
         language: "bash",
       },
       localResourceStep(
         "Building the Docker image installs about 800MB of dependencies, mostly Boost headers and a C/C++ " +
-          "compiler used once to build Hector's core. After that, each run takes about 1 to 2 seconds on 1 to 2 " +
-          "CPUs, with no meaningful memory requirement.",
+          "compiler used once to build Hector's core -- the prebuilt image skips all of that. Each run takes " +
+          "about 1 to 2 seconds on 1 to 2 CPUs, with no meaningful memory requirement.",
       ),
     ],
     [
@@ -346,16 +359,23 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     [
       {
         text:
-          "Build and run this repo's own sandboxes/magicc/Dockerfile, which installs Wine (pymagicc wraps a real " +
-          "Windows MAGICC6.exe binary via it) and pins xarray to a version confirmed to work -- pymagicc's current " +
-          "pip dependency resolution otherwise pulls a newer xarray it can't import.",
-        code: "docker build -t magicc-sandbox sandboxes/magicc\ndocker run --rm magicc-sandbox",
+          "pymagicc wraps a real Windows MAGICC6.exe binary via Wine, and its current pip dependency resolution " +
+          "pulls a newer xarray it can't import. Pull the prebuilt image instead of installing Wine yourself -- " +
+          "it already has Wine and a working xarray version baked in. This runs the RCP26 scenario by default and " +
+          "prints the result as JSON. To run a different one, pass `SCENARIO_PARAMS` as an environment variable " +
+          "(supported scenarios: RCP26, RCP45, RCP60, RCP85).",
+        code:
+          "docker pull possibleplanets/magicc\n" +
+          "docker run --rm possibleplanets/magicc\n" +
+          '# -> {"years": [...], "T_atmos": [...]}\n\n' +
+          'docker run --rm -e SCENARIO_PARAMS=\'{"scenario": "RCP85"}\' possibleplanets/magicc',
         language: "bash",
       },
       localResourceStep(
         "Wine alone needs at least 2 to 3GB of free disk space, on top of pymagicc's own small (tens of MB) " +
-          "footprint. That didn't fit in the environment used to write this guide, which had only about 1.6GB " +
-          "free, so budget more than that if you're installing it yourself.",
+          "footprint, if you build it yourself -- the prebuilt image skips that install entirely. That disk " +
+          "requirement didn't fit in the environment used to write this guide, which had only about 1.6GB free, " +
+          "so budget more than that if you do build it locally.",
       ),
     ],
     [
@@ -377,10 +397,17 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     [
       {
         text:
-          "Build and run this repo's own sandboxes/twolayer/Dockerfile, which patches a 2-line pandas API call " +
-          "openscm-twolayermodel==0.2.3 makes that pandas>=2.0 removed -- no pandas version compatible with both " +
-          "this package and Python 3.11 exists on PyPI, so the installed package itself needs the patch.",
-        code: "docker build -t twolayer-sandbox sandboxes/twolayer\ndocker run --rm twolayer-sandbox",
+          "openscm-twolayermodel==0.2.3 makes a 2-line pandas API call that pandas>=2.0 removed -- no pandas " +
+          "version compatible with both this package and Python 3.11 exists on PyPI, so the installed package " +
+          "itself needs a source patch. Pull the prebuilt image instead; it's already patched. This runs the " +
+          "ssp245 scenario by default and prints the result as JSON. To run a different one, pass " +
+          "`SCENARIO_PARAMS` as an environment variable (supported scenarios: ssp119, ssp126, ssp245, ssp370, " +
+          "ssp434, ssp460, ssp534-over, ssp585).",
+        code:
+          "docker pull possibleplanets/twolayer\n" +
+          "docker run --rm possibleplanets/twolayer\n" +
+          '# -> {"years": [...], "T_atmos": [...]}\n\n' +
+          'docker run --rm -e SCENARIO_PARAMS=\'{"scenario": "ssp585"}\' possibleplanets/twolayer',
         language: "bash",
       },
       localResourceStep(
@@ -400,6 +427,52 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
         1,
       ),
       apiCostStep("twolayer", 1, 1, 1, 0, "under a second"),
+    ],
+  ),
+  gcam: sections(
+    "gcam",
+    [
+      {
+        text:
+          "GCAM isn't a pip-installable package -- it's a compiled C++17 program that reads a multi-gigabyte " +
+          "input database generated by a separate R data pipeline (one that genuinely needs more memory than a " +
+          "typical machine has, see docs/gcam/architecture.md). Docker is the only realistic path here: the " +
+          "prebuilt image already has the compiled binary and that full database baked in. This runs the " +
+          "\"Reference\" scenario (the only one currently supported -- see docs/gcam/known-gaps.md) and prints " +
+          "the result as JSON once it finishes.",
+        code:
+          "docker pull possibleplanets/gcam\n" +
+          "docker run --rm possibleplanets/gcam\n" +
+          '# -> {"status": "succeeded", "scenario": "Reference", "result": {"rows": [...]}}\n\n' +
+          '# SCENARIO_PARAMS works the same way as every other model here, but "Reference" is\n' +
+          '# the only scenario currently supported (see docs/gcam/known-gaps.md), so this is\n' +
+          '# equivalent to the bare command above, not a different result:\n' +
+          'docker run --rm -e SCENARIO_PARAMS=\'{"scenario": "Reference"}\' possibleplanets/gcam',
+        language: "bash",
+      },
+      localResourceStep(
+        "The image is several GB (the baked-in input database alone is 5.2GB). A run uses close to 4 CPUs and " +
+          "several GB of memory for about 30 minutes -- GCAM is solving a real multi-region economic equilibrium " +
+          "across 21 time periods (1975-2100), not a closed-form calculation like every other model here.",
+      ),
+    ],
+    [
+      restApiStep(
+        "gcam",
+        '{"scenario": "Reference"}',
+        '{\n' +
+          '    "rows": [\n' +
+          '      {"scenario": "Reference", "run_name": "none", "spinup": "0", "year": "1850", "variable": "Tgav", "value": "0.0", "units": "degC"},\n' +
+          '      ...\n' +
+          '      {"scenario": "Reference", "run_name": "none", "spinup": "0", "year": "2100", "variable": "Tgav", "value": "...", "units": "degC"}\n' +
+          '    ]  // ILLUSTRATIVE shape -- see docs/api-examples/README.md\n' +
+          '  }',
+        "GCAM runs its own internal Hector instance for climate -- rows follow Hector's standard long-format " +
+          "output (scenario/run_name/spinup/year/variable/value/units), not independently re-executed -- see " +
+          "docs/api-examples/README.md",
+        1860,
+      ),
+      apiCostStep("gcam", 4, 8, 1860, 7),
     ],
   ),
 };

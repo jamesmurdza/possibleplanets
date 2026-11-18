@@ -10,19 +10,32 @@
  *     hector's 3-second run, which the old Python gateway ran via a plain
  *     blocking exec() inside the request.
  *
- *   - advanceRun() is what GET /v1/runs/{run_id} calls on every poll. Each
- *     call does ONE check: read the sandbox's progress file (if the model
- *     supports it) and the session command's exit status, persist whatever
- *     changed, and -- if the command just finished -- parse the result,
- *     write it to the cache, delete the sandbox, and mark the run terminal.
- *     The client's existing ~150ms polling loop is what drives the job
- *     forward, one short stateless call at a time; there is no background
- *     loop or long-lived process doing this on its own.
+ *   - The command submitted isn't just the model's own run command --
+ *     buildWrappedCommand() wraps it so that, once it exits (successfully,
+ *     with a model error, or killed), the sandbox itself POSTs the result
+ *     straight back to this app (see WEBHOOK_BASE_URL/completeRunFromWebhook
+ *     below) using an interpreter already present in that image (no
+ *     Dockerfile/image changes needed for this). That's the PRIMARY way a
+ *     run gets finalized now -- it doesn't depend on anyone ever polling.
  *
- *   - Double-finalization is guarded by claimRunForFinalize()'s atomic
- *     UPDATE ... WHERE status = 'running' (see lib/db.ts) -- if two GETs
- *     both see the command just finished, only one of them wins the claim
- *     and proceeds to parse/cache/delete; the other just re-reads the row.
+ *   - advanceRun() is the FALLBACK: what GET /v1/runs/{run_id} calls on
+ *     every poll. Each call does ONE check: read the sandbox's progress
+ *     file (if the model supports it) and the session command's exit
+ *     status, persist whatever changed, and -- if the command just
+ *     finished and the webhook above hasn't already finalized it (e.g. its
+ *     POST never reached this app) -- do the same parse/cache/delete
+ *     finalization itself. A browser that's actively watching a run still
+ *     polls this for live progress either way, which doubles as an early
+ *     liveness check (a sandbox that vanishes outright gets caught here,
+ *     whenever anyone next looks -- see the "sandbox lookup failed" branch
+ *     below) even though it's no longer what's load-bearing for
+ *     finalization in the common case.
+ *
+ *   - Double-finalization (from the webhook and a poll both trying, or two
+ *     concurrent polls) is guarded by claimRunForFinalize()'s atomic
+ *     UPDATE ... WHERE status = 'running' (see lib/db.ts) -- only one
+ *     caller ever wins the claim and proceeds to parse/cache/delete; every
+ *     other caller just re-reads the row.
  */
 import { Image, Resources, CreateSandboxFromImageParams } from "@daytona/sdk";
 import { randomUUID } from "crypto";
@@ -44,10 +57,116 @@ import {
 
 const DEFAULT_RUN_COMMAND = "python3 -u /app/run.py";
 const PROGRESS_FILE_PATH = "/tmp/progress.json";
+// Where the wrapped command (see buildWrappedCommand) redirects the real
+// run command's stdout+stderr, so the follow-up webhook step can read it
+// back -- separate from PROGRESS_FILE_PATH, which is a different file
+// run.py itself writes mid-run for live progress, not the final output.
+const RUN_OUTPUT_LOG_PATH = "/tmp/run_output.log";
 // Backstop auto-delete, in minutes -- same reasoning as the Python version's
 // SANDBOX_AUTO_DELETE_MINUTES: a sandbox we fail to explicitly delete (e.g.
-// the process crashes mid-run) still gets cleaned up on its own.
+// the process crashes mid-run, or the webhook POST below never reaches
+// this app) still gets cleaned up on its own, eventually, after it stops.
 const SANDBOX_AUTO_DELETE_MINUTES = 15;
+
+// Small margin on top of the model's own exec_timeout_seconds -- NOT a
+// "wait around for a human to come back" buffer (the webhook below makes
+// that unnecessary: a finished sandbox reports in and gets deleted
+// immediately in the common case, whether or not anyone's watching).
+// This exists purely so Daytona's own idle-stop timer doesn't land at
+// almost the same moment as our own exec_timeout_seconds deadline check
+// (advanceRun's deadlinePassed) -- if those two raced, it'd be ambiguous
+// (and produce a worse error: "sandbox lookup failed" instead of "run did
+// not finish within the allotted time") which one actually ended the run.
+// Keeping this small, rather than padding it generously, is deliberate:
+// exec_timeout_seconds is itself already supposed to be the real ceiling
+// we're willing to wait for a run (see each model's own comment in
+// models.ts for how that number was chosen) -- this margin isn't trying
+// to second-guess that number or protect against it being wrong.
+const AUTO_STOP_SAFETY_MARGIN_MINUTES = 5;
+
+function autoStopMinutes(model: ModelMeta): number {
+  return Math.ceil(model.exec_timeout_seconds / 60) + AUTO_STOP_SAFETY_MARGIN_MINUTES;
+}
+
+// Netlify sets this to the site's own deployed origin at build and
+// function-runtime (confirmed via Netlify's documented environment
+// variables), so the sandbox can reach this exact deployment without a
+// hardcoded domain baked in. Falls back to the known production domain
+// for local dev, where Netlify's own runtime env isn't present.
+const WEBHOOK_BASE_URL = process.env.URL || "https://possibleplanets.org";
+
+function webhookUrl(runId: string): string {
+  return `${WEBHOOK_BASE_URL}/v1/internal/runs/${runId}/complete`;
+}
+
+/**
+ * Wraps the model's own run command so that, once it exits -- for ANY
+ * reason: success, a model-reported failure, or getting killed -- the
+ * sandbox reports the result straight back to this app via an HTTP POST,
+ * instead of (only) waiting for someone to poll GET /v1/runs/{run_id}.
+ *
+ * Deliberately NOT implemented by editing sandboxes/<model>/run.py (or
+ * run.jl): that would mean every model's image needs rebuilding/
+ * re-publishing for this. Instead, the report-back step is appended here,
+ * in the command string itself (constructed fresh per run, never baked
+ * into any image), using an interpreter the image already has:
+ *   - python3 for every model but dice -- it's already what's running
+ *     run.py, so this needs nothing extra (just Python's own stdlib
+ *     urllib.request, no new package).
+ *   - Julia's own Downloads stdlib (bundled since Julia 1.6, no `Pkg.add`
+ *     needed) + the JSON package sandboxes/dice/Dockerfile already
+ *     installs (for run.jl's own use) for dice specifically.
+ *
+ * `> RUN_OUTPUT_LOG_PATH 2>&1` captures the real run command's combined
+ * stdout/stderr (same content advanceRun's poll path reads via
+ * getSessionCommandLogs) so the follow-up step can read it back and send
+ * it along. `EXIT=$?` captures the real run command's own exit code
+ * (deliberately captured before the follow-up step can touch $?), and
+ * `exit $EXIT` at the very end makes the WHOLE wrapped command's own exit
+ * code equal to that -- not the follow-up POST's exit code -- so
+ * advanceRun()'s existing poll-based fallback still sees the true outcome
+ * if the webhook call itself fails to reach this app for any reason.
+ * Nothing here uses `set -e`/`&&`: the follow-up step must still run even
+ * when the real run command exits non-zero.
+ */
+function buildWrappedCommand(runId: string, runCommand: string, params: Record<string, unknown>): string {
+  const url = webhookUrl(runId);
+  const isJulia = runCommand.trim().startsWith("julia");
+
+  // No single quotes anywhere in either inline script below -- both are
+  // passed as a single-quoted shell argument (python3 -c '...'/julia -e
+  // '...'), so a literal single quote in the script would terminate that
+  // argument early. Double quotes are used for every string instead,
+  // which both Python and Julia accept just as well.
+  const reportStep = isJulia
+    ? `EXIT=$EXIT WEBHOOK_URL='${url}' julia -e '
+using JSON, Downloads
+stdout_text = read("${RUN_OUTPUT_LOG_PATH}", String)
+body = JSON.json(Dict("exit_code" => parse(Int, ENV["EXIT"]), "stdout" => stdout_text))
+try
+    Downloads.request(ENV["WEBHOOK_URL"]; method="POST", headers=["Content-Type" => "application/json"], input=IOBuffer(body))
+catch
+end
+'`
+    : `EXIT=$EXIT WEBHOOK_URL='${url}' python3 -c '
+import json, os, urllib.request
+with open("${RUN_OUTPUT_LOG_PATH}") as f:
+    stdout = f.read()
+body = json.dumps({"exit_code": int(os.environ["EXIT"]), "stdout": stdout}).encode()
+req = urllib.request.Request(os.environ["WEBHOOK_URL"], data=body, headers={"Content-Type": "application/json"}, method="POST")
+try:
+    urllib.request.urlopen(req, timeout=15)
+except Exception:
+    pass
+'`;
+
+  return (
+    `SCENARIO_PARAMS='${JSON.stringify(params)}' ${runCommand} > ${RUN_OUTPUT_LOG_PATH} 2>&1\n` +
+    `EXIT=$?\n` +
+    `${reportStep}\n` +
+    `exit $EXIT`
+  );
+}
 
 export interface SubmitResult {
   run_id: string;
@@ -255,6 +374,7 @@ export async function submitRun(
   const createParams: CreateSandboxFromImageParams = {
     image,
     name: `${modelName}-run-${runId.slice(0, 8)}`,
+    autoStopInterval: autoStopMinutes(model),
     autoDeleteInterval: SANDBOX_AUTO_DELETE_MINUTES,
   };
   if (model.resources) {
@@ -267,11 +387,12 @@ export async function submitRun(
   await sandbox.process.createSession(sessionId);
 
   const runCommand = model.run_command || DEFAULT_RUN_COMMAND;
-  // No `env` param on session commands -- pass it inline as a shell prefix,
-  // same approach as the Python gateway. Safe here: params are
-  // gateway-controlled JSON (scenario names/lists), not arbitrary user shell
-  // input.
-  const command = `SCENARIO_PARAMS='${JSON.stringify(params)}' ${runCommand}`;
+  // SCENARIO_PARAMS is passed inline as a shell prefix (no `env` param on
+  // session commands) -- safe here: params are gateway-controlled JSON
+  // (scenario names/lists), not arbitrary user shell input. See
+  // buildWrappedCommand's own docstring for why this is more than just the
+  // bare run command now.
+  const command = buildWrappedCommand(runId, runCommand, params);
   const resp = await sandbox.process.executeSessionCommand(sessionId, { command, runAsync: true });
 
   await insertRun({
@@ -399,10 +520,12 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
   }
 
   // Command finished. Atomically claim the right to finalize -- see this
-  // module's docstring and lib/db.ts's claimRunForFinalize.
+  // module's docstring and lib/db.ts's claimRunForFinalize. (The webhook
+  // may have already claimed and finalized this in the time since this
+  // poll started -- that's exactly what this claim is for.)
   const claimed = await claimRunForFinalize(runId);
   if (!claimed) {
-    // Another concurrent poll already won the claim (or already finished).
+    // Another concurrent poll (or the webhook) already won the claim.
     row = (await getRun(runId))!;
     return toView(row);
   }
@@ -410,10 +533,73 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
   const exitCode = cmdInfo.exitCode;
   const logs = await sandbox.process.getSessionCommandLogs(row.session_id, row.cmd_id);
   const stdout = logs.stdout || logs.output || "";
-  const jsonLine = lastJsonLine(stdout);
   const runSeconds = elapsedSeconds(startedAt);
 
   await cleanupSandboxAndSession(daytona, sandbox, row.session_id);
+  await finalizeOutcome(runId, row, exitCode, stdout, runSeconds);
+  row = (await getRun(runId))!;
+  return toView(row);
+}
+
+/**
+ * Called from the webhook route (app/v1/internal/runs/[runId]/complete)
+ * when the sandbox itself reports in -- the primary way a run finishes
+ * now, not a fallback. Mirrors advanceRun()'s own "command finished"
+ * branch, just with `exitCode`/`stdout` handed to it directly in the POST
+ * body instead of being fetched from Daytona, and no sandbox object
+ * available going in (so cleanup looks it up by sandbox_id, best-effort --
+ * if it's already gone, or the lookup itself fails, there's nothing left
+ * to clean up anyway).
+ */
+export async function completeRunFromWebhook(
+  runId: string,
+  exitCode: number,
+  stdout: string,
+): Promise<RunView | null> {
+  let row = await getRun(runId);
+  if (!row) return null;
+
+  if (row.status === "succeeded" || row.status === "failed") {
+    return toView(row);
+  }
+
+  const claimed = await claimRunForFinalize(runId);
+  if (!claimed) {
+    // A concurrent poll already won the claim (or already finished) --
+    // same race advanceRun() itself already guards against.
+    row = (await getRun(runId))!;
+    return toView(row);
+  }
+
+  const startedAt = new Date(Date.parse(row.started_at));
+  const runSeconds = elapsedSeconds(startedAt);
+
+  if (row.sandbox_id) {
+    try {
+      const daytona = getDaytonaClient();
+      const sandbox = await daytona.get(row.sandbox_id);
+      await cleanupSandboxAndSession(daytona, sandbox, row.session_id ?? "");
+    } catch {
+      // Already gone, or the lookup itself failed -- nothing left to clean
+      // up either way; this call still needs to finalize the run below.
+    }
+  }
+
+  await finalizeOutcome(runId, row, exitCode, stdout, runSeconds);
+  row = (await getRun(runId))!;
+  return toView(row);
+}
+
+/**
+ * Shared by advanceRun() (poll path) and completeRunFromWebhook() (push
+ * path): given a finished command's exit code and captured stdout, parse
+ * run.py/run.jl's own JSON result (its last line that looks like one --
+ * see lastJsonLine), write it to run_cache, and mark the run terminal.
+ * Must be called only AFTER claimRunForFinalize() has already succeeded
+ * for this runId -- this function itself does no claiming.
+ */
+async function finalizeOutcome(runId: string, row: RunRow, exitCode: number, stdout: string, runSeconds: number) {
+  const jsonLine = lastJsonLine(stdout);
 
   if (exitCode !== 0 || jsonLine === null) {
     await finishRunFailed(
@@ -421,8 +607,7 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
       { code: "model_run_failed", message: `exit_code=${exitCode}`, stdout_tail: stdout.slice(-2000) },
       runSeconds,
     );
-    row = (await getRun(runId))!;
-    return toView(row);
+    return;
   }
 
   let parsed: any;
@@ -431,25 +616,19 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
   } catch {
     // Keep the actual output around (stdout_tail) -- without it, a parse
     // failure here was previously undiagnosable after the fact, since the
-    // sandbox is already deleted above by the time this runs (confirmed by
-    // hitting exactly this gap debugging a real oscar run.py failure).
+    // sandbox is already deleted by the caller before this runs (confirmed
+    // by hitting exactly this gap debugging a real oscar run.py failure).
     await finishRunFailed(
       runId,
       { code: "model_run_failed", message: "could not parse model output", stdout_tail: stdout.slice(-2000) },
       runSeconds,
     );
-    row = (await getRun(runId))!;
-    return toView(row);
+    return;
   }
 
   if (parsed.status !== "succeeded") {
-    await finishRunFailed(
-      runId,
-      { code: "model_run_failed", message: parsed.error || "unknown error" },
-      runSeconds,
-    );
-    row = (await getRun(runId))!;
-    return toView(row);
+    await finishRunFailed(runId, { code: "model_run_failed", message: parsed.error || "unknown error" }, runSeconds);
+    return;
   }
 
   // Real measured wall-clock time for this specific run (sandbox create +
@@ -477,8 +656,6 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
     }
   }
   await finishRunSucceeded(runId, parsed, runSeconds, false);
-  row = (await getRun(runId))!;
-  return toView(row);
 }
 
 async function cleanupSandboxAndSession(daytona: ReturnType<typeof getDaytonaClient>, sandbox: any, sessionId: string) {

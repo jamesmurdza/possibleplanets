@@ -1,0 +1,17 @@
+--- a/input/gcamdata/R/zsocio_L100.Population_hist.R
++++ b/input/gcamdata/R/zsocio_L100.Population_hist.R
+@@ -216,14 +216,8 @@
+     # Some iso's don't have data out to the base year, so we need to extrapolate
+     # Create a dataframe that has all iso's and all years, and fill with the values we have from Maddison and UN
+     L100.Pop_thous_ctry_Yh %>%
+-      repeat_add_columns(tibble::tibble(iso=unique(L100.Pop_thous_ctry_Yh$iso))) %>%
+-      repeat_add_columns(tibble::tibble(year=unique(L100.Pop_thous_ctry_Yh$year))) %>%
+-      select(-c(iso.x,year.x,value)) %>%
+-      distinct() %>%
+-      # Must use left_join because we want NAs in this dataframe to show what is missing from IEA
+-      left_join(L100.Pop_thous_ctry_Yh, by=c("iso.y" = "iso", "year.y" = "year")) %>%
+-      rename(iso = iso.y,
+-             year = year.y) ->
++      tidyr::complete(iso, year) ->
+       # This results in a df that has NAs, so we can interpolate / extrapolate
+       L100.Pop_thous_ctry_UNpopYh_NAs

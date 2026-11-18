@@ -673,6 +673,19 @@ a.icon-button {
   padding: calc(0.55rem - 1px) calc(0.7rem - 1px) calc(1.4rem - 1px);
 }
 
+/* Shift-clicked in ADDITION to the primary (non-shift) selection, for
+   batch-submitting several runs at once from one form -- a dashed accent
+   border keeps it visually distinct from the single primary selection
+   (solid border, see .selected above) without implying it's "the"
+   selection too. Border width matches .selected's 2px for the same
+   no-layout-shift reason. */
+.model-card.selected-extra {
+  border-width: 2px;
+  border-style: dashed;
+  border-color: var(--color-accent);
+  padding: calc(0.55rem - 1px) calc(0.7rem - 1px) calc(1.4rem - 1px);
+}
+
 .model-card-header {
   display: flex;
   align-items: center;
@@ -797,6 +810,15 @@ a.icon-button {
   padding: calc(0.55rem - 1px) calc(0.7rem - 1px) calc(1.4rem - 1px);
 }
 
+/* See .model-card.selected-extra's comment -- same shift-click batch
+   selection, applied to scenario cards. */
+.scenario-card.selected-extra {
+  border-width: 2px;
+  border-style: dashed;
+  border-color: var(--color-accent);
+  padding: calc(0.55rem - 1px) calc(0.7rem - 1px) calc(1.4rem - 1px);
+}
+
 .scenario-card-header {
   display: flex;
   align-items: center;
@@ -833,6 +855,11 @@ a.icon-button {
   margin-top: 1.1rem;
   padding-top: 1rem;
   border-top: 1px solid var(--color-border);
+}
+
+.form-hint {
+  font-size: 0.8125rem;
+  color: var(--color-text-faint);
 }
 
 /* --- Compare tab's "compare by" axis toggle --- */
@@ -991,6 +1018,10 @@ a.icon-button {
   .sidebar-nav {
     flex-direction: row;
     overflow-x: auto;
+  }
+
+  .public-card-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .main-area {
@@ -1299,22 +1330,26 @@ a.icon-button {
   margin: 0 0 1rem;
 }
 
-/* One row, always -- cards divide the full row width evenly and shrink
-   together rather than wrapping to a second row (auto-fill grid would
-   wrap once cards got too narrow for their min-width). On genuinely
-   narrow viewports this lets the row scroll horizontally instead, so a
-   card's content is never crushed past readability. */
+/* Used by the "Emissions scenarios" section below (the "Models" section
+   has its own, smaller .public-model-row/.public-model-card instead --
+   see below). A fixed-column grid (4 columns), so a scenario list past
+   8 items wraps to a second row of however many remain, each card under
+   the same column tracks as the row above rather than stretching to
+   fill whatever's left in its own row. That's the difference from a
+   flexbox approach: flex sizes each row's items based on what's in that
+   row (so a ragged last row's cards end up a different width than a
+   full row's), while a grid's column tracks are fixed by the
+   container, so every card is the same width and the grid still fills
+   the full row width evenly -- a short last row just leaves its unused
+   columns empty instead of stretching to fill them. */
 .public-card-grid {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.6rem;
-  overflow-x: auto;
-  padding-bottom: 0.25rem;
 }
 
 .public-card {
   display: block;
-  flex: 1 1 0;
-  min-width: 7rem;
   border: 1px solid var(--pp-grey-light);
   border-radius: 4px;
   background: #fff;
@@ -1339,6 +1374,86 @@ a.icon-button {
   font-size: 0.875rem;
   color: var(--pp-grey);
   line-height: 1.5;
+}
+
+/* Shown in place of the last visible card when a grid has more items
+   than fit in VISIBLE_ROWS (app/page.tsx's truncateToRows) -- a plain
+   "there's more than this" indicator, not a link, so no hover/pointer
+   styling. */
+.public-card-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+  color: var(--pp-grey);
+}
+
+.public-card-more .public-card-title {
+  margin-bottom: 0;
+  text-transform: none;
+  font-weight: 400;
+  letter-spacing: 0.15em;
+}
+
+/* "Models" section: a single row, always -- no wrapping to a second row
+   and no truncation like .public-card-grid above. Each card is just an
+   icon + acronym (no description); cards divide the full row width
+   evenly (flex: 1 1 0, same approach .public-card-grid's old flex
+   version used before it switched to a fixed-column grid -- that
+   problem doesn't apply here since there's no "..." indicator card to
+   keep a consistent width against) and shrink together on narrow
+   viewports rather than wrapping. min-width + overflow-x is the
+   fallback once they'd shrink past legibility, so the row scrolls
+   horizontally instead of cramming. */
+.public-model-row {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.public-model-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 1 1 0;
+  min-width: 4.5rem;
+  padding: 0.9rem 0.4rem;
+  border: 1px solid var(--pp-grey-light);
+  border-radius: 4px;
+  background: #fff;
+  text-decoration: none;
+  color: var(--pp-text);
+  transition: border-color 0.12s ease;
+}
+
+.public-model-card:hover {
+  border-color: var(--pp-brand);
+}
+
+.public-model-card-icon {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  color: var(--pp-grey);
+}
+
+.public-model-card:hover .public-model-card-icon {
+  color: var(--pp-brand);
+}
+
+.public-model-card-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.public-model-card-acronym {
+  font-weight: 600;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  text-align: center;
+  line-height: 1.25;
 }
 
 /* --- Article pages (one model or one scenario) --- */

@@ -8,109 +8,8 @@ import { modelAssumptions, scenarioAssumptions, type AssumptionSection } from ".
 import Sparkline from "./Sparkline";
 import Modal, { AssumptionsModalBody } from "./Modal";
 import InfoButton from "./InfoButton";
+import ModelIcon from "./ModelIcon";
 import type { ModelMeta, ModelListItem, RunJob, ModelDurationStats, CheckResult } from "../lib/clientTypes";
-
-// One simple, distinct glyph per model -- purely decorative wayfinding on
-// the model cards, not derived from any real model property. Falls back to
-// a plain circle for any model not listed here, so adding a new model to
-// lib/models.ts without updating this never breaks rendering.
-function ModelIcon({ model }: { model: string }) {
-  const common = { viewBox: "0 0 16 16", "aria-hidden": true as const };
-  switch (model) {
-    case "hector": // bolt -- fastest model in this project
-      return (
-        <svg {...common}>
-          <path d="M8.5 1.5 3 9h3.3L6 14.5 13 6.5H9.3L8.5 1.5z" fill="currentColor" />
-        </svg>
-      );
-    case "fair": // balance/scale
-      return (
-        <svg {...common}>
-          <path
-            d="M8 1.5v13M3 4.5h10M3 4.5 1.5 8.5a1.75 1.75 0 0 0 3 0L3 4.5zM13 4.5l-1.5 4a1.75 1.75 0 0 0 3 0L13 4.5zM5.5 14.5h5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      );
-    case "oscar": // orbit/atom -- Monte Carlo ensemble
-      return (
-        <svg {...common}>
-          <circle cx="8" cy="8" r="1.4" fill="currentColor" />
-          <ellipse cx="8" cy="8" rx="6.2" ry="2.6" fill="none" stroke="currentColor" strokeWidth="1.1" />
-          <ellipse
-            cx="8"
-            cy="8"
-            rx="6.2"
-            ry="2.6"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.1"
-            transform="rotate(60 8 8)"
-          />
-          <ellipse
-            cx="8"
-            cy="8"
-            rx="6.2"
-            ry="2.6"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.1"
-            transform="rotate(120 8 8)"
-          />
-        </svg>
-      );
-    case "dice": // literal die
-      return (
-        <svg {...common}>
-          <rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" strokeWidth="1.3" />
-          <circle cx="5.5" cy="5.5" r="1" fill="currentColor" />
-          <circle cx="10.5" cy="5.5" r="1" fill="currentColor" />
-          <circle cx="8" cy="8" r="1" fill="currentColor" />
-          <circle cx="5.5" cy="10.5" r="1" fill="currentColor" />
-          <circle cx="10.5" cy="10.5" r="1" fill="currentColor" />
-        </svg>
-      );
-    case "magicc": // sparkle
-      return (
-        <svg {...common}>
-          <path
-            d="M8 1.5l1.1 3.4L12.5 6l-3.4 1.1L8 10.5l-1.1-3.4L3.5 6l3.4-1.1L8 1.5zM13 9.5l.6 1.9 1.9.6-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6.6-1.9z"
-            fill="currentColor"
-          />
-        </svg>
-      );
-    case "twolayer": // two stacked layers -- surface + deep ocean
-      return (
-        <svg {...common}>
-          <path
-            d="M8 2 1.5 5.5 8 9l6.5-3.5L8 2z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.2"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M1.5 9.5 8 13l6.5-3.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      );
-    default:
-      return (
-        <svg {...common}>
-          <circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" strokeWidth="1.3" />
-        </svg>
-      );
-  }
-}
 
 export default function NewRunPanel() {
   const [models, setModels] = useState<ModelListItem[]>([]);
@@ -132,6 +31,18 @@ export default function NewRunPanel() {
   const [statsByModel, setStatsByModel] = useState<Record<string, ModelDurationStats>>({});
   const [checkResult, setCheckResult] = useState<CheckResult | null>(null);
   const [infoModal, setInfoModal] = useState<{ title: string; section: AssumptionSection } | null>(null);
+  // Shift-click adds a model/scenario to a batch IN ADDITION to the
+  // "primary" (plain-click) selection above (modelName/scenario) -- never
+  // replaces it. Submitting then fires one run per (model, scenario) pair
+  // in the cross product of {modelName, ...extraModels} x {scenario,
+  // ...extraScenarios}, not just the single primary pair. See runModel's
+  // batch-submission comment below for why only the primary pair gets
+  // this form's own live progress/chart -- the rest show up in the Runs
+  // tab instead (it already polls every run_id globally, see
+  // RunsPanel.tsx), same as if the user had clicked "Run" once per
+  // combination by hand.
+  const [extraModels, setExtraModels] = useState<Set<string>>(new Set());
+  const [extraScenarios, setExtraScenarios] = useState<Set<string>>(new Set());
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -139,6 +50,10 @@ export default function NewRunPanel() {
   const rawObjectUrl = useRef<string | null>(null);
   const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const checkSeq = useRef(0);
+  // Schemas for shift-selected models other than modelName -- fetched lazily
+  // (only once a batch run actually needs one), not up front, since most
+  // visits never touch multi-select at all.
+  const schemaCache = useRef<Record<string, ModelMeta>>({});
 
   useEffect(() => {
     loadModels().catch((err) => {
@@ -306,6 +221,57 @@ export default function NewRunPanel() {
     handleJob(job, name, runId);
   }
 
+  // Every (model, scenario) combination the current selection implies --
+  // just [{modelName, scenario}] in the common, non-batch case. The first
+  // entry is always the primary (plain-click) selection; the rest, if any,
+  // come from shift-clicked extras.
+  function selectedCombos(): { model: string; scenario: string }[] {
+    const models = [modelName, ...extraModels];
+    const scenarios = [scenario, ...extraScenarios];
+    const combos: { model: string; scenario: string }[] = [];
+    for (const m of models) {
+      for (const s of scenarios) combos.push({ model: m, scenario: s });
+    }
+    return combos;
+  }
+
+  // Fire-and-forget submission for every combo beyond the primary one --
+  // each is validated/built against ITS OWN model's schema (fetched lazily,
+  // see getModelMetaFor), not modelMeta/paramValues, since a different
+  // model's parameter keys won't generally mean the same thing (or even be
+  // accepted -- see validateParams in lib/runs.ts). A combo whose model has
+  // no scenario equivalent to the one selected (see resolveNativeScenario)
+  // is skipped rather than submitted broken. These don't get this form's
+  // own progress bar/chart -- they show up in the Runs tab like any other
+  // submitted run, same as if "Run" had been clicked once per combo by
+  // hand; this form keeps showing the primary combo's own result below.
+  async function submitExtraRuns(combos: { model: string; scenario: string }[], forceRefresh: boolean) {
+    let skipped = 0;
+    await Promise.all(
+      combos.map(async ({ model: m, scenario: s }) => {
+        try {
+          const meta = await getModelMetaFor(m);
+          const nativeScenario = resolveNativeScenario(meta, s);
+          if (!nativeScenario) {
+            skipped++;
+            return;
+          }
+          const params = buildParams(meta, nativeScenario, m === modelName ? paramValues : {});
+          await fetchJson(`/v1/models/${m}/runs`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ params, refresh: forceRefresh }),
+          });
+        } catch {
+          skipped++;
+        }
+      }),
+    );
+    if (skipped > 0) {
+      setStatusText(`${skipped} of ${combos.length} extra run(s) could not be submitted -- see the Runs tab.`, true);
+    }
+  }
+
   async function runModel(forceRefresh = false) {
     if (pollTimer.current) clearTimeout(pollTimer.current);
     setRunDisabled(true);
@@ -315,8 +281,20 @@ export default function NewRunPanel() {
 
     if (!modelMeta) return;
 
+    const combos = selectedCombos();
+    // The primary pair (modelName, scenario) is always combos[0] -- see
+    // selectedCombos. Everything else is a shift-selected extra.
+    const extraCombos = combos.slice(1);
+    if (extraCombos.length > 0) {
+      // Deliberately not awaited -- these submit independently of (and in
+      // parallel with) the primary run below; nothing here should make the
+      // primary run's own progress bar wait on unrelated jobs.
+      submitExtraRuns(extraCombos, forceRefresh);
+    }
+
     try {
-      setStatusText(`${modelName}: submitting...`);
+      const batchNote = extraCombos.length ? ` (+${extraCombos.length} more -- see Runs tab)` : "";
+      setStatusText(`${modelName}: submitting...${batchNote}`);
       showLoading("submitting...", null);
       const params = buildParams(modelMeta, scenario, paramValues);
       const submitted = await fetchJson(`/v1/models/${modelName}/runs`, {
@@ -354,6 +332,67 @@ export default function NewRunPanel() {
     setScenario(s);
     setShowRefresh(false);
     setCheckResult(null);
+  }
+
+  // Plain click: behaves exactly as before (replaces the primary selection,
+  // clears any batch). Shift-click: toggles membership in the batch set
+  // instead, leaving the primary selection (and the form built around it --
+  // schema, scenario list, parameter fields) untouched. Shift-clicking the
+  // card that's already the primary selection is a no-op either way -- it's
+  // always implicitly included, there's nothing to toggle.
+  function onModelCardClick(e: { shiftKey: boolean }, name: string) {
+    if (e.shiftKey) {
+      if (name === modelName) return;
+      setExtraModels((prev) => {
+        const next = new Set(prev);
+        if (next.has(name)) next.delete(name);
+        else next.add(name);
+        return next;
+      });
+      return;
+    }
+    setExtraModels(new Set());
+    setExtraScenarios(new Set());
+    onModelChange(name);
+  }
+
+  function onScenarioCardClick(e: { shiftKey: boolean }, s: string) {
+    if (e.shiftKey) {
+      if (s === scenario) return;
+      setExtraScenarios((prev) => {
+        const next = new Set(prev);
+        if (next.has(s)) next.delete(s);
+        else next.add(s);
+        return next;
+      });
+      return;
+    }
+    setExtraScenarios(new Set());
+    onScenarioChange(s);
+  }
+
+  // Fetches and caches a model's full schema (params/scenarios) -- needed
+  // only for a shift-selected model other than modelName, since that's the
+  // only one this form doesn't already have loaded.
+  async function getModelMetaFor(name: string): Promise<ModelMeta> {
+    if (name === modelName && modelMeta) return modelMeta;
+    if (schemaCache.current[name]) return schemaCache.current[name];
+    const schema = await fetchJson(`/v1/models/${name}/schema`);
+    schemaCache.current[name] = schema;
+    return schema;
+  }
+
+  // A shift-selected scenario card's value is a scenario string native to
+  // modelMeta (the primary model) -- a different model may spell the "same"
+  // scenario differently (e.g. hector's "ssp126" vs oscar's "SSP1-2.6"), or
+  // not support it at all. Matches by canonical label (same helper RunsPanel
+  // uses to line up equivalent scenarios across models); returns null if
+  // that model has nothing equivalent, so the caller can skip that one
+  // combination rather than submit something invalid.
+  function resolveNativeScenario(meta: ModelMeta, s: string): string | null {
+    if (meta.scenarios.includes(s)) return s;
+    const canonical = canonicalScenario(s);
+    return meta.scenarios.find((native) => canonicalScenario(native) === canonical) ?? null;
   }
 
   function onParamChange(key: string, raw: string) {
@@ -403,15 +442,15 @@ export default function NewRunPanel() {
             {models.map((m) => (
               <div
                 key={m.model}
-                className={`model-card${m.model === modelName ? " selected" : ""}`}
+                className={`model-card${m.model === modelName ? " selected" : extraModels.has(m.model) ? " selected-extra" : ""}`}
                 role="radio"
-                aria-checked={m.model === modelName}
+                aria-checked={m.model === modelName || extraModels.has(m.model)}
                 tabIndex={0}
-                onClick={() => onModelChange(m.model)}
+                onClick={(e) => onModelCardClick(e, m.model)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    onModelChange(m.model);
+                    onModelCardClick(e, m.model);
                   }
                 }}
               >
@@ -458,15 +497,15 @@ export default function NewRunPanel() {
               return (
                 <div
                   key={s}
-                  className={`scenario-card${s === scenario ? " selected" : ""}`}
+                  className={`scenario-card${s === scenario ? " selected" : extraScenarios.has(s) ? " selected-extra" : ""}`}
                   role="radio"
-                  aria-checked={s === scenario}
+                  aria-checked={s === scenario || extraScenarios.has(s)}
                   tabIndex={0}
-                  onClick={() => onScenarioChange(s)}
+                  onClick={(e) => onScenarioCardClick(e, s)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      onScenarioChange(s);
+                      onScenarioCardClick(e, s);
                     }
                   }}
                 >
@@ -524,9 +563,10 @@ export default function NewRunPanel() {
 
         <div className="form-actions">
           <button type="submit" className="primary-button" disabled={runDisabled}>
-            Run
+            {extraModels.size + extraScenarios.size > 0 ? `Run ${(1 + extraModels.size) * (1 + extraScenarios.size)}` : "Run"}
           </button>
           {eta && <span className={`eta-badge eta-badge-${eta.kind}`}>{eta.text}</span>}
+          <span className="form-hint">Shift-click a model or scenario to run it alongside the current selection.</span>
         </div>
       </form>
 

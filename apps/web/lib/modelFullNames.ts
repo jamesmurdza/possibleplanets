@@ -16,14 +16,26 @@ export const MODEL_FULL_NAMES: Record<string, string> = {
   dice: "Dynamic Integrated Climate Economy model",
   magicc: "Model for the Assessment of Greenhouse Gas Induced Climate Change",
   twolayer: "OpenSCM Two Layer Model",
+  gcam: "Global Change Analysis Model",
 };
 
 // "twolayer" (the lib/models.ts registry key) isn't an acronym at all --
 // uppercasing it reads as a garbled "TWOLAYER" rather than a real short
 // name. Override just this one case; everything else still has a genuine
 // acronym as its registry key.
+//
+// Deliberately title-case ("Two Layer"), not shouting caps like every
+// other model's acronym here (HECTOR, FAIR, ...) -- those are real
+// acronyms, so all-caps reads naturally; "Two Layer" isn't one, and
+// showing it as "TWO LAYER" in running guide text/headings read oddly.
+// The homepage's small model-row card still displays it in all caps
+// visually (app/globals.css's .public-model-card-acronym has its own
+// text-transform: uppercase, matching every other card there), without
+// needing this shared value to be a shouting-caps string everywhere
+// else it's used (the model's own guide page title, runGuides.ts's
+// section headings, ScenarioChart's legend labels).
 const ACRONYM_OVERRIDES: Record<string, string> = {
-  twolayer: "Two Layer Model",
+  twolayer: "Two Layer",
 };
 
 export function modelAcronym(model: string): string {
