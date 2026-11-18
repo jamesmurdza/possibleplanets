@@ -85,6 +85,15 @@ export default function TemperatureChart({
   useEffect(() => {
     function onResize() {
       setIsNarrow(window.innerWidth <= 640);
+      // Chart.js's own ResizeObserver watches the <canvas>'s parent, but
+      // doesn't reliably catch every resize in a flex/grid layout (e.g.
+      // this chart's own container) -- narrowing the window then widening
+      // it back left the canvas stuck at the narrower pixel width it last
+      // observed, never growing back out. Forcing a resize() on every
+      // window resize event (not just the 640px breakpoint crossing
+      // handled below) makes sure Chart.js re-measures its container and
+      // actually re-expands.
+      chartRef.current?.resize();
     }
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
