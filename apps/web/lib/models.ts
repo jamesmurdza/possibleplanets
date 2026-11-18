@@ -72,6 +72,18 @@ export interface ModelMeta {
   implementation: string;
   website: string;
   dockerfile: string;
+  // Set only for a model whose Dockerfile can't actually be built from
+  // this repo's own git checkout -- currently just gcam, whose final
+  // stage COPYs a 5.2GB generated XML database that's deliberately
+  // gitignored (see sandboxes/gcam/runtime/README.md: too large for git,
+  // baked in locally once and pushed as a pre-built image instead).
+  // `dockerfile` above still documents/exercises the real build (useful
+  // locally, where that directory DOES exist), but a production
+  // deployment's own checkout never has it -- Image.fromDockerfile would
+  // fail there with a missing COPY source. When this is set, lib/runs.ts
+  // uses Image.base(prebuilt_image) instead, pulling the already-built,
+  // already-validated image straight from Docker Hub (no build at all).
+  prebuilt_image?: string;
   scenarios: string[];
   params_shape: ParamsShape;
   // Default is "python3 /app/run.py" (DEFAULT_RUN_COMMAND in lib/runs.ts);
@@ -420,6 +432,14 @@ export const MODELS: Record<string, ModelMeta> = {
     implementation: "It's implemented in C++17, licensed under the ECL-2.0 license.",
     website: "https://github.com/JGCRI/gcam-core",
     dockerfile: path.join(SANDBOXES_DIR, "gcam", "Dockerfile"),
+    // See prebuilt_image's own doc comment above -- this repo's checkout
+    // (including in production) never has
+    // sandboxes/gcam/runtime/input/gcamdata/xml/ (gitignored, 5.2GB), so
+    // Image.fromDockerfile(dockerfile) would fail there at the COPY step.
+    // possibleplanets/gcam:v1 is the exact same validated build (see
+    // docs/gcam/artifacts.md/trial-log.md), already pushed to Docker Hub
+    // specifically to survive this.
+    prebuilt_image: "possibleplanets/gcam:v1",
     // Only "Reference" -- see sandboxes/gcam/run.py's module docstring and
     // docs/gcam/known-gaps.md ("Only configuration_ref.xml was actually
     // run-tested"). The other shipped configs reference additional input

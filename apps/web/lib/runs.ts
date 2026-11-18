@@ -370,7 +370,11 @@ export async function submitRun(
 
   const daytona = getDaytonaClient();
 
-  const image = Image.fromDockerfile(model.dockerfile);
+  // See models.ts's prebuilt_image doc comment -- gcam's Dockerfile can't
+  // actually be built from this repo's own checkout (a required COPY
+  // source is gitignored), so it pulls an already-built image straight
+  // from Docker Hub instead of building model.dockerfile at all.
+  const image = model.prebuilt_image ? Image.base(model.prebuilt_image) : Image.fromDockerfile(model.dockerfile);
   const createParams: CreateSandboxFromImageParams = {
     image,
     name: `${modelName}-run-${runId.slice(0, 8)}`,
