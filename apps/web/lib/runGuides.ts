@@ -111,8 +111,7 @@ function apiCostStep(
     label: "Cost",
     text:
       `This model runs on ${cpu} vCPU${cpu === 1 ? "" : "s"} and ${memoryGiB} GiB of memory for ` +
-      `${duration} per run, which costs roughly ${costPhrase} on Daytona. Results that are ` +
-      `already cached are free, since no new sandbox is created.`,
+      `${duration} per run, which costs roughly ${costPhrase} on Daytona. Results that are already cached are free.`,
   };
 }
 
