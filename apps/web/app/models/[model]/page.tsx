@@ -102,12 +102,7 @@ export default function ModelArticlePage() {
                     {step.label && <p className="run-guide-step-label">{step.label}</p>}
                     <p>{step.text}</p>
                     {step.code && <CodeBlock code={step.code} language={step.language} />}
-                    {step.note && (
-                      <p className="run-guide-step-note">
-                        <strong>Why: </strong>
-                        {step.note}
-                      </p>
-                    )}
+                    {step.note && <p>{step.note}</p>}
                   </li>
                 ))}
               </ol>
