@@ -39,11 +39,12 @@ apps/
   dashboard/       the minimal frontend -- see Minimal dashboard below
 ```
 
-(As of this note, `apps/web` is the real, live app -- see its own
-`lib/runs.ts`, which re-implements `apps/gateway/jobs.py`'s job logic
-directly in Next.js API routes rather than calling out to a separate
-FastAPI service. `guides/` no longer exists -- see the stale-doc note
-above.)
+(As of this note, `apps/web` is the real, live app -- it re-implements
+`apps/gateway/jobs.py`'s job logic directly in Next.js API routes
+(see `lib/runs.ts`) rather than calling out to a separate FastAPI
+service. `apps/gateway`, `apps/dashboard`, and `guides/` have all since
+been deleted, confirmed dead by the same method as the Jekyll site --
+see the stale-doc note above.)
 
 ## Background
 
