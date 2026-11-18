@@ -88,17 +88,30 @@ function formatDuration(seconds: number): string {
  * billable) but isn't called out in the sentence itself -- it's a minor
  * contributor next to CPU/memory/time.
  */
-function apiCostStep(model: string, cpu: number, memoryGiB: number, seconds: number, billableDiskGiB = 0): RunGuideStep {
+function apiCostStep(
+  model: string,
+  cpu: number,
+  memoryGiB: number,
+  seconds: number,
+  billableDiskGiB = 0,
+  // Overrides the displayed duration phrase (still charged using the
+  // real `seconds` below) -- for models like twolayer where `seconds`
+  // is a conservative round-up ceiling rather than a real measured
+  // median, so "about 1 second" would overstate precision that isn't
+  // there. Omit to use the real measured number.
+  durationPhrase?: string,
+): RunGuideStep {
   const cost =
     cpu * DAYTONA_VCPU_PER_SECOND * seconds +
     memoryGiB * DAYTONA_GIB_MEMORY_PER_SECOND * seconds +
     billableDiskGiB * DAYTONA_GIB_DISK_PER_SECOND * seconds;
   const costPhrase = cost >= 0.01 ? `${formatUsd(cost)} per run` : `${formatUsdPer1000(cost)} per 1,000 runs`;
+  const duration = durationPhrase ?? `about ${formatDuration(seconds)}`;
   return {
     label: "Cost",
     text:
-      `This model runs on ${cpu} vCPU${cpu === 1 ? "" : "s"} and ${memoryGiB} GiB of memory for about ` +
-      `${formatDuration(seconds)} per run, which costs roughly ${costPhrase} on Daytona. Results that are ` +
+      `This model runs on ${cpu} vCPU${cpu === 1 ? "" : "s"} and ${memoryGiB} GiB of memory for ` +
+      `${duration} per run, which costs roughly ${costPhrase} on Daytona. Results that are ` +
       `already cached are free, since no new sandbox is created.`,
   };
 }
@@ -397,7 +410,7 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
         "year 2100: T_atmos = 2.84°C",
         1,
       ),
-      apiCostStep("twolayer", 1, 1, 1),
+      apiCostStep("twolayer", 1, 1, 1, 0, "under a second"),
     ],
   ),
 };
