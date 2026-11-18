@@ -319,8 +319,14 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
         text:
           "A plain `pip install pyhector` fails on a bare machine -- it needs a C/C++ toolchain and Boost headers " +
           "to compile Hector's core from source. Pull the prebuilt image instead of building it yourself; it " +
-          "already has all of that baked in.",
-        code: "docker pull possibleplanets/hector\ndocker run --rm possibleplanets/hector",
+          "already has all of that baked in. This runs the ssp126 scenario by default and prints the result as " +
+          "JSON. To run a different one, pass `SCENARIO_PARAMS` as an environment variable (supported scenarios: " +
+          "ssp119, ssp126, ssp245, ssp370, ssp585).",
+        code:
+          "docker pull possibleplanets/hector\n" +
+          "docker run --rm possibleplanets/hector\n" +
+          '# -> {"temperature.global_tas": [...], "simpleNbox.CO2_concentration": [...], ...}\n\n' +
+          'docker run --rm -e SCENARIO_PARAMS=\'{"scenario": "ssp585"}\' possibleplanets/hector',
         language: "bash",
       },
       localResourceStep(
@@ -355,8 +361,14 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
         text:
           "pymagicc wraps a real Windows MAGICC6.exe binary via Wine, and its current pip dependency resolution " +
           "pulls a newer xarray it can't import. Pull the prebuilt image instead of installing Wine yourself -- " +
-          "it already has Wine and a working xarray version baked in.",
-        code: "docker pull possibleplanets/magicc\ndocker run --rm possibleplanets/magicc",
+          "it already has Wine and a working xarray version baked in. This runs the RCP26 scenario by default and " +
+          "prints the result as JSON. To run a different one, pass `SCENARIO_PARAMS` as an environment variable " +
+          "(supported scenarios: RCP26, RCP45, RCP60, RCP85).",
+        code:
+          "docker pull possibleplanets/magicc\n" +
+          "docker run --rm possibleplanets/magicc\n" +
+          '# -> {"years": [...], "T_atmos": [...]}\n\n' +
+          'docker run --rm -e SCENARIO_PARAMS=\'{"scenario": "RCP85"}\' possibleplanets/magicc',
         language: "bash",
       },
       localResourceStep(
@@ -387,8 +399,15 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
         text:
           "openscm-twolayermodel==0.2.3 makes a 2-line pandas API call that pandas>=2.0 removed -- no pandas " +
           "version compatible with both this package and Python 3.11 exists on PyPI, so the installed package " +
-          "itself needs a source patch. Pull the prebuilt image instead; it's already patched.",
-        code: "docker pull possibleplanets/twolayer\ndocker run --rm possibleplanets/twolayer",
+          "itself needs a source patch. Pull the prebuilt image instead; it's already patched. This runs the " +
+          "ssp245 scenario by default and prints the result as JSON. To run a different one, pass " +
+          "`SCENARIO_PARAMS` as an environment variable (supported scenarios: ssp119, ssp126, ssp245, ssp370, " +
+          "ssp434, ssp460, ssp534-over, ssp585).",
+        code:
+          "docker pull possibleplanets/twolayer\n" +
+          "docker run --rm possibleplanets/twolayer\n" +
+          '# -> {"years": [...], "T_atmos": [...]}\n\n' +
+          'docker run --rm -e SCENARIO_PARAMS=\'{"scenario": "ssp585"}\' possibleplanets/twolayer',
         language: "bash",
       },
       localResourceStep(
