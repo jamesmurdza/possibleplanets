@@ -17,9 +17,11 @@
  *     `possibleplanets/<model>` image on Docker Hub (built from that same
  *     Dockerfile) rather than asking the reader to build it themselves --
  *     a `docker pull`+`run` skips the compile/Wine-install/patch step
- *     entirely. A `note` on each step still points at building locally
- *     from the Dockerfile as the alternative, for anyone who'd rather not
- *     pull a prebuilt image.
+ *     entirely. This page is public-facing and readers have no reason to
+ *     know this repo (or its sandboxes/<model>/Dockerfile) exists at all,
+ *     so there's deliberately no "or build it yourself from this repo's
+ *     Dockerfile" fallback mentioned here -- that instruction would be
+ *     meaningless to someone who's never heard of this repo.
  *
  * Every model's REST section is built by restApiStep(): one curl example
  * that submits a run and polls it to completion against this project's
@@ -320,7 +322,6 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           "already has all of that baked in.",
         code: "docker pull possibleplanets/hector\ndocker run --rm possibleplanets/hector",
         language: "bash",
-        note: "Or build it yourself from this repo's sandboxes/hector/Dockerfile (`docker build -t hector-sandbox sandboxes/hector`) if you'd rather not use a prebuilt image.",
       },
       localResourceStep(
         "Building the Docker image installs about 800MB of dependencies, mostly Boost headers and a C/C++ " +
@@ -357,7 +358,6 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           "it already has Wine and a working xarray version baked in.",
         code: "docker pull possibleplanets/magicc\ndocker run --rm possibleplanets/magicc",
         language: "bash",
-        note: "Or build it yourself from this repo's sandboxes/magicc/Dockerfile (`docker build -t magicc-sandbox sandboxes/magicc`) if you'd rather not use a prebuilt image.",
       },
       localResourceStep(
         "Wine alone needs at least 2 to 3GB of free disk space, on top of pymagicc's own small (tens of MB) " +
@@ -390,7 +390,6 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
           "itself needs a source patch. Pull the prebuilt image instead; it's already patched.",
         code: "docker pull possibleplanets/twolayer\ndocker run --rm possibleplanets/twolayer",
         language: "bash",
-        note: "Or build it yourself from this repo's sandboxes/twolayer/Dockerfile (`docker build -t twolayer-sandbox sandboxes/twolayer`) if you'd rather not use a prebuilt image.",
       },
       localResourceStep(
         "Installing openscm-twolayermodel takes about 208MB of disk space, the smallest footprint of any model " +
