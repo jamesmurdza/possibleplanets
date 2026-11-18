@@ -13,6 +13,7 @@ import TemperatureChart, { type HoverFilter } from "../components/TemperatureCha
 import { PublicHeader, PublicFooter } from "../components/PublicChrome";
 import { modelAcronym } from "../lib/modelFullNames";
 import { scenarioFullName } from "../lib/scenarioFullNames";
+import { sortByResourceUsage } from "../lib/modelOrder";
 import ModelIcon from "../components/ModelIcon";
 import type { ModelListItem } from "../lib/clientTypes";
 
@@ -85,6 +86,7 @@ export default function HomePage() {
   })();
 
   const visibleScenarios = truncateToRows(sharedSsps, columnsPerRow);
+  const modelsByResourceUsage = sortByResourceUsage(models);
 
   return (
     <div className="public-page">
@@ -111,7 +113,7 @@ export default function HomePage() {
         <section className="public-cards-section">
           <h2>Models</h2>
           <div className="public-model-row">
-            {models.map((m) => (
+            {modelsByResourceUsage.map((m) => (
               <Link
                 key={m.model}
                 href={`/models/${m.model}`}
