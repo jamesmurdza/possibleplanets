@@ -46,8 +46,40 @@ const DEFAULT_RUN_COMMAND = "python3 -u /app/run.py";
 const PROGRESS_FILE_PATH = "/tmp/progress.json";
 // Backstop auto-delete, in minutes -- same reasoning as the Python version's
 // SANDBOX_AUTO_DELETE_MINUTES: a sandbox we fail to explicitly delete (e.g.
-// the process crashes mid-run) still gets cleaned up on its own.
+// the process crashes mid-run) still gets cleaned up on its own. Only
+// matters AFTER a sandbox has already auto-stopped (see autoStopMinutes
+// below) -- by that point the "come back later" window has already
+// passed, so this doesn't need to be large.
 const SANDBOX_AUTO_DELETE_MINUTES = 15;
+
+// How long a finished-but-unpolled sandbox should keep sitting around
+// (stopped or not) before anyone needs to have come back and looked at
+// it. This is what actually makes "start a run, close the window, come
+// back later" work: advanceRun() below only ever runs in response to a
+// GET /v1/runs/{id} poll (there's no background worker -- see this
+// module's own docstring), so a sandbox that finishes while nobody's
+// watching just needs to survive long enough for a LATER poll to notice
+// and finalize it. Deliberately not solved with a cron job -- that would
+// need its own scheduling infra and still just be "poll on a timer
+// instead of on user action"; stretching the sandbox's own lifetime
+// accomplishes the same thing with nothing new to run.
+const COME_BACK_LATER_GRACE_MINUTES = 120;
+
+// Daytona's own default auto-stop is 15 minutes of inactivity (undocumented
+// here before now) -- fine for hector's ~1s runs, actively dangerous for
+// anything that runs longer than that while this code isn't polling it
+// (which is exactly the "close the window" scenario): if Daytona's idle
+// timer doesn't treat an actively-running background exec as activity (not
+// verified either way), a long model could get auto-stopped mid-run purely
+// because nobody was watching, independent of its own exec_timeout_seconds.
+// Sized per-model so it's always comfortably longer than the model's own
+// real exec_timeout_seconds -- it literally cannot fire before the run
+// would be done anyway -- plus COME_BACK_LATER_GRACE_MINUTES on top, so a
+// finished, unpolled sandbox also stays alive long enough for someone to
+// come back, open the dashboard, and let a real poll finalize it.
+function autoStopMinutes(model: ModelMeta): number {
+  return Math.ceil(model.exec_timeout_seconds / 60) + COME_BACK_LATER_GRACE_MINUTES;
+}
 
 export interface SubmitResult {
   run_id: string;
@@ -255,6 +287,7 @@ export async function submitRun(
   const createParams: CreateSandboxFromImageParams = {
     image,
     name: `${modelName}-run-${runId.slice(0, 8)}`,
+    autoStopInterval: autoStopMinutes(model),
     autoDeleteInterval: SANDBOX_AUTO_DELETE_MINUTES,
   };
   if (model.resources) {
