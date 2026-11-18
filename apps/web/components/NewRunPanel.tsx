@@ -1,33 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Chart from "chart.js/auto";
-import { fetchJson, CHART_ADAPTERS, buildParams, chartAspectRatio, scenarioDescription, canonicalScenario } from "../lib/clientApi";
+import { fetchJson, buildParams, scenarioDescription, canonicalScenario } from "../lib/clientApi";
 import { scenarioDriverSeries } from "../lib/scenarioDrivers";
 import { modelAssumptions, scenarioAssumptions, type AssumptionSection } from "../lib/assumptions";
 import Sparkline from "./Sparkline";
 import Modal, { AssumptionsModalBody } from "./Modal";
 import InfoButton from "./InfoButton";
 import ModelIcon from "./ModelIcon";
-import type { ModelMeta, ModelListItem, RunJob, ModelDurationStats, CheckResult } from "../lib/clientTypes";
+import { sortByResourceUsage } from "../lib/modelOrder";
+import type { ModelMeta, ModelListItem, ModelDurationStats, CheckResult } from "../lib/clientTypes";
 
-export default function NewRunPanel() {
+export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId: string) => void }) {
   const [models, setModels] = useState<ModelListItem[]>([]);
   const [modelName, setModelName] = useState("");
   const [modelMeta, setModelMeta] = useState<ModelMeta | null>(null);
   const [scenario, setScenario] = useState("");
   const [status, setStatus] = useState("Loading models...");
   const [statusIsError, setStatusIsError] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [loadingText, setLoadingText] = useState("");
-  const [progressPercent, setProgressPercent] = useState<number | null>(null);
-  const [hasChart, setHasChart] = useState(false);
-  const [rawUrl, setRawUrl] = useState<string | null>(null);
-  const [rawFilename, setRawFilename] = useState("result.json");
-  const [showRefresh, setShowRefresh] = useState(false);
   const [runDisabled, setRunDisabled] = useState(false);
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
-  const [lastRunParams, setLastRunParams] = useState<Record<string, unknown> | null>(null);
   const [statsByModel, setStatsByModel] = useState<Record<string, ModelDurationStats>>({});
   const [checkResult, setCheckResult] = useState<CheckResult | null>(null);
   const [infoModal, setInfoModal] = useState<{ title: string; section: AssumptionSection } | null>(null);
@@ -35,19 +27,23 @@ export default function NewRunPanel() {
   // "primary" (plain-click) selection above (modelName/scenario) -- never
   // replaces it. Submitting then fires one run per (model, scenario) pair
   // in the cross product of {modelName, ...extraModels} x {scenario,
-  // ...extraScenarios}, not just the single primary pair. See runModel's
-  // batch-submission comment below for why only the primary pair gets
-  // this form's own live progress/chart -- the rest show up in the Runs
-  // tab instead (it already polls every run_id globally, see
-  // RunsPanel.tsx), same as if the user had clicked "Run" once per
-  // combination by hand.
+  // ...extraScenarios}, not just the single primary pair. Every combo
+  // (primary included) now behaves identically on submit: none of them
+  // render a chart in this form any more -- submitting just navigates to
+  // the Runs tab (see onRunSubmitted/runModel below), same as if the user
+  // had clicked "Run" once per combination by hand and then opened the Runs
+  // tab themselves.
   const [extraModels, setExtraModels] = useState<Set<string>>(new Set());
   const [extraScenarios, setExtraScenarios] = useState<Set<string>>(new Set());
+  // Narrowed scenario list / parameter-key set when more than one model is
+  // selected (primary + extras) -- only scenarios/params common to ALL
+  // selected models are shown, since a combo whose model doesn't support a
+  // given scenario/param would otherwise be submitted broken (or silently
+  // skipped -- see submitExtraRuns/resolveNativeScenario). Null means "no
+  // restriction" (zero or one model selected).
+  const [multiModelScenarios, setMultiModelScenarios] = useState<string[] | null>(null);
+  const [multiModelParamKeys, setMultiModelParamKeys] = useState<Set<string> | null>(null);
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef = useRef<Chart | null>(null);
-  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const rawObjectUrl = useRef<string | null>(null);
   const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const checkSeq = useRef(0);
   // Guards loadSchema against exactly the race that caused "scenario
@@ -59,8 +55,9 @@ export default function NewRunPanel() {
   // checkSeq above, just for schema loads instead of the cache-check debounce.
   const schemaSeq = useRef(0);
   // Schemas for shift-selected models other than modelName -- fetched lazily
-  // (only once a batch run actually needs one), not up front, since most
-  // visits never touch multi-select at all.
+  // (only once a batch run or the common-scenario computation actually
+  // needs one), not up front, since most visits never touch multi-select at
+  // all.
   const schemaCache = useRef<Record<string, ModelMeta>>({});
 
   useEffect(() => {
@@ -78,20 +75,6 @@ export default function NewRunPanel() {
         // Non-critical -- the estimate just stays absent (never a
         // fabricated number) if this fails.
       });
-    function onResize() {
-      if (chartRef.current) {
-        const ratio = chartAspectRatio();
-        if (chartRef.current.options.aspectRatio !== ratio) {
-          chartRef.current.options.aspectRatio = ratio;
-          chartRef.current.resize();
-        }
-      }
-    }
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      if (pollTimer.current) clearTimeout(pollTimer.current);
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -125,11 +108,82 @@ export default function NewRunPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelName, modelMeta, scenario, paramValues]);
 
+  // When more than one model is selected (primary + shift-clicked extras),
+  // narrow the shown scenarios/params to the intersection across all of
+  // them -- see multiModelScenarios/multiModelParamKeys's own comment above.
+  useEffect(() => {
+    if (extraModels.size === 0 || !modelMeta) {
+      setMultiModelScenarios(null);
+      setMultiModelParamKeys(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const extraMetas = await Promise.all(Array.from(extraModels).map((m) => getModelMetaFor(m)));
+        if (cancelled) return;
+        const allMetas = [modelMeta, ...extraMetas];
+
+        // Scenario intersection, by canonical label (the same matching
+        // resolveNativeScenario uses) so e.g. hector's "ssp126" and oscar's
+        // "SSP1-2.6" count as the same scenario.
+        const canonicalSets = allMetas.map((m) => new Set(m.scenarios.map((s) => canonicalScenario(s))));
+        const commonCanonical = canonicalSets[0]
+          ? Array.from(canonicalSets[0]).filter((c) => canonicalSets.every((set) => set.has(c)))
+          : [];
+        // Render using the primary model's own native scenario spellings,
+        // since that's what the scenario cards submit for the primary combo.
+        const narrowedScenarios = modelMeta.scenarios.filter((s) => commonCanonical.includes(canonicalScenario(s)));
+
+        // Param-key intersection -- a key only makes sense to show if every
+        // selected model actually accepts it.
+        const keySets = allMetas.map((m) => new Set((m.parameters ?? []).map((p) => p.key)));
+        const commonKeys = new Set(Array.from(keySets[0] ?? []).filter((k) => keySets.every((set) => set.has(k))));
+
+        setMultiModelScenarios(narrowedScenarios);
+        setMultiModelParamKeys(commonKeys);
+      } catch {
+        // If any extra model's schema fails to load, fail open (no
+        // restriction) rather than silently hiding everything.
+        if (!cancelled) {
+          setMultiModelScenarios(null);
+          setMultiModelParamKeys(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extraModels, modelMeta]);
+
+  // Keep the primary scenario (and any shift-selected extra scenarios)
+  // valid whenever the common-scenario list narrows due to a multi-model
+  // selection -- e.g. adding a second model that doesn't support the
+  // currently-selected scenario should fall back to the first one that's
+  // common to both, not silently keep submitting an invalid combo.
+  useEffect(() => {
+    if (multiModelScenarios === null) return;
+    if (!multiModelScenarios.includes(scenario)) {
+      setScenario(multiModelScenarios[0] ?? "");
+    }
+    setExtraScenarios((prev) => {
+      const pruned = new Set(Array.from(prev).filter((s) => multiModelScenarios.includes(s)));
+      return pruned.size === prev.size ? prev : pruned;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [multiModelScenarios]);
+
   async function loadModels() {
     const data = await fetchJson("/v1/models");
-    setModels(data.models);
-    if (data.models.length) {
-      const first = data.models[0].model;
+    // Same order as the home page's model row (lightest/fastest to
+    // heaviest) -- see lib/modelOrder.ts -- rather than whatever order
+    // GET /v1/models happens to return (lib/models.ts's own object key
+    // order, which isn't meaningful here).
+    const ordered = sortByResourceUsage<ModelListItem>(data.models ?? []);
+    setModels(ordered);
+    if (ordered.length) {
+      const first = ordered[0].model;
       setModelName(first);
       await loadSchema(first);
     }
@@ -153,87 +207,6 @@ export default function NewRunPanel() {
     setStatusIsError(isError);
   }
 
-  function showLoading(text: string, progress: { percent: number } | null) {
-    setLoading(true);
-    setLoadingText(text);
-    setProgressPercent(progress && typeof progress.percent === "number" ? progress.percent : null);
-  }
-
-  function hideLoading() {
-    setLoading(false);
-  }
-
-  function renderChart(name: string, result: any) {
-    const adapter = CHART_ADAPTERS[name];
-    if (!adapter) {
-      setStatusText(`No chart adapter for model '${name}' yet.`, true);
-      return;
-    }
-    const { labels, values, label } = adapter(result);
-    setHasChart(true);
-
-    if (chartRef.current) chartRef.current.destroy();
-    if (!canvasRef.current) return;
-    chartRef.current = new Chart(canvasRef.current, {
-      type: "line",
-      data: { labels, datasets: [{ label, data: values, borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4 }] },
-      options: {
-        animation: false,
-        aspectRatio: chartAspectRatio(),
-        interaction: { mode: "nearest", intersect: false },
-        scales: {
-          x: { title: { display: true, text: "year" } },
-          y: { title: { display: true, text: "temperature anomaly" } },
-        },
-        plugins: {
-          tooltip: { mode: "nearest", intersect: false },
-        },
-      },
-    });
-  }
-
-  function setRawDownload(job: RunJob) {
-    if (rawObjectUrl.current) URL.revokeObjectURL(rawObjectUrl.current);
-    const blob = new Blob([JSON.stringify(job, null, 2)], { type: "application/json" });
-    rawObjectUrl.current = URL.createObjectURL(blob);
-    setRawUrl(rawObjectUrl.current);
-    setRawFilename(`${job.model}-${job.run_id}.json`);
-  }
-
-  // Shared terminal/in-progress handling for a job, whether it arrived via
-  // a poll (GET /v1/runs/{id}) or inline in the POST response itself (a
-  // cache hit -- see submitRun's module comment: that run_id was never
-  // written to the `runs` table, so there's nothing to poll for).
-  function handleJob(job: RunJob, name: string, runId: string) {
-    if (job.status === "queued" || job.status === "running") {
-      const pct = job.progress && typeof job.progress.percent === "number" ? ` (${job.progress.percent}%)` : "";
-      const text = `${job.status}${pct}...`;
-      setStatusText(`${name}: ${text}`);
-      showLoading(text, job.progress);
-      pollTimer.current = setTimeout(() => pollRun(runId, name), 150);
-      return;
-    }
-
-    setRunDisabled(false);
-    hideLoading();
-
-    if (job.status === "succeeded") {
-      const duration = typeof job.duration_seconds === "number" ? ` in ${job.duration_seconds.toFixed(1)}s` : "";
-      setStatusText(`${name}: succeeded${job.cached ? " (cached)" : ""}${duration}`);
-      renderChart(name, job.result);
-      setRawDownload(job);
-      setLastRunParams(job.params ?? null);
-      setShowRefresh(!!job.cached);
-    } else {
-      setStatusText(`${name}: failed - ${job.error?.message || "unknown error"}`, true);
-    }
-  }
-
-  async function pollRun(runId: string, name: string) {
-    const job: RunJob = await fetchJson(`/v1/runs/${runId}`);
-    handleJob(job, name, runId);
-  }
-
   // Every (model, scenario) combination the current selection implies --
   // just [{modelName, scenario}] in the common, non-batch case. The first
   // entry is always the primary (plain-click) selection; the rest, if any,
@@ -254,10 +227,8 @@ export default function NewRunPanel() {
   // model's parameter keys won't generally mean the same thing (or even be
   // accepted -- see validateParams in lib/runs.ts). A combo whose model has
   // no scenario equivalent to the one selected (see resolveNativeScenario)
-  // is skipped rather than submitted broken. These don't get this form's
-  // own progress bar/chart -- they show up in the Runs tab like any other
-  // submitted run, same as if "Run" had been clicked once per combo by
-  // hand; this form keeps showing the primary combo's own result below.
+  // is skipped rather than submitted broken. These show up in the Runs tab
+  // like any other submitted run; this form doesn't wait on or show them.
   async function submitExtraRuns(combos: { model: string; scenario: string }[], forceRefresh: boolean) {
     let skipped = 0;
     await Promise.all(
@@ -285,14 +256,17 @@ export default function NewRunPanel() {
     }
   }
 
+  // Submitting no longer renders anything locally -- it either navigates to
+  // the Runs tab (via onRunSubmitted) with the new/cached run's drawer open,
+  // or -- on a genuine submission failure -- shows an inline error and stays
+  // on this form so the user can fix and retry.
   async function runModel(forceRefresh = false) {
-    if (pollTimer.current) clearTimeout(pollTimer.current);
     setRunDisabled(true);
-    setShowRefresh(false);
-    setRawUrl(null);
-    setLastRunParams(null);
 
-    if (!modelMeta) return;
+    if (!modelMeta) {
+      setRunDisabled(false);
+      return;
+    }
 
     const combos = selectedCombos();
     // The primary pair (modelName, scenario) is always combos[0] -- see
@@ -301,38 +275,56 @@ export default function NewRunPanel() {
     if (extraCombos.length > 0) {
       // Deliberately not awaited -- these submit independently of (and in
       // parallel with) the primary run below; nothing here should make the
-      // primary run's own progress bar wait on unrelated jobs.
+      // primary submission wait on unrelated jobs.
       submitExtraRuns(extraCombos, forceRefresh);
     }
 
     try {
       const batchNote = extraCombos.length ? ` (+${extraCombos.length} more -- see Runs tab)` : "";
       setStatusText(`${modelName}: submitting...${batchNote}`);
-      showLoading("submitting...", null);
       const params = buildParams(modelMeta, scenario, paramValues);
       const submitted = await fetchJson(`/v1/models/${modelName}/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ params, refresh: forceRefresh }),
       });
+      setRunDisabled(false);
       // A cache hit comes back as a finished job inline (see submitRun's
-      // module comment) rather than a run_id to poll -- that run_id was
-      // never written to the `runs` table, so polling it would 404.
-      if (submitted.status === "succeeded" || submitted.status === "failed") {
-        handleJob(submitted as RunJob, modelName, submitted.run_id);
+      // module comment) rather than a run_id to poll -- that inline run_id
+      // was never written to the `runs` table, so opening it in the drawer
+      // would 404. Look up the real historical run_id behind the hit
+      // instead (the check we already ran has it, see checkResult).
+      if (submitted.status === "succeeded") {
+        const realRunId = checkResult?.cached_run_id;
+        if (realRunId) {
+          onRunSubmitted(realRunId);
+        } else {
+          setStatusText(`${modelName}: succeeded, but couldn't locate its run history -- see the Runs tab.`);
+        }
+      } else if (submitted.status === "failed") {
+        setStatusText(`${modelName}: failed - ${submitted.error?.message || "unknown error"}`, true);
       } else {
-        pollRun(submitted.run_id, modelName);
+        onRunSubmitted(submitted.run_id);
       }
     } catch (err: any) {
       setRunDisabled(false);
-      hideLoading();
       setStatusText(`${modelName}: ${err.message}`, true);
+    }
+  }
+
+  // "View cached" button next to the ETA badge -- jumps straight to the
+  // Runs tab's drawer for the most recent succeeded run with this exact
+  // (model, params), without resubmitting anything.
+  function viewCachedRun() {
+    if (checkResult?.cached_run_id) {
+      onRunSubmitted(checkResult.cached_run_id);
+    } else {
+      setStatusText(`${modelName}: couldn't locate the cached run's history -- see the Runs tab.`, true);
     }
   }
 
   async function onModelChange(name: string) {
     setModelName(name);
-    setShowRefresh(false);
     setCheckResult(null);
     try {
       await loadSchema(name);
@@ -343,7 +335,6 @@ export default function NewRunPanel() {
 
   function onScenarioChange(s: string) {
     setScenario(s);
-    setShowRefresh(false);
     setCheckResult(null);
   }
 
@@ -410,7 +401,6 @@ export default function NewRunPanel() {
 
   function onParamChange(key: string, raw: string) {
     setParamValues((prev) => ({ ...prev, [key]: raw }));
-    setShowRefresh(false);
     setCheckResult(null);
   }
 
@@ -430,11 +420,10 @@ export default function NewRunPanel() {
   }
   const eta = etaBadge();
 
-  const scenarios = modelMeta?.scenarios ?? [];
-  const parameters = modelMeta?.parameters ?? [];
+  const scenarios = multiModelScenarios ?? modelMeta?.scenarios ?? [];
+  const parameters = (modelMeta?.parameters ?? []).filter((p) => multiModelParamKeys === null || multiModelParamKeys.has(p.key));
   const nonDeterministicKey = modelMeta?.non_deterministic_unless;
   const nonDeterministicUnset = !!nonDeterministicKey && !paramValues[nonDeterministicKey];
-  const showResult = loading || hasChart;
 
   return (
     <div>
@@ -579,81 +568,17 @@ export default function NewRunPanel() {
             {extraModels.size + extraScenarios.size > 0 ? `Run ${(1 + extraModels.size) * (1 + extraScenarios.size)}` : "Run"}
           </button>
           {eta && <span className={`eta-badge eta-badge-${eta.kind}`}>{eta.text}</span>}
+          {checkResult?.cached && (
+            <button type="button" className="text-button" onClick={viewCachedRun}>
+              View cached
+            </button>
+          )}
           <span className="form-hint">Shift-click a model or scenario to run it alongside the current selection.</span>
         </div>
       </form>
 
-      {showResult && (
-        <>
-          <div className="panel-header">
-            <h3 className="panel-title">Result</h3>
-            <div className="run-controls">
-              {showRefresh && (
-                <button
-                  className="icon-button secondary"
-                  title="Re-run without using the cached result"
-                  aria-label="Refresh"
-                  disabled={runDisabled}
-                  onClick={() => runModel(true)}
-                >
-                  <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <path
-                      d="M13.5 8a5.5 5.5 0 10-1.64 3.93M13.5 8V4.5M13.5 8H10"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-              )}
-              {rawUrl && (
-                <a
-                  className="icon-button secondary"
-                  href={rawUrl}
-                  download={rawFilename}
-                  title="Download raw output (JSON)"
-                  aria-label="Download raw output (JSON)"
-                >
-                  <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <path
-                      d="M8 2v7.5M4.5 7l3.5 3.5L11.5 7M3 13.5h10"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </a>
-              )}
-            </div>
-          </div>
-
-          <section className="panel">
-            <div className="panel-body">
-              <canvas ref={canvasRef} id="result-chart" height={220}></canvas>
-              {loading && (
-                <div className="loading-overlay">
-                  <div className="loading-box">
-                    <span className="loading-text">{loadingText}</span>
-                    <progress className="progress-bar" max={100} value={progressPercent ?? undefined}></progress>
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
-        </>
-      )}
-
       <div className="panel-footer">
         <span className={`status-text${statusIsError ? " error" : ""}`}>{status}</span>
-        {lastRunParams && (
-          <span className="status-params" title="Exact params this result was run with -- reuse them for a guaranteed cache hit">
-            {JSON.stringify(lastRunParams)}
-          </span>
-        )}
       </div>
 
       {infoModal && (

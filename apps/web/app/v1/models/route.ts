@@ -14,6 +14,7 @@ export async function GET() {
       description: meta.description,
       implementation: meta.implementation,
       website: meta.website,
+      model_version: meta.model_version,
     })),
   });
 }

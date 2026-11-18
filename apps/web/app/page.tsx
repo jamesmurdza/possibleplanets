@@ -51,14 +51,19 @@ function truncateToRows<T>(items: T[], columnsPerRow: number): { visible: T[]; t
   return { visible: items.slice(0, capacity - 1), truncated: true };
 }
 
-// SSPs are a socioeconomic-storyline scenario framework; RCPs (magicc) and
-// DICE's own named policies (base/optimal) are different frameworks
-// entirely (see lib/assumptions.ts's scenarioAssumptions) -- there's no
-// "canonical SSP shared by all models" to compute if those two are
-// included, so they're excluded from this intersection by name, the same
-// explicit distinction already made throughout lib/clientApi.ts/
-// lib/assumptions.ts.
-const NON_SSP_MODELS = new Set(["dice", "magicc"]);
+// SSPs are a socioeconomic-storyline scenario framework; RCPs (magicc),
+// DICE's own named policies (base/optimal), and GCAM's single "Reference"
+// scenario are different frameworks entirely (see lib/assumptions.ts's
+// scenarioAssumptions) -- there's no "canonical SSP shared by all models"
+// to compute if any of these are included, so they're excluded from this
+// intersection by name, the same explicit distinction already made
+// throughout lib/clientApi.ts/lib/assumptions.ts. Confirmed this was the
+// actual bug behind the whole "Emissions scenarios" section vanishing
+// from the home page once gcam was added to the model list: gcam's own
+// scenario set is just {"Reference"}, so intersecting it against any
+// SSP model's set -- with gcam NOT excluded here -- always produced an
+// empty result.
+const NON_SSP_MODELS = new Set(["dice", "magicc", "gcam"]);
 
 export default function HomePage() {
   const [models, setModels] = useState<ModelListItem[]>([]);

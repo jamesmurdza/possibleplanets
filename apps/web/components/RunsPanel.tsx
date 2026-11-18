@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Chart from "chart.js/auto";
 import Dropdown from "./Dropdown";
+import Drawer from "./Drawer";
 import { fetchJson, CHART_ADAPTERS, summarizeParams, chartAspectRatio, nativeScenarioOf, canonicalScenario } from "../lib/clientApi";
 import type { RunJob, RunListItem } from "../lib/clientTypes";
 
@@ -32,15 +33,27 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`status-pill status-pill-${status}`}>{status}</span>;
 }
 
-export default function RunsPanel() {
+export interface RunsPanelProps {
+  // Controlled, not local state -- a New Run submission (see
+  // NewRunPanel.tsx's onRunSubmitted) sets this from OUTSIDE this
+  // component (switching the dashboard's own tab to "runs" at the same
+  // time), not just a row click inside this table.
+  selectedRunId: string | null;
+  onSelectRun: (runId: string | null) => void;
+}
+
+export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps) {
   const [runs, setRuns] = useState<RunListItem[]>([]);
   const [loadErr, setLoadErr] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedJob, setSelectedJob] = useState<RunJob | null>(null);
   const [detailErr, setDetailErr] = useState<string | null>(null);
   const [filterModel, setFilterModel] = useState(ALL);
   const [filterScenario, setFilterScenario] = useState(ALL);
   const [filterStatus, setFilterStatus] = useState(ALL);
+  // Checkbox selection for bulk delete -- independent of selectedRunId
+  // (which run's drawer is open), see the header comment above.
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -67,8 +80,8 @@ export default function RunsPanel() {
   }, []);
 
   // Keep the list itself live while anything in it is still in flight --
-  // same ~1s cadence is plenty for a list view (contrast with the ~150ms
-  // poll used for a single run's own progress bar).
+  // same ~1s cadence is plenty for a list view (contrast with the ~500ms
+  // poll used for the open drawer's own progress).
   useEffect(() => {
     if (listPollTimer.current) clearTimeout(listPollTimer.current);
     const anyActive = runs.some((r) => r.status === "queued" || r.status === "running");
@@ -107,12 +120,47 @@ export default function RunsPanel() {
     return true;
   });
 
-  async function selectRun(id: string) {
-    setSelectedId(id);
-    setSelectedJob(null);
-    setDetailErr(null);
-    if (detailPollTimer.current) clearTimeout(detailPollTimer.current);
-    pollDetail(id);
+  // Dropped from `checkedIds` whenever the list is refreshed and a
+  // previously-checked run has disappeared from it (deleted by someone
+  // else, or aged out past the limit=50 cap) -- otherwise "N selected"
+  // could silently count rows that no longer exist.
+  useEffect(() => {
+    setCheckedIds((prev) => {
+      const stillPresent = new Set(runs.map((r) => r.run_id));
+      const next = new Set([...prev].filter((id) => stillPresent.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [runs]);
+
+  function toggleChecked(id: string) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleCheckAll() {
+    setCheckedIds((prev) => {
+      if (prev.size === filteredRuns.length && filteredRuns.length > 0) return new Set();
+      return new Set(filteredRuns.map((r) => r.run_id));
+    });
+  }
+
+  async function deleteSelected() {
+    if (checkedIds.size === 0 || deleting) return;
+    setDeleting(true);
+    try {
+      await Promise.all([...checkedIds].map((id) => fetchJson(`/v1/runs/${id}`, { method: "DELETE" })));
+      if (selectedRunId && checkedIds.has(selectedRunId)) onSelectRun(null);
+      setCheckedIds(new Set());
+      await refreshList();
+    } catch (err: any) {
+      setLoadErr(err.message);
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function pollDetail(id: string) {
@@ -134,6 +182,22 @@ export default function RunsPanel() {
       setDetailErr(err.message);
     }
   }
+
+  // Driven by selectedRunId (a prop, settable from outside this
+  // component) rather than a local "selectRun" click handler owning the
+  // whole lifecycle -- a row click just calls onSelectRun(id); this
+  // effect is what actually starts polling, whether that id came from a
+  // click here or from NewRunPanel just having submitted a run.
+  useEffect(() => {
+    if (detailPollTimer.current) clearTimeout(detailPollTimer.current);
+    setSelectedJob(null);
+    setDetailErr(null);
+    if (selectedRunId) pollDetail(selectedRunId);
+    return () => {
+      if (detailPollTimer.current) clearTimeout(detailPollTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRunId]);
 
   useEffect(() => {
     if (selectedJob?.status === "succeeded") {
@@ -165,13 +229,22 @@ export default function RunsPanel() {
     });
   }
 
+  const allChecked = filteredRuns.length > 0 && checkedIds.size === filteredRuns.length;
+
   return (
     <div>
       <div className="panel-header">
         <h2 className="panel-title">Runs</h2>
-        <button className="text-button" onClick={refreshList}>
-          Refresh
-        </button>
+        <div className="run-controls">
+          {checkedIds.size > 0 && (
+            <button className="text-button danger" onClick={deleteSelected} disabled={deleting}>
+              Delete {checkedIds.size} selected
+            </button>
+          )}
+          <button className="text-button" onClick={refreshList}>
+            Refresh
+          </button>
+        </div>
       </div>
 
       {loadErr && <p className="panel-error">{loadErr}</p>}
@@ -199,6 +272,14 @@ export default function RunsPanel() {
           <table className="runs-table">
             <thead>
               <tr>
+                <th className="runs-table-checkbox-col">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all runs"
+                    checked={allChecked}
+                    onChange={toggleCheckAll}
+                  />
+                </th>
                 <th>Model</th>
                 <th>Params</th>
                 <th>Status</th>
@@ -209,7 +290,7 @@ export default function RunsPanel() {
             <tbody>
               {filteredRuns.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="runs-table-empty">
+                  <td colSpan={6} className="runs-table-empty">
                     {runs.length === 0 ? 'No runs yet -- start one from "New Run".' : "No runs match these filters."}
                   </td>
                 </tr>
@@ -217,9 +298,17 @@ export default function RunsPanel() {
               {filteredRuns.map((r) => (
                 <tr
                   key={r.run_id}
-                  className={r.run_id === selectedId ? "selected" : ""}
-                  onClick={() => selectRun(r.run_id)}
+                  className={r.run_id === selectedRunId ? "selected" : ""}
+                  onClick={() => onSelectRun(r.run_id)}
                 >
+                  <td className="runs-table-checkbox-col" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select run ${r.run_id}`}
+                      checked={checkedIds.has(r.run_id)}
+                      onChange={() => toggleChecked(r.run_id)}
+                    />
+                  </td>
                   <td>{r.model}</td>
                   <td className="mono">{summarizeParams(r.params)}</td>
                   <td>
@@ -243,23 +332,43 @@ export default function RunsPanel() {
         </div>
       </section>
 
-      {selectedId && (
-        <section className="panel detail-panel">
-          <div className="panel-body">
-            {detailErr && <p className="panel-error">{detailErr}</p>}
-            {selectedJob?.status === "succeeded" ? (
-              <canvas ref={canvasRef} height={220}></canvas>
-            ) : (
-              <div className="chart-placeholder">
-                {selectedJob
-                  ? selectedJob.status === "failed"
-                    ? `Failed: ${selectedJob.error?.message || "unknown error"}`
-                    : `${selectedJob.status}...`
-                  : "Loading..."}
+      {selectedRunId && (
+        <Drawer title={selectedJob ? `${selectedJob.model} run` : "Run"} onClose={() => onSelectRun(null)}>
+          {detailErr && <p className="panel-error">{detailErr}</p>}
+          {selectedJob && (
+            <div className="drawer-meta">
+              <div className="drawer-meta-row">
+                <span className="drawer-meta-label">Model</span>
+                <span>{selectedJob.model}</span>
               </div>
-            )}
-          </div>
-        </section>
+              <div className="drawer-meta-row">
+                <span className="drawer-meta-label">Version</span>
+                <span className="mono">{selectedJob.model_version ?? "unknown (run predates version tracking)"}</span>
+              </div>
+              <div className="drawer-meta-row">
+                <span className="drawer-meta-label">Params</span>
+                <span className="mono">{summarizeParams(selectedJob.params)}</span>
+              </div>
+              {typeof selectedJob.duration_seconds === "number" && (
+                <div className="drawer-meta-row">
+                  <span className="drawer-meta-label">Duration</span>
+                  <span>{selectedJob.duration_seconds.toFixed(1)}s</span>
+                </div>
+              )}
+            </div>
+          )}
+          {selectedJob?.status === "succeeded" ? (
+            <canvas ref={canvasRef} height={220}></canvas>
+          ) : (
+            <div className="chart-placeholder">
+              {selectedJob
+                ? selectedJob.status === "failed"
+                  ? `Failed: ${selectedJob.error?.message || "unknown error"}`
+                  : `${selectedJob.status}...`
+                : "Loading..."}
+            </div>
+          )}
+        </Drawer>
       )}
     </div>
   );

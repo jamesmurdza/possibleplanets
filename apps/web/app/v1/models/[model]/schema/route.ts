@@ -14,6 +14,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ model: 
   return corsJson({
     model,
     family: meta.family,
+    model_version: meta.model_version,
     scenarios: meta.scenarios,
     params_shape: meta.params_shape,
     // Optional model-native tunable inputs beyond scenario (empty array for
