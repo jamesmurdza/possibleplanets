@@ -86,6 +86,30 @@ export const CHART_ADAPTERS: Record<string, (result: any) => { labels: any[]; va
       label: `Two-layer surface temperature anomaly (${result.scenario})`,
     };
   },
+  gcam(result) {
+    // GCAM's result.rows is Hector's own long-format outputstream.csv,
+    // untouched (see sandboxes/gcam/run.py's _read_output_csv docstring):
+    // one row per (variable, year), not nested by variable like hector's
+    // own library adapter above. "global_tas" is Hector's own variable
+    // name, in that CSV, for global mean atmospheric temperature anomaly
+    // -- the same quantity hector's adapter reads as
+    // native.data["temperature.global_tas"] from its library's nested
+    // dict, just flattened differently by Hector's CSV writer (no
+    // separate "component" column, so "variable" alone already carries
+    // that name). Confirmed via Hector's own docs, not guessed:
+    // https://github.com/JGCRI/hector/wiki/OutputFiles and
+    // https://jgcri.github.io/hector/articles/outputstream.html.
+    const rows: any[] = result.result?.rows ?? [];
+    const temps = rows
+      .filter((r) => r.variable === "global_tas")
+      .map((r) => ({ year: Number(r.year), value: Number(r.value) }))
+      .sort((a, b) => a.year - b.year);
+    return {
+      labels: temps.map((r) => r.year),
+      values: temps.map((r) => r.value),
+      label: `GCAM (Hector) temperature anomaly (${result.scenario})`,
+    };
+  },
 };
 
 // --- Cross-model scenario naming -----------------------------------------

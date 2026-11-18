@@ -50,6 +50,14 @@ export default function NewRunPanel() {
   const rawObjectUrl = useRef<string | null>(null);
   const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const checkSeq = useRef(0);
+  // Guards loadSchema against exactly the race that caused "scenario
+  // doesn't match the model" bugs: clicking model A then quickly clicking
+  // model B before A's GET /v1/models/A/schema resolves. Without this, A's
+  // response can land AFTER B's and overwrite modelMeta/scenario back to
+  // A's values while modelName is already "B" -- the scenario list shown
+  // then belongs to a model that's no longer selected. Same pattern as
+  // checkSeq above, just for schema loads instead of the cache-check debounce.
+  const schemaSeq = useRef(0);
   // Schemas for shift-selected models other than modelName -- fetched lazily
   // (only once a batch run actually needs one), not up front, since most
   // visits never touch multi-select at all.
@@ -129,7 +137,12 @@ export default function NewRunPanel() {
   }
 
   async function loadSchema(name: string) {
+    const mySeq = ++schemaSeq.current;
     const schema = await fetchJson(`/v1/models/${name}/schema`);
+    // A newer loadSchema call (a later model click) has already started --
+    // this response is stale, applying it now would overwrite the newer
+    // selection's own schema/scenario. See schemaSeq's own comment above.
+    if (mySeq !== schemaSeq.current) return;
     setModelMeta(schema);
     setScenario(schema.scenarios[0] ?? "");
     setParamValues({});
