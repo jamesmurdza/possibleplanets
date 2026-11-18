@@ -39,7 +39,6 @@ export default function AccountPage() {
 
         <section className="article-section">
           <h2>Internal dashboard</h2>
-          <p>The dashboard is internal -- the public site doesn&apos;t need this.</p>
           <Suspense fallback={null}>
             <PasswordLoginForm />
           </Suspense>
