@@ -145,14 +145,27 @@ function apiCostStep(
     memoryGiB * DAYTONA_GIB_MEMORY_PER_SECOND * seconds +
     billableDiskGiB * DAYTONA_GIB_DISK_PER_SECOND * seconds;
   const diskPart = billableDiskGiB > 0 ? ` + ${billableDiskGiB} GiB disk (10 GiB configured, first 5 free)` : "";
+  // Every model but oscar costs a small fraction of a cent per run --
+  // the "per 1,000 runs" framing exists specifically so that number
+  // reads as a plain dollar amount instead of a string of leading
+  // zeros. Oscar's own per-run cost (~5-6 minutes of real wall-clock on
+  // a 4 vCPU/8 GiB sandbox) is already several cents on its own, so
+  // scaling it up to "per 1,000 runs" does the opposite -- it turns an
+  // already-readable number into a big one that reads like it's 1000x
+  // worse than it is. Lead with the real per-run figure for oscar
+  // specifically; keep the per-1,000 framing (still true, still useful
+  // for budgeting a batch) as the secondary number for everything else.
+  const costPhrase =
+    cost >= 0.01
+      ? `roughly ${formatUsd(cost)} per single run (${formatUsdPer1000(cost)} per 1,000 runs)`
+      : `roughly ${formatUsdPer1000(cost)} per 1,000 runs (${formatUsd(cost)} per single run)`;
   return {
     text:
       `Rough Daytona cost: ${cpu} vCPU + ${memoryGiB} GiB memory${diskPart}, for ${seconds}s per run ` +
       `(${secondsSource}), at Daytona's published per-second rates (vCPU $0.0504/h, memory $0.0162/GiB-h, disk ` +
-      `$0.000108/GiB-h -- daytona.io/pricing, confirmed Nov 2026) comes to roughly ${formatUsdPer1000(cost)} per ` +
-      `1,000 runs (${formatUsd(cost)} per single run). This excludes sandbox creation/teardown overhead, which ` +
-      `isn't separately measured anywhere in this project -- so treat this as a lower bound, not the full bill. A ` +
-      `cached (model, params) repeat costs $0: no new sandbox is created at all.`,
+      `$0.000108/GiB-h -- daytona.io/pricing, confirmed Nov 2026) comes to ${costPhrase}. This excludes sandbox ` +
+      `creation/teardown overhead, which isn't separately measured anywhere in this project -- so treat this as a ` +
+      `lower bound, not the full bill. A cached (model, params) repeat costs $0: no new sandbox is created at all.`,
   };
 }
 
