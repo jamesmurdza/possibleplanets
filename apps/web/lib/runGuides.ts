@@ -2,8 +2,8 @@
  * "How to run this yourself" guides for every model that has a sandboxes/*
  * Dockerfile. Each model gets exactly two sections (see RunGuideSection
  * below): "How to run <X> locally" (ends with a real, measured resource
- * estimate for doing it WITHOUT Daytona) and "Run <X> through the API
- * using curl" (ends with a real cost estimate for doing it WITH Daytona,
+ * estimate for doing it WITHOUT Daytona) and "How to run <X> through the
+ * REST API" (ends with a real cost estimate for doing it WITH Daytona,
  * computed from Daytona's own published per-second pricing + this
  * project's actual configured sandbox resources + real measured run
  * times). Two different shapes of local-setup step, by model:
@@ -298,7 +298,7 @@ function sections(model: string, localSteps: RunGuideStep[], apiSteps: RunGuideS
   const name = modelAcronym(model);
   return [
     { heading: `How to run ${name} locally`, steps: localSteps },
-    { heading: `Run ${name} through the API using curl`, steps: apiSteps },
+    { heading: `How to run ${name} through the REST API`, steps: apiSteps },
   ];
 }
 
