@@ -1509,7 +1509,7 @@ a.icon-button {
   margin: 0 0 0.5rem;
 }
 
-.run-guide-step-note {
+.run-guide-step .run-guide-step-note {
   color: var(--pp-grey);
   font-size: 0.8125rem;
   line-height: 1.5;
