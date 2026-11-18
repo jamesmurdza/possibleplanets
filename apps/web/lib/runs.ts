@@ -61,6 +61,11 @@ export interface SubmitResult {
   // is still populated (a fresh randomUUID, for display/download-filename
   // purposes only) but is NOT a real, lookup-able run.
   inline?: RunView;
+  // True only when this call would have needed to start a real sandbox run
+  // (a cache miss) and `isAuthed` was false -- see submitRun's signature.
+  // The route layer turns this into a 401, distinct from `error` (a 400,
+  // e.g. bad params) since they mean different things to a caller.
+  unauthorized?: boolean;
 }
 
 /**
@@ -185,6 +190,12 @@ export async function submitRun(
   modelName: string,
   params: Record<string, unknown>,
   forceRefresh: boolean,
+  // Whether the caller presented valid auth (lib/apiKey.ts's checkApiAuth)
+  // -- only consulted below on a cache MISS. A cache hit never touches
+  // this: nothing is being authorized when the answer was already sitting
+  // in run_cache from an earlier real run, so an unauthenticated caller
+  // can still get cached results, just not trigger a new sandbox run.
+  isAuthed: boolean,
 ): Promise<SubmitResult> {
   const model = getModelOrNull(modelName);
   if (!model) {
@@ -229,6 +240,13 @@ export async function submitRun(
         },
       };
     }
+  }
+
+  // Reached only on a cache miss (or forceRefresh) -- this is the point
+  // where a real sandbox is about to be created, i.e. the only point
+  // where auth actually matters. See this function's `isAuthed` param doc.
+  if (!isAuthed) {
+    return { run_id: "", error: null, unauthorized: true };
   }
 
   const daytona = getDaytonaClient();

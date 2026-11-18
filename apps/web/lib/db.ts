@@ -63,6 +63,41 @@ CREATE TABLE IF NOT EXISTS runs (
     duration_seconds DOUBLE PRECISION,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- One row per GitHub account that has ever signed in via /api/auth/github
+-- (see that route + its callback). No passwords here at all -- GitHub does
+-- the actual authentication; this just remembers which github_id maps to
+-- which app-internal user id, for api_keys.user_id to reference.
+CREATE TABLE IF NOT EXISTS users (
+    -- SERIAL (32-bit), not BIGSERIAL -- this app will never have billions
+    -- of users, and node-pg returns BIGINT/BIGSERIAL columns as JS
+    -- strings (int8 doesn't safely fit a JS number), which would silently
+    -- disagree with this file's id: number types. github_id below stays
+    -- BIGINT since that's GitHub's own id space, not ours to shrink.
+    id SERIAL PRIMARY KEY,
+    github_id BIGINT UNIQUE NOT NULL,
+    login TEXT NOT NULL,
+    avatar_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Real per-user API keys (lib/apiKey.ts checks these), replacing the single
+-- shared placeholder key. Only key_hash is stored, never the plaintext --
+-- the real key is shown to the user exactly once, right after
+-- lib/apiKeys.ts's createApiKey() generates it, same "can't be recovered,
+-- only revoked and replaced" convention as e.g. GitHub's own PATs.
+CREATE TABLE IF NOT EXISTS api_keys (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    key_hash TEXT NOT NULL UNIQUE,
+    key_prefix TEXT NOT NULL,
+    label TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_used_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS api_keys_key_hash_idx ON api_keys (key_hash);
+CREATE INDEX IF NOT EXISTS api_keys_user_id_idx ON api_keys (user_id);
 `;
 
 // Migrates a `runs` table created by an earlier version of this schema --
@@ -369,4 +404,111 @@ export async function markRunRunning(runId: string): Promise<void> {
     "UPDATE runs SET status = 'running', updated_at = now() WHERE run_id = $1 AND status = 'queued'",
     [runId],
   );
+}
+
+// --- Users + API keys (lib/session.ts, lib/apiKey.ts, app/api/auth/github/*,
+// app/api/keys/*) -----------------------------------------------------------
+
+export interface UserRow {
+  id: number;
+  // string, not number -- node-pg returns BIGINT columns as JS strings
+  // (int8 doesn't safely fit a JS number). Never used for arithmetic,
+  // only equality/lookup, so this is fine as an opaque string.
+  github_id: string;
+  login: string;
+  avatar_url: string | null;
+  created_at: string;
+}
+
+/** Insert on first sign-in, refresh login/avatar on every later one (a
+ * GitHub username/avatar can change) -- keyed on the stable github_id, not
+ * login, since login is the thing that can change. */
+export async function upsertGithubUser(githubId: number, login: string, avatarUrl: string | null): Promise<UserRow> {
+  await ensureDb();
+  const { rows } = await getPool().query(
+    `INSERT INTO users (github_id, login, avatar_url) VALUES ($1, $2, $3)
+     ON CONFLICT (github_id) DO UPDATE SET login = $2, avatar_url = $3
+     RETURNING *`,
+    [githubId, login, avatarUrl],
+  );
+  return rows[0] as UserRow;
+}
+
+export async function getUserById(userId: number): Promise<UserRow | null> {
+  await ensureDb();
+  const { rows } = await getPool().query("SELECT * FROM users WHERE id = $1", [userId]);
+  return rows.length ? (rows[0] as UserRow) : null;
+}
+
+function hashApiKey(plaintext: string): string {
+  const crypto = require("crypto");
+  return crypto.createHash("sha256").update(plaintext).digest("hex");
+}
+
+export interface ApiKeyRow {
+  id: number;
+  user_id: number;
+  key_prefix: string;
+  label: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+
+/** Generates a fresh `pp_live_<40 hex chars>` key, stores only its hash,
+ * and returns the one and only time the plaintext is ever available --
+ * the caller (POST /api/keys) must show it to the user immediately. */
+export async function createApiKey(userId: number, label: string | null): Promise<{ plaintext: string; row: ApiKeyRow }> {
+  await ensureDb();
+  const crypto = require("crypto");
+  const plaintext = `pp_live_${crypto.randomBytes(20).toString("hex")}`;
+  const keyHash = hashApiKey(plaintext);
+  const keyPrefix = plaintext.slice(0, 12);
+  const { rows } = await getPool().query(
+    `INSERT INTO api_keys (user_id, key_hash, key_prefix, label) VALUES ($1, $2, $3, $4)
+     RETURNING id, user_id, key_prefix, label, created_at, last_used_at, revoked_at`,
+    [userId, keyHash, keyPrefix, label],
+  );
+  return { plaintext, row: rows[0] as ApiKeyRow };
+}
+
+export async function listApiKeys(userId: number): Promise<ApiKeyRow[]> {
+  await ensureDb();
+  const { rows } = await getPool().query(
+    `SELECT id, user_id, key_prefix, label, created_at, last_used_at, revoked_at
+     FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC`,
+    [userId],
+  );
+  return rows as ApiKeyRow[];
+}
+
+/** No-op (not an error) if `keyId` doesn't belong to `userId` or is already
+ * revoked -- the route layer doesn't need to distinguish "already gone"
+ * from "just revoked it", it only needs the key to end up not working. */
+export async function revokeApiKey(userId: number, keyId: number): Promise<void> {
+  await ensureDb();
+  await getPool().query(
+    "UPDATE api_keys SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL",
+    [keyId, userId],
+  );
+}
+
+/** The actual auth check behind every `Authorization: Bearer <key>` request
+ * -- see lib/apiKey.ts. Null for a missing/unknown/revoked key. Updates
+ * last_used_at on every successful check (best-effort -- a lagging
+ * last_used_at is a cosmetic issue, not a correctness one, so this doesn't
+ * block the caller on it finishing). */
+export async function findUserByApiKey(plaintext: string): Promise<UserRow | null> {
+  await ensureDb();
+  const keyHash = hashApiKey(plaintext);
+  const { rows } = await getPool().query(
+    `SELECT u.* FROM api_keys k JOIN users u ON u.id = k.user_id
+     WHERE k.key_hash = $1 AND k.revoked_at IS NULL`,
+    [keyHash],
+  );
+  if (!rows.length) return null;
+  getPool()
+    .query("UPDATE api_keys SET last_used_at = now() WHERE key_hash = $1", [keyHash])
+    .catch(() => {});
+  return rows[0] as UserRow;
 }

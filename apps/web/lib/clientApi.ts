@@ -3,6 +3,16 @@
  * paths ("" base) since the dashboard and gateway are same-origin -- see
  * app/page.tsx's original comment on why that's just a convenience for
  * THIS page, not a constraint on the API (CORS is wide open -- lib/cors.ts).
+ *
+ * No Authorization header attached here (unlike an earlier version of this
+ * file, which sent a single shared placeholder key on every request --
+ * visible to anyone who opened devtools or grepped the client bundle, so
+ * not a real credential at all). The two gateway routes that need auth
+ * (POST /v1/models/{model}/runs, GET /v1/runs/{runId}) now accept the
+ * existing httpOnly dashboard_auth cookie as this console's own
+ * credential -- see lib/apiKey.ts -- which the browser already attaches
+ * automatically on every same-origin request once logged into /dashboard,
+ * and which client-side JS can't read out to begin with.
  */
 import type { ModelMeta } from "./clientTypes";
 

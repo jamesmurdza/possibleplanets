@@ -13,7 +13,7 @@
  * server-side, so this component no longer needs it or each run's full
  * native result blob.
  */
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Chart from "chart.js/auto";
 import { alignSeriesByYear, modelColor, colorWithAlpha, averageSeries, nativeScenarioOf, canonicalScenario } from "../lib/clientApi";
 import type { ChartSeries } from "../lib/clientTypes";
@@ -70,6 +70,26 @@ export default function TemperatureChart({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
+
+  // The 640px breakpoint below, tracked reactively -- NOT read inline as
+  // `window.innerWidth` inside the chart-creation effect below, which was
+  // the bug: that effect only runs once (its deps don't include window
+  // width), so whichever ratio matched the window size AT MOUNT stuck
+  // forever. A page loaded wide, then the window narrowed past 640px: the
+  // canvas's actual pixel width still shrinks (Chart.js's own
+  // ResizeObserver handles that part fine), but the aspect ratio stayed
+  // the wide-screen 1.8, so the chart kept getting squashed flatter
+  // instead of growing taller/more-mobile-shaped the way the narrow
+  // breakpoint's 1.1 ratio intends -- "shrinks but doesn't expand".
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth <= 640);
+  useEffect(() => {
+    function onResize() {
+      setIsNarrow(window.innerWidth <= 640);
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const effectiveAspectRatio = aspectRatio ?? (isNarrow ? 1.1 : 1.8);
 
   const chartData = useMemo(() => {
     if (series.length === 0) return null;
@@ -138,7 +158,7 @@ export default function TemperatureChart({
       data: { datasets: chartData.datasets as any },
       options: {
         animation: false,
-        aspectRatio: aspectRatio ?? (typeof window !== "undefined" && window.innerWidth <= 640 ? 1.1 : 1.8),
+        aspectRatio: effectiveAspectRatio,
         // "nearest" + intersect:false -- this chart can have dozens of
         // thin, pointRadius:0 lines overlapping, so requiring a
         // pixel-exact hover (Chart.js's intersect:true default) made the
@@ -172,6 +192,18 @@ export default function TemperatureChart({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!chartData, windowMin, windowMax, aspectRatio, legend]);
+
+  // Keeps an already-created chart's aspect ratio in sync with the
+  // reactive breakpoint tracked above, in place -- same "update the
+  // existing instance, don't destroy/recreate" reasoning as the
+  // hover-update effect right below this one, so crossing the 640px
+  // breakpoint doesn't cause the same resize-flash/scroll-jump a full
+  // recreate would.
+  useEffect(() => {
+    if (!chartRef.current) return;
+    chartRef.current.options.aspectRatio = effectiveAspectRatio;
+    chartRef.current.resize();
+  }, [effectiveAspectRatio]);
 
   // Hover (and any other dataset-only change) updates the existing
   // instance in place instead of recreating it -- no resize flash.

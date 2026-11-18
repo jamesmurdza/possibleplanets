@@ -1482,8 +1482,25 @@ a.icon-button {
   color: var(--pp-grey-dark);
 }
 
+/* Doc-style step list: a bold label per step (see .run-guide-step-label)
+   is what makes each one scannable -- no numbered badge, since these
+   steps aren't a strict do-this-before-that sequence (e.g. the final
+   "Resource footprint"/"Estimated cost" step is a summary, not a next
+   action). */
+.run-guide-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
 .run-guide-step {
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.run-guide-step-label {
+  font-weight: 600;
+  color: var(--pp-text);
+  margin: 0 0 0.25rem;
 }
 
 .run-guide-step p {
@@ -1499,6 +1516,42 @@ a.icon-button {
   font-size: 0.8125rem;
   overflow-x: auto;
   white-space: pre;
+}
+
+.run-guide-code code {
+  font-family: inherit;
+  color: var(--pp-text);
+}
+
+/* Prism.js token colors, hand-picked to match this page's existing light
+   palette (--pp-*) instead of pulling in a stock Prism theme's own colors,
+   which would clash with it. Covers the token classes prism-bash/-python/
+   -julia actually emit for the run-guide snippets (confirmed by running
+   Prism.highlight() on each snippet in this file's guide data). */
+.run-guide-code .token.comment {
+  color: var(--pp-grey);
+  font-style: italic;
+}
+.run-guide-code .token.string {
+  color: #0a7a3d;
+}
+.run-guide-code .token.keyword,
+.run-guide-code .token.builtin {
+  color: var(--pp-brand);
+}
+.run-guide-code .token.function {
+  color: #a5399b;
+}
+.run-guide-code .token.number,
+.run-guide-code .token.boolean {
+  color: #b35900;
+}
+.run-guide-code .token.operator,
+.run-guide-code .token.punctuation {
+  color: var(--pp-grey-dark);
+}
+.run-guide-code .token.class-name {
+  color: #1d6fa5;
 }
 
 /* --- Login page --- */

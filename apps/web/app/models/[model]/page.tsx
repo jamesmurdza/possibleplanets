@@ -7,6 +7,7 @@ import { fetchJson } from "../../../lib/clientApi";
 import { modelAssumptions } from "../../../lib/assumptions";
 import { useChartSeries } from "../../../lib/useRunsData";
 import TemperatureChart from "../../../components/TemperatureChart";
+import CodeBlock from "../../../components/CodeBlock";
 import { PublicHeader, PublicFooter } from "../../../components/PublicChrome";
 import { modelAcronym, modelFullName } from "../../../lib/modelFullNames";
 import { runGuide } from "../../../lib/runGuides";
@@ -91,17 +92,22 @@ export default function ModelArticlePage() {
           </section>
         )}
 
-        {guide && (
-          <section className="article-section">
-            <h2>How to run {modelAcronym(model)}</h2>
-            {guide.map((step, i) => (
-              <div key={i} className="run-guide-step">
-                <p>{step.text}</p>
-                {step.code && <pre className="run-guide-code">{step.code}</pre>}
-              </div>
-            ))}
-          </section>
-        )}
+        {guide &&
+          guide.map((section, si) => (
+            <section className="article-section" key={si}>
+              <h2>{section.heading}</h2>
+              <ol className="run-guide-steps">
+                {section.steps.map((step, i) => (
+                  <li key={i} className="run-guide-step">
+                    {step.label && <p className="run-guide-step-label">{step.label}</p>}
+                    <p>{step.text}</p>
+                    {step.code && <CodeBlock code={step.code} language={step.language} />}
+                    {step.note && <p>{step.note}</p>}
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ))}
       </main>
       <PublicFooter />
     </div>
