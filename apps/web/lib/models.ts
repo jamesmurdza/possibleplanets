@@ -71,6 +71,13 @@ export interface ModelMeta {
   // second line under `description` on a model's public article page.
   implementation: string;
   website: string;
+  // No longer read by any runtime code path (submitRun() creates from
+  // daytona_snapshot below exclusively) -- kept purely as a pointer to
+  // the source this model's snapshot was built from, for whoever next
+  // needs to rebuild that snapshot (model code change, dependency bump,
+  // etc.): `daytona.create({ image: Image.fromDockerfile(dockerfile) })`
+  // + `sandbox.createSnapshot("<model>-production-v1")`, same as how
+  // every current snapshot was made.
   dockerfile: string;
   // Every model sets this now (`<model>-production-v1`) -- lib/runs.ts's
   // submitRun() creates the sandbox FROM THIS DAYTONA SNAPSHOT
@@ -113,7 +120,7 @@ export interface ModelMeta {
   // repo into their own Daytona account, or running a guide's plain
   // `docker run` command -- just not what this app's own submitRun()
   // uses for a real request anymore.
-  daytona_snapshot?: string;
+  daytona_snapshot: string;
   scenarios: string[];
   params_shape: ParamsShape;
   // Default is "python3 /app/run.py" (DEFAULT_RUN_COMMAND in lib/runs.ts);

@@ -398,14 +398,6 @@ export async function finishRunFailed(
   );
 }
 
-export async function markRunRunning(runId: string): Promise<void> {
-  await ensureDb();
-  await getPool().query(
-    "UPDATE runs SET status = 'running', updated_at = now() WHERE run_id = $1 AND status = 'queued'",
-    [runId],
-  );
-}
-
 // --- Users + API keys (lib/session.ts, lib/apiKey.ts, app/api/auth/github/*,
 // app/api/keys/*) -----------------------------------------------------------
 

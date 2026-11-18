@@ -37,7 +37,6 @@
  *     caller ever wins the claim and proceeds to parse/cache/delete; every
  *     other caller just re-reads the row.
  */
-import { Image, Resources } from "@daytona/sdk";
 import { randomUUID } from "crypto";
 
 import { getDaytonaClient } from "./daytona";
@@ -370,41 +369,24 @@ export async function submitRun(
 
   const daytona = getDaytonaClient();
 
-  // See models.ts's daytona_snapshot doc comment -- gcam's Dockerfile
-  // can't actually be built from this repo's own checkout (a required
-  // COPY source is gitignored), and pulling the equivalent image from
-  // Docker Hub instead is too slow to fit inside a serverless function's
-  // own execution timeout (confirmed: this is what a prior version of
-  // this code did, and it 502'd from the platform itself in production
-  // even though it eventually succeeded locally, where nothing enforces
-  // that timeout). Creating from this project's own Daytona snapshot
-  // instead takes well under a second.
-  const name = `${modelName}-run-${runId.slice(0, 8)}`;
-  const sandbox = model.daytona_snapshot
-    ? // A snapshot already has its own fixed cpu/mem/disk baked in from
-      // whenever it was created (confirmed: gcam-production-v1's own
-      // cpu:4/mem:8/disk:12 already matches model.resources below) --
-      // CreateSandboxFromSnapshotParams has no `resources` override for
-      // this reason, unlike the image-build path.
-      await daytona.create(
-        {
-          snapshot: model.daytona_snapshot,
-          name,
-          autoStopInterval: autoStopMinutes(model),
-          autoDeleteInterval: SANDBOX_AUTO_DELETE_MINUTES,
-        },
-        { timeout: 600 },
-      )
-    : await daytona.create(
-        {
-          image: Image.fromDockerfile(model.dockerfile),
-          name,
-          autoStopInterval: autoStopMinutes(model),
-          autoDeleteInterval: SANDBOX_AUTO_DELETE_MINUTES,
-          ...(model.resources ? { resources: model.resources as Resources } : {}),
-        },
-        { timeout: 600 },
-      );
+  // Every model creates from its own pre-built Daytona snapshot now, not
+  // by building (or pulling) an image at request time -- see
+  // models.ts's daytona_snapshot doc comment for the full why (Next.js's
+  // file tracing can't see sandboxes/<model>/Dockerfile at all in a real
+  // deployment, and even once that's fixed, a build/pull is far too slow
+  // to fit inside a serverless function's own execution timeout). A
+  // snapshot already has its own fixed cpu/mem/disk baked in from
+  // whenever it was created, so there's no `resources` override here
+  // (unlike the old Image.fromDockerfile path this replaced).
+  const sandbox = await daytona.create(
+    {
+      snapshot: model.daytona_snapshot,
+      name: `${modelName}-run-${runId.slice(0, 8)}`,
+      autoStopInterval: autoStopMinutes(model),
+      autoDeleteInterval: SANDBOX_AUTO_DELETE_MINUTES,
+    },
+    { timeout: 600 },
+  );
 
   const sessionId = `run-${runId.slice(0, 8)}`;
   await sandbox.process.createSession(sessionId);
