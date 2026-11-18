@@ -237,7 +237,7 @@ function restApiStep(
 
   return [
     {
-      text: "Without a key, run creation genuinely fails -- this isn't a stand-in for a feature that doesn't exist, it's the real, current behavior:",
+      text: "Without a key, starting a NEW run genuinely fails -- this isn't a stand-in for a feature that doesn't exist, it's the real, current behavior. It only 401s like this the first time anyone requests this exact (model, params) pair, though: a cached repeat of the same params skips the key check entirely and returns the finished result with no key needed (lib/runs.ts's submitRun checks the cache before it checks auth) -- so if someone already ran this exact example before you, you'd see a 200 with the full result here instead:",
       code:
         `curl -X POST ${SITE_ORIGIN}/v1/models/${model}/runs \\\n` +
         `  -H "Content-Type: application/json" \\\n` +
