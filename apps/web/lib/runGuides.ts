@@ -123,7 +123,7 @@ function restApiStep(model: string, params: string, resultValue: string, resultN
 
   return {
     label: "Call it over HTTP",
-    text: "Cached results don't need an API key.",
+    text: "Submit a run with your API key, then poll it until it finishes.",
     code:
       `curl -X POST ${SITE_ORIGIN}/v1/models/${model}/runs \\\n` +
       `  -H "Authorization: Bearer YOUR_API_KEY" \\\n` +
@@ -139,6 +139,7 @@ function restApiStep(model: string, params: string, resultValue: string, resultN
       `# }\n` +
       `# ${resultNote}`,
     language: "bash",
+    note: "Cached results don't need an API key.",
   };
 }
 
