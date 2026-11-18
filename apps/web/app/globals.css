@@ -1423,7 +1423,14 @@ a.icon-button {
   scroll-margin-top: 1.5rem;
 }
 
-/* Hover-to-reveal "#" anchor, like blog.jamesmurdza.com's headers -- sits
+/* The whole heading is the link (bigger, more discoverable click
+   target) -- reset it to look like plain heading text, not a link. */
+.heading-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Hover-to-reveal "#" marker, like blog.jamesmurdza.com's headers -- sits
    just left of the heading, invisible until the heading is hovered (or
    focused, for keyboard users), so it doesn't clutter the page by
    default. */
@@ -1432,14 +1439,13 @@ a.icon-button {
   left: -1.25rem;
   top: 0;
   color: var(--pp-brand);
-  text-decoration: none;
   font-weight: 400;
   opacity: 0;
   transition: opacity 0.1s;
 }
 
 .article-section h2:hover .heading-anchor,
-.heading-anchor:focus {
+.heading-link:focus .heading-anchor {
   opacity: 1;
 }
 

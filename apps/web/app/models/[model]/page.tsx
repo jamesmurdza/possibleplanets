@@ -22,15 +22,17 @@ function slugify(text: string): string {
 
 // Hover-to-reveal "#" anchor link, like blog.jamesmurdza.com's headers --
 // gives every section a stable, shareable URL (#how-to-run-x-locally)
-// without cluttering the heading when you're not hovering it.
+// without cluttering the heading when you're not hovering it. The whole
+// heading (not just the "#") is clickable -- it's the same link, just a
+// bigger, more discoverable target.
 function SectionHeading({ children }: { children: string }) {
   const slug = slugify(children);
   return (
     <h2 id={slug}>
-      <a href={`#${slug}`} className="heading-anchor" aria-label={`Link to "${children}"`}>
-        #
+      <a href={`#${slug}`} className="heading-link" aria-label={`Link to "${children}"`}>
+        <span className="heading-anchor">#</span>
+        {children}
       </a>
-      {children}
     </h2>
   );
 }
