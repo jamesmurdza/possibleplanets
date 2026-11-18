@@ -149,7 +149,6 @@ function restApiStep(model: string, params: string, resultValue: string, resultN
     .join("\n");
 
   return {
-    label: "Call it over HTTP",
     text: "Submit a run with your API key, then poll it until it finishes.",
     code:
       `curl -X POST ${SITE_ORIGIN}/v1/models/${model}/runs \\\n` +
@@ -203,13 +202,11 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "fair",
     [
       {
-        label: "Install",
         text: "FAIR is a plain Python package. It needs no compiled extension and no system packages.",
         code: "pip install fair",
         language: "bash",
       },
       {
-        label: "Run a minimal example",
         text:
           "Define a scenario, configure it, and run it. This is the shortest version that runs end to end, using " +
           "illustrative (not calibrated) climate parameters -- see FAIR's own docs (linked above) for the full " +
@@ -242,13 +239,11 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "oscar",
     [
       {
-        label: "Install",
         text: "OSCAR is distributed as a Git repository managed with Poetry, not a pip package.",
         code: "git clone https://github.com/jamesmurdza/OSCAR.git\ncd OSCAR\npoetry install",
         language: "bash",
       },
       {
-        label: "Run a minimal example",
         text: "Run one of its own example scripts directly through Poetry, from inside that cloned directory.",
         code: "poetry run python run_scripts/basic_example_1.py",
         language: "bash",
@@ -277,7 +272,6 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "dice",
     [
       {
-        label: "Install",
         text:
           "Add the pinned Ipopt solver and the DICE.jl package directly from its repository. These exact " +
           "versions avoid a real segfault in a newer Ipopt/DICE.jl combination.",
@@ -286,7 +280,6 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
         language: "julia",
       },
       {
-        label: "Run a minimal example",
         text: "Solve a named policy path and read its atmospheric temperature series back out.",
         code:
           "using DICE\nresult = solve(OptimalPrice, v2016R2())\nresult.results.Tₐₜ\n# [0.85, 1.016, 1.184, 1.354, 1.524, ..., 4.001, 3.997, 3.993, 3.989]  (°C, from ~1900)\n# 100 values total, years 2015-2510 in 5-year steps",
@@ -317,7 +310,6 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "hector",
     [
       {
-        label: "Build and run",
         text:
           "Build and run this repo's own sandboxes/hector/Dockerfile, which installs the system packages pyhector " +
           "needs to compile its C++ core from source -- a plain `pip install pyhector` fails on a bare machine " +
@@ -354,7 +346,6 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "magicc",
     [
       {
-        label: "Build and run",
         text:
           "Build and run this repo's own sandboxes/magicc/Dockerfile, which installs Wine (pymagicc wraps a real " +
           "Windows MAGICC6.exe binary via it) and pins xarray to a version confirmed to work -- pymagicc's current " +
@@ -386,7 +377,6 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "twolayer",
     [
       {
-        label: "Build and run",
         text:
           "Build and run this repo's own sandboxes/twolayer/Dockerfile, which patches a 2-line pandas API call " +
           "openscm-twolayermodel==0.2.3 makes that pandas>=2.0 removed -- no pandas version compatible with both " +
