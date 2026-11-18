@@ -254,20 +254,78 @@ unmaintained but still installable).
   the pipeline, cumulative R memory usage already exceeds 8GB on its own,
   independent of the raw input data size.
 
-**This is where the investigation stops for now.** Unlike every blocker
-found so far (all fixable with the right flag/package/env var), this one
-runs directly into the same **4 CPU / 8GB memory account ceiling**
-already confirmed as a hard wall during the build-stage testing above --
-there's no higher tier to request. Two paths exist but weren't attempted
-in this pass: (a) `driver_drake()` -- the incremental/caching variant,
-which may release memory between chunks differently (though it's meant
-for repeated incremental runs during development, not clearly a lower
-peak-memory one-shot path), or (b) requesting/restoring only the specific
-`MODULE_OUTPUTS` actually needed for one scenario's XML files rather than
-the full all-chunks `driver()` run. Neither is confirmed to fit in 8GB.
+### Follow-up 2: confirming the account's memory ceiling, then `driver_drake()`
+
+Before chasing a workaround, re-verified directly (not from memory) that
+8GB really is this account's hard ceiling: `resources.memory` requests of
+9 through 32GB were all rejected by the API with the same "exceeds
+maximum allowed per sandbox (8GB)" error; `cpu` is still capped at 4
+too. Checked `organizations/{id}/available-sandbox-classes` directly --
+this org only has `container` and `windows` classes, no higher-tier
+`linux-vm` class. The **only** way found to request more than 8GB is
+attaching a GPU (`resources.gpu: 1` unlocked `memory: 16` in testing) --
+but GPU sandboxes must be ephemeral (`autoDeleteInterval: 0` is
+mandatory) and bill for GPU time this is pure-CPU R code doesn't need, so
+not pursued. Also tried adding a swapfile inside the sandbox as a
+zero-cost way to extend past the cgroup's RAM limit --
+`/sys/fs/cgroup/memory.swap.max` is `0`, i.e. swap is disabled at the
+platform level; not available either.
+
+With no resource increase available, tried `driver_drake()` (the
+incremental/caching variant mentioned as unexplored above) with
+`jobs=1, memory_strategy="autoclean", garbage_collection=TRUE` to force
+drake to release each completed target's memory rather than accumulate
+all of them like plain `driver()` does. Result: real improvement, not a
+full fix. It got past `Population_hist` cleanly this time (memory stayed
+in the 1-7GB range, visibly fluctuating rather than monotonically
+climbing, and progressed to generating 127 of the model's XML outputs --
+compared to 0 on every previous attempt) before OOM-killing again, this
+time on `module_emissions_L112.ceds_ghg_en_R_S_T_Y`.
+
+**Found and fixed one genuine upstream bug this way:** `Population_hist`
+itself turned out to have the same class of bug as `Employment` -- a
+block meant to build the full iso x year grid for interpolation chained
+two `repeat_add_columns()` calls on a dataframe that **already contained
+both the `iso` and `year` columns being added**, squaring the row count
+twice over (should be ~21,600 rows for the intended grid; the actual
+code produces hundreds of millions). Replaced the whole block with the
+one-line equivalent, `tidyr::complete(iso, year)`, which produces the
+identical grid+ NA-fill result without the accidental cross-multiplication.
+This fix is why `driver_drake()`'s second attempt got past `Population_hist`
+at all -- the first attempt (before this fix) died on it instantly, just
+like plain `driver()` did.
+
+Confirmed `driver_drake()`'s on-disk cache (`.drake/`) lets a killed run
+resume rather than restart from scratch -- re-running the same
+`driver_drake()` call after unlocking the cache
+(`drake::drake_cache(path)$unlock()`, needed because the prior process
+was killed mid-write) picked up exactly where it left off with a fresh,
+near-zero-memory R process. This is a real, usable checkpoint/resume
+mechanism for working through the pipeline in bounded-memory passes.
+
+**The new blocker (`ceds_ghg_en_R_S_T_Y`) is different in kind.** Unlike
+`Population_hist`/`Employment`, this one's `repeat_add_columns()` chain
+expands a filtered sector/tech table by genuinely distinct dimensions
+(gas species x 53 CEDS years x 32 GCAM regions) -- a real, intentional
+cross-join needed to build a complete emissions-factor grid, not an
+accidental self-multiplication. It reproduces the OOM on a cold retry
+from near-zero memory, meaning this single chunk's own working set
+exceeds what's left of the 8GB budget. Did not patch this one: changing
+real emissions-calculation logic without being certain what downstream
+GCAM math depends on its exact row structure risks silently corrupting
+model output in a way that wouldn't show up as an error -- a materially
+different risk than the `Population_hist`/`Employment` fixes, which were
+provably redundant intermediate steps with an identical end result.
 
 **Conclusion:** GCAM remains **not added** to `sandboxes/` (beyond the
 already-committed build-only `Dockerfile`) or `lib/models.ts`. The C++
-build is fully solved; the R data-generation step is now understood in
-detail (exact failure point, exact byte-for-byte cause) but not yet
-solved within this account's resource limits.
+build is fully solved. The R data-generation step is now substantially
+further along than before -- two real upstream bugs found and fixed,
+127 of the pipeline's XML outputs confirmed generatable within 8GB using
+`driver_drake()`'s checkpoint/resume mechanism -- but one more
+memory-heavy chunk remains unresolved, and fixing it safely would need
+either genuine GCAM/R domain expertise (to rewrite the emissions grid
+construction without changing its output) or to just run the pipeline on
+a machine with more memory outside this project's sandbox budget
+entirely. 8GB is a confirmed hard ceiling on this account for CPU
+sandboxes; there's no higher tier available to request.
