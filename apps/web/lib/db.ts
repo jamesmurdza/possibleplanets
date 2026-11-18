@@ -319,13 +319,21 @@ export interface RunListItem {
  * lighter projection than getRun() (no `result`/`error` payload, which can
  * be large) since this is meant to be polled/refreshed cheaply for a list
  * view; a row's full detail is still just a GET /v1/runs/{run_id} away.
+ *
+ * No default/max cap -- the Runs tab wants every run, not just the most
+ * recent 50/200 (a user explicitly asked for this: don't limit the runs
+ * page). `limit` is still accepted (and still optional) for any caller that
+ * genuinely wants a bounded page, but omitting it returns everything.
  */
-export async function listRuns(limit = 50): Promise<RunListItem[]> {
+export async function listRuns(limit?: number): Promise<RunListItem[]> {
   await ensureDb();
   const { rows } = await getPool().query(
-    `SELECT run_id, model, model_version, params, status, cached, progress, duration_seconds, started_at, updated_at
-     FROM runs ORDER BY started_at DESC LIMIT $1`,
-    [limit],
+    limit
+      ? `SELECT run_id, model, model_version, params, status, cached, progress, duration_seconds, started_at, updated_at
+         FROM runs ORDER BY started_at DESC LIMIT $1`
+      : `SELECT run_id, model, model_version, params, status, cached, progress, duration_seconds, started_at, updated_at
+         FROM runs ORDER BY started_at DESC`,
+    limit ? [limit] : [],
   );
   return rows.map((r: any) => ({
     ...r,

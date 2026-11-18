@@ -229,7 +229,7 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
   // no scenario equivalent to the one selected (see resolveNativeScenario)
   // is skipped rather than submitted broken. These show up in the Runs tab
   // like any other submitted run; this form doesn't wait on or show them.
-  async function submitExtraRuns(combos: { model: string; scenario: string }[], forceRefresh: boolean) {
+  async function submitExtraRuns(combos: { model: string; scenario: string }[]) {
     let skipped = 0;
     await Promise.all(
       combos.map(async ({ model: m, scenario: s }) => {
@@ -241,10 +241,13 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
             return;
           }
           const params = buildParams(meta, nativeScenario, m === modelName ? paramValues : {});
+          // Always force a fresh run here too -- clicking "Run" never shows
+          // a cached result, for the batch combos any more than the
+          // primary one. See runModel's own comment.
           await fetchJson(`/v1/models/${m}/runs`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ params, refresh: forceRefresh }),
+            body: JSON.stringify({ params, refresh: true }),
           });
         } catch {
           skipped++;
@@ -257,10 +260,13 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
   }
 
   // Submitting no longer renders anything locally -- it either navigates to
-  // the Runs tab (via onRunSubmitted) with the new/cached run's drawer open,
-  // or -- on a genuine submission failure -- shows an inline error and stays
-  // on this form so the user can fix and retry.
-  async function runModel(forceRefresh = false) {
+  // the Runs tab (via onRunSubmitted) with the new run's drawer open, or --
+  // on a genuine submission failure -- shows an inline error and stays on
+  // this form so the user can fix and retry. Clicking "Run" always forces a
+  // fresh run (refresh: true) -- showing a cached result on a "Run" click
+  // would be surprising; cached results are only ever surfaced through the
+  // explicit "View cached" button (see viewCachedRun/checkResult.cached).
+  async function runModel() {
     setRunDisabled(true);
 
     if (!modelMeta) {
@@ -276,7 +282,7 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
       // Deliberately not awaited -- these submit independently of (and in
       // parallel with) the primary run below; nothing here should make the
       // primary submission wait on unrelated jobs.
-      submitExtraRuns(extraCombos, forceRefresh);
+      submitExtraRuns(extraCombos);
     }
 
     try {
@@ -286,13 +292,16 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
       const submitted = await fetchJson(`/v1/models/${modelName}/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ params, refresh: forceRefresh }),
+        body: JSON.stringify({ params, refresh: true }),
       });
       setRunDisabled(false);
-      // A cache hit comes back as a finished job inline (see submitRun's
-      // module comment) rather than a run_id to poll -- that inline run_id
+      // refresh: true above means this normally won't be a cache hit (the
+      // whole point of forcing a fresh run on "Run" -- see runModel's own
+      // comment). Keep this branch anyway as a defensive fallback: a cache
+      // hit still comes back as a finished job inline rather than a run_id
+      // to poll (see submitRun's module comment), and that inline run_id
       // was never written to the `runs` table, so opening it in the drawer
-      // would 404. Look up the real historical run_id behind the hit
+      // would 404 -- look up the real historical run_id behind the hit
       // instead (the check we already ran has it, see checkResult).
       if (submitted.status === "succeeded") {
         const realRunId = checkResult?.cached_run_id;
@@ -404,13 +413,15 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
     setCheckResult(null);
   }
 
-  function etaBadge(): { text: string; kind: "cached" | "estimate" | "warn" } | null {
+  // Always a time estimate, never a "Cached" pill -- clicking "Run" always
+  // forces a fresh run (see runModel), so an ETA badge that said "Cached"
+  // would be misleading about what's about to happen. Whether this exact
+  // (model, params) happens to have a cached result is instead surfaced
+  // only via the separate "View cached" button below.
+  function etaBadge(): { text: string; kind: "estimate" | "warn" } | null {
     if (!checkResult) return null;
     if (!checkResult.cacheable) {
       return { text: "Won't be cached (see Advanced)", kind: "warn" };
-    }
-    if (checkResult.cached) {
-      return { text: "Cached", kind: "cached" };
     }
     const stats = statsByModel[modelName];
     if (stats) {
@@ -435,7 +446,7 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
         className="run-form"
         onSubmit={(e) => {
           e.preventDefault();
-          runModel(false);
+          runModel();
         }}
       >
         <div className="form-field-block">
