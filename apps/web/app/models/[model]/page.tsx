@@ -96,12 +96,16 @@ export default function ModelArticlePage() {
           guide.map((section, si) => (
             <section className="article-section" key={si}>
               <h2>{section.heading}</h2>
-              {section.steps.map((step, i) => (
-                <div key={i} className="run-guide-step">
-                  <p>{step.text}</p>
-                  {step.code && <CodeBlock code={step.code} language={step.language} />}
-                </div>
-              ))}
+              <ol className="run-guide-steps">
+                {section.steps.map((step, i) => (
+                  <li key={i} className="run-guide-step">
+                    {step.label && <p className="run-guide-step-label">{step.label}</p>}
+                    <p>{step.text}</p>
+                    {step.code && <CodeBlock code={step.code} language={step.language} />}
+                    {step.note && <p className="run-guide-step-note">{step.note}</p>}
+                  </li>
+                ))}
+              </ol>
             </section>
           ))}
       </main>

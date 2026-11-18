@@ -1482,14 +1482,57 @@ a.icon-button {
   color: var(--pp-grey-dark);
 }
 
+/* Numbered-doc-style step list: a small circular badge per <li> (via a
+   CSS counter, not literal "1."/"2." text in the content) instead of a
+   wall of plain paragraphs -- reads like a reference doc's numbered
+   steps rather than a train-of-thought narrative. */
+.run-guide-steps {
+  list-style: none;
+  counter-reset: run-guide-step;
+  margin: 0;
+  padding: 0;
+}
+
 .run-guide-step {
-  margin-bottom: 1rem;
+  position: relative;
+  counter-increment: run-guide-step;
+  padding-left: 2.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.run-guide-step::before {
+  content: counter(run-guide-step);
+  position: absolute;
+  left: 0;
+  top: 0.1rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--pp-brand);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+  text-align: center;
+}
+
+.run-guide-step-label {
+  font-weight: 600;
+  color: var(--pp-text);
+  margin: 0 0 0.25rem;
 }
 
 .run-guide-step p {
   color: var(--pp-grey-dark);
   line-height: 1.6;
   margin: 0 0 0.5rem;
+}
+
+.run-guide-step-note {
+  color: var(--pp-grey);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  margin: 0.5rem 0 0;
 }
 
 .run-guide-code {

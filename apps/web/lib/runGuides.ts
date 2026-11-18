@@ -157,15 +157,16 @@ function apiCostStep(
   // for budgeting a batch) as the secondary number for everything else.
   const costPhrase =
     cost >= 0.01
-      ? `roughly ${formatUsd(cost)} per single run (${formatUsdPer1000(cost)} per 1,000 runs)`
-      : `roughly ${formatUsdPer1000(cost)} per 1,000 runs (${formatUsd(cost)} per single run)`;
+      ? `${formatUsd(cost)} per run (${formatUsdPer1000(cost)} per 1,000 runs)`
+      : `${formatUsdPer1000(cost)} per 1,000 runs (${formatUsd(cost)} per run)`;
   return {
-    text:
-      `Rough Daytona cost: ${cpu} vCPU + ${memoryGiB} GiB memory${diskPart}, for ${seconds}s per run ` +
-      `(${secondsSource}), at Daytona's published per-second rates (vCPU $0.0504/h, memory $0.0162/GiB-h, disk ` +
-      `$0.000108/GiB-h -- daytona.io/pricing, confirmed Nov 2026) comes to ${costPhrase}. This excludes sandbox ` +
-      `creation/teardown overhead, which isn't separately measured anywhere in this project -- so treat this as a ` +
-      `lower bound, not the full bill. A cached (model, params) repeat costs $0: no new sandbox is created at all.`,
+    label: "Estimated cost",
+    text: `Roughly ${costPhrase} on Daytona. A cached (model, params) repeat costs $0 -- no new sandbox is created.`,
+    note:
+      `Based on ${cpu} vCPU + ${memoryGiB} GiB memory${diskPart}, for ${seconds}s per run (${secondsSource}), at ` +
+      `Daytona's published per-second rates (vCPU $0.0504/h, memory $0.0162/GiB-h, disk $0.000108/GiB-h -- ` +
+      `daytona.io/pricing, confirmed Nov 2026). Excludes sandbox creation/teardown overhead, which isn't ` +
+      `separately measured anywhere in this project -- so treat this as a lower bound, not the full bill.`,
   };
 }
 
@@ -175,8 +176,8 @@ function apiCostStep(
  * this session while generating that model's real API example (same
  * install, same versions) -- not estimated from reading package manifests.
  */
-function localResourceStep(text: string): RunGuideStep {
-  return { text };
+function localResourceStep(text: string, note: string): RunGuideStep {
+  return { label: "Resource footprint", text, note };
 }
 
 // Real (not invented) domain this app is actually deployed at.
@@ -237,16 +238,24 @@ function restApiStep(
 
   return [
     {
-      text: "Without a key, starting a NEW run genuinely fails -- this isn't a stand-in for a feature that doesn't exist, it's the real, current behavior. It only 401s like this the first time anyone requests this exact (model, params) pair, though: a cached repeat of the same params skips the key check entirely and returns the finished result with no key needed (lib/runs.ts's submitRun checks the cache before it checks auth) -- so if someone already ran this exact example before you, you'd see a 200 with the full result here instead:",
+      label: "Attempt without a key",
+      text: "Starting a new run requires a key.",
       code:
         `curl -X POST ${SITE_ORIGIN}/v1/models/${model}/runs \\\n` +
         `  -H "Content-Type: application/json" \\\n` +
         `  -d '{"params": ${params}}'\n` +
         `# -> 401 {"detail": "missing or invalid API key"}`,
       language: "bash",
+      note:
+        "This isn't a stand-in for a feature that doesn't exist -- it's the real, current behavior, and only " +
+        "applies the first time anyone requests this exact (model, params) pair. A cached repeat of the same " +
+        "params skips the key check entirely and returns the finished result with no key needed (lib/runs.ts's " +
+        "submitRun checks the cache before it checks auth) -- so if someone already ran this exact example " +
+        "before you, you'd see a 200 with the full result here instead.",
     },
     {
-      text: "Sign in with GitHub at /account to create a real key, then submit the same request with it. Since no one has run this exact (model, params) combination before, this is a cache MISS -- it actually starts a new sandbox and hands back a run_id to poll, not the final result yet:",
+      label: "Submit with a key",
+      text: "Sign in with GitHub at /account to create a real key, then submit the same request with it.",
       code:
         `curl -X POST ${SITE_ORIGIN}/v1/models/${model}/runs \\\n` +
         `  -H "Authorization: Bearer YOUR_API_KEY" \\\n` +
@@ -254,9 +263,13 @@ function restApiStep(
         `  -d '{"params": ${params}}'\n` +
         `# -> 200 {"run_id": "${EXAMPLE_RUN_ID}", "status": "queued"}`,
       language: "bash",
+      note:
+        "Since no one has run this exact (model, params) combination before, this is a cache MISS -- it " +
+        "actually starts a new sandbox and hands back a run_id to poll, not the final result yet.",
     },
     {
-      text: `Poll that run_id with the same key until it finishes. ${provenanceNote}`,
+      label: "Poll for the result",
+      text: "Poll that run_id with the same key until it finishes.",
       code:
         `curl ${SITE_ORIGIN}/v1/runs/${EXAMPLE_RUN_ID} \\\n` +
         `  -H "Authorization: Bearer YOUR_API_KEY"\n` +
@@ -275,11 +288,22 @@ function restApiStep(
         `# }\n` +
         `# ${resultNote}`,
       language: "bash",
+      note: provenanceNote,
     },
   ];
 }
 
 export interface RunGuideStep {
+  // Short bold lead-in shown above the step body, e.g. "Install" or
+  // "Estimated cost" -- what a reference-docs numbered step list uses
+  // instead of making the reader parse a paragraph to find the verb.
+  // Every step defines one; kept optional on the type only so a future
+  // one-off step isn't forced to invent a label that doesn't fit.
+  label?: string;
+  // The instruction itself: one short, imperative sentence (or two).
+  // Rationale, caveats, and "how we know this" provenance belong in
+  // `note` below, not here -- this is what you'd read to just get the
+  // step done.
   text: string;
   code?: string;
   // Prism.js language id for `code`, when present -- picks which syntax
@@ -287,6 +311,11 @@ export interface RunGuideStep {
   // (or a prose-only step like the resource/cost estimates) where
   // highlighting wouldn't add anything.
   language?: "bash" | "python" | "julia";
+  // Secondary aside, rendered smaller/muted below the code block: why
+  // this works, where a number came from, an edge case. Separated from
+  // `text` specifically so the main instruction stays skimmable instead
+  // of reading like a single long train-of-thought paragraph.
+  note?: string;
 }
 
 export interface RunGuideSection {
@@ -307,18 +336,24 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "fair",
     [
       {
-        text: "FAIR is a plain Python package, with no compiled extension or system packages required.",
+        label: "Install",
+        text: "FAIR is a plain Python package -- no compiled extension or system packages required.",
         code: "pip install fair",
         language: "bash",
       },
       {
-        text: "From there, follow FAIR's own documented example to define a scenario, configure it, and run it -- linked above as this model's website. The shortest version that actually runs end to end looks like this (illustrative, not calibrated, climate parameters):",
+        label: "Run a minimal example",
+        text:
+          "Define a scenario, configure it, and run it. This is the shortest version that actually runs end to " +
+          "end (illustrative, not calibrated, climate parameters) -- see FAIR's own docs (linked above) for the " +
+          "full calibrated walkthrough.",
         code:
           'from fair import FAIR\nfrom fair.io import read_properties\nfrom fair.interface import initialise, fill\n\nf = FAIR()\nf.define_time(2000, 2050, 1)\nf.define_scenarios(["ssp245"])\nf.define_configs(["central"])\n\nspecies, properties = read_properties()\nf.define_species(species, properties)\nf.allocate()\n\nf.fill_species_configs()\nf.fill_from_rcmip()  # downloads standard SSP emissions/concentrations\n\n# illustrative (not calibrated) ocean heat response\nfill(f.climate_configs["ocean_heat_capacity"], [5, 20, 100], config="central")\nfill(f.climate_configs["ocean_heat_transfer"], [1.0, 2.0, 1.0], config="central")\nfill(f.climate_configs["deep_ocean_efficacy"], 1.29, config="central")\n\ninitialise(f.concentration, f.species_configs["baseline_concentration"])\ninitialise(f.forcing, 0)\ninitialise(f.temperature, 0)\ninitialise(f.cumulative_emissions, 0)\ninitialise(f.airborne_emissions, 0)\n\nf.run()\nprint(f.temperature.sel(layer=0, scenario="ssp245", config="central").values[-5:])',
         language: "python",
       },
       localResourceStep(
-        "Measured this session: a fresh venv with just `fair` installed is ~446MB (pip's own deps -- numpy/scipy/pandas/xarray -- dominate that, not FAIR's own code). No compiler, no system packages. Running the full ssp245/66-config ensemble above takes ~13-19s on 1-2 CPUs (see the API section's cost estimate below for the exact measured range) -- no special RAM requirement observed.",
+        "~446MB installed; the full ssp245/66-config ensemble above takes ~13-19s on 1-2 CPUs; no special RAM required.",
+        "Measured this session -- numpy/scipy/pandas/xarray (pip's own deps) dominate the footprint, not FAIR's own code. See the API section's cost estimate below for the exact measured timing range.",
       ),
     ],
     [
@@ -340,17 +375,20 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "oscar",
     [
       {
+        label: "Install",
         text: "OSCAR is distributed as a Git repository managed with Poetry, not a pip package.",
         code: "git clone https://github.com/jamesmurdza/OSCAR.git\ncd OSCAR\npoetry install",
         language: "bash",
       },
       {
+        label: "Run a minimal example",
         text: "Run one of its own example scripts directly through Poetry, from inside that cloned directory.",
         code: "poetry run python run_scripts/basic_example_1.py",
         language: "bash",
       },
       localResourceStep(
-        "Measured this session: the cloned repo (code + bundled parameter data) is ~294MB, plus a ~475MB venv for its pinned deps (xarray/netCDF4/scipy/pandas) -- ~770MB total. The real cost here is time and memory, not disk: a full run at nMC=1 (the smallest possible sample) takes 6-8.5 minutes (measured directly: 522s on 4 CPU/8GB), and it needs real headroom -- confirmed by testing that it gets OOM-killed in just 7.8s on a smaller/default-sized machine while loading its own parameter files.",
+        "~770MB installed (294MB repo + 475MB venv). The real cost is time and memory, not disk: a full run at nMC=1 (the smallest possible sample) takes 6-8.5 minutes and needs real headroom.",
+        "Measured this session: 522s on 4 CPU/8GB; confirmed it gets OOM-killed in just 7.8s on a smaller/default-sized machine while loading its own parameter files.",
       ),
     ],
     [
@@ -380,19 +418,25 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "dice",
     [
       {
-        text: "DICE runs on Julia's own package manager. Add the pinned Ipopt solver and the DICE.jl package directly from its repository -- these exact versions avoid a real segfault in a newer Ipopt/DICE.jl combination.",
+        label: "Install",
+        text:
+          "Add the pinned Ipopt solver and the DICE.jl package directly from its repository -- these exact " +
+          "versions avoid a real segfault in a newer Ipopt/DICE.jl combination.",
         code:
           'using Pkg\nPkg.add(Pkg.PackageSpec(name="Ipopt", version="1.0.2"))\nPkg.add(url="https://github.com/possibleplanets/DICE.jl", rev="754e9ba250e549f3f385a9b5e9c7f39117d29b4d")\nPkg.pin(Pkg.PackageSpec(name="Ipopt", version="1.0.2"))',
         language: "julia",
       },
       {
-        text: "Solve a named policy path and read its atmospheric temperature series back out. Real output from actually running this (100 values, years 2015-2510 in 5-year steps):",
+        label: "Run a minimal example",
+        text: "Solve a named policy path and read its atmospheric temperature series back out.",
         code:
           "using DICE\nresult = solve(OptimalPrice, v2016R2())\nresult.results.Tₐₜ\n# [0.85, 1.016, 1.184, 1.354, 1.524, ..., 4.001, 3.997, 3.993, 3.989]  (°C, from ~1900)",
         language: "julia",
+        note: "Real output from actually running this: 100 values, years 2015-2510 in 5-year steps.",
       },
       localResourceStep(
-        "Measured this session: Julia itself plus Ipopt + DICE.jl's own package depot (~/.julia) comes to ~1.1-1.2GB. The real cost is one-time, not ongoing: the FIRST solve on a fresh depot pays Julia's package-precompilation cost (several minutes, almost all compile time rather than the solve itself); every solve after that completes in ~8-17s, matching the IPOPT solver timing seen directly (7.7s/16.6s across two runs here). No GAMS install or commercial solver license needed -- it falls back to the bundled, free MUMPS linear solver.",
+        "~1.1-1.2GB installed (Julia + Ipopt + DICE.jl's own package depot). The first solve on a fresh depot pays Julia's package-precompilation cost (several minutes); every solve after that completes in ~8-17s. No GAMS install or commercial solver license needed.",
+        "Measured this session: 7.7s/16.6s IPOPT solve timing across two runs. Falls back to the bundled, free MUMPS linear solver.",
       ),
     ],
     [
@@ -415,12 +459,17 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "hector",
     [
       {
-        text: "A plain `pip install pyhector` fails on a bare machine -- it builds Hector's C++ core from source and needs Boost headers it doesn't bundle. This repo's sandboxes/hector/Dockerfile already installs the right system packages, so build and run that image instead of fighting the compile step yourself.",
+        label: "Build and run",
+        text:
+          "A plain `pip install pyhector` fails on a bare machine -- it builds Hector's C++ core from source and " +
+          "needs Boost headers it doesn't bundle. Build and run this repo's own sandboxes/hector/Dockerfile " +
+          "instead, which already installs the right system packages.",
         code: "docker build -t hector-sandbox sandboxes/hector\ndocker run --rm hector-sandbox",
         language: "bash",
       },
       localResourceStep(
-        "Measured this session: the Boost dev headers alone are ~322MB installed (`libboost-all-dev`'s full transitive set), plus ~119MB for a C/C++ toolchain (gcc/g++/libgcc-dev) to actually compile pyhector's bundled Hector core, plus a ~361MB venv on top -- roughly 800MB total, most of it one-time compiler/library install rather than pyhector's own footprint. Once built, a run itself is fast: ~1.1-2.2s depending on CPU count (see the API section's cost estimate for the exact measured range), no meaningful memory requirement observed.",
+        "~800MB installed (322MB Boost dev headers + 119MB C/C++ toolchain + 361MB venv), most of it one-time compiler/library install. Once built, a run itself is fast: ~1.1-2.2s depending on CPU count.",
+        "Measured this session. See the API section's cost estimate below for the exact measured timing range.",
       ),
     ],
     [
@@ -447,12 +496,17 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "magicc",
     [
       {
-        text: "pymagicc wraps a real Windows MAGICC6.exe binary via Wine, and its current pip dependency resolution pulls an xarray version too new for it to import. sandboxes/magicc/Dockerfile installs Wine and pins xarray to a version confirmed to work, so build and run that image rather than installing pymagicc directly.",
+        label: "Build and run",
+        text:
+          "pymagicc wraps a real Windows MAGICC6.exe binary via Wine, and its current pip dependency resolution " +
+          "pulls an xarray version too new for it to import. Build and run this repo's own " +
+          "sandboxes/magicc/Dockerfile instead, which installs Wine and pins xarray to a version confirmed to work.",
         code: "docker build -t magicc-sandbox sandboxes/magicc\ndocker run --rm magicc-sandbox",
         language: "bash",
       },
       localResourceStep(
-        "Wine's own dependency tree (X11/audio/video libraries pulled in regardless of --no-install-recommends, since MAGICC6.exe needs Wine's base libs, not those directly) genuinely would not fit in this guide's own authoring environment -- confirmed by two separate real attempts, each failing partway through unpacking with \"No space left on device\" at ~1.6GB free. Budget AT LEAST 2-3GB of free disk just for Wine, on top of pymagicc's own small (~tens of MB) Python footprint -- this is a real, tested lower bound from a real failure, not a guess.",
+        "Budget AT LEAST 2-3GB of free disk just for Wine, on top of pymagicc's own small (~tens of MB) Python footprint.",
+        "Wine's own dependency tree (X11/audio/video libraries, pulled in regardless of --no-install-recommends) genuinely would not fit in this guide's own authoring environment -- confirmed by two separate real attempts, each failing partway through unpacking with \"No space left on device\" at ~1.6GB free. This is a real, tested lower bound from a real failure, not a guess.",
       ),
     ],
     [
@@ -481,12 +535,18 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     "twolayer",
     [
       {
-        text: "openscm-twolayermodel==0.2.3 calls a pandas API in a form pandas>=2.0 removed, and no pandas version compatible with both this package and Python 3.11 exists on PyPI -- so the installed package itself needs a 2-line patch. sandboxes/twolayer/Dockerfile applies that patch automatically, so build and run that image rather than patching the package by hand.",
+        label: "Build and run",
+        text:
+          "openscm-twolayermodel==0.2.3 calls a pandas API that pandas>=2.0 removed, and no pandas version " +
+          "compatible with both this package and Python 3.11 exists on PyPI -- so the installed package itself " +
+          "needs a 2-line patch. Build and run this repo's own sandboxes/twolayer/Dockerfile instead, which " +
+          "applies that patch automatically.",
         code: "docker build -t twolayer-sandbox sandboxes/twolayer\ndocker run --rm twolayer-sandbox",
         language: "bash",
       },
       localResourceStep(
-        "Measured this session: a venv with openscm-twolayermodel + its pinned pandas/numpy is ~208MB, the smallest footprint of any model here -- it's a bare energy-balance physics engine, no emissions chemistry of its own. A run (loading the bundled ERF CSV + solving) completes in well under a second, confirmed directly -- no meaningful CPU or memory requirement.",
+        "~208MB installed, the smallest footprint of any model here -- it's a bare energy-balance physics engine, no emissions chemistry of its own. A run completes in well under a second.",
+        "Measured this session: venv with openscm-twolayermodel + its pinned pandas/numpy. No meaningful CPU or memory requirement.",
       ),
     ],
     [
