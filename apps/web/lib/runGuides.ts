@@ -13,8 +13,13 @@
  *     broken on a bare machine (each sandboxes/<model>/Dockerfile's own
  *     comments document the exact failure: hector needs a C++ toolchain
  *     to compile its core, magicc needs Wine, twolayer needs a source
- *     patch for pandas compatibility), so the step instead builds/runs
- *     that Dockerfile -- the one path actually confirmed to work.
+ *     patch for pandas compatibility). The step points at the prebuilt
+ *     `possibleplanets/<model>` image on Docker Hub (built from that same
+ *     Dockerfile) rather than asking the reader to build it themselves --
+ *     a `docker pull`+`run` skips the compile/Wine-install/patch step
+ *     entirely. A `note` on each step still points at building locally
+ *     from the Dockerfile as the alternative, for anyone who'd rather not
+ *     pull a prebuilt image.
  *
  * Every model's REST section is built by restApiStep(): one curl example
  * that submits a run and polls it to completion against this project's
@@ -310,16 +315,17 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     [
       {
         text:
-          "Build and run this repo's own sandboxes/hector/Dockerfile, which installs the system packages pyhector " +
-          "needs to compile its C++ core from source -- a plain `pip install pyhector` fails on a bare machine " +
-          "without them.",
-        code: "docker build -t hector-sandbox sandboxes/hector\ndocker run --rm hector-sandbox",
+          "A plain `pip install pyhector` fails on a bare machine -- it needs a C/C++ toolchain and Boost headers " +
+          "to compile Hector's core from source. Pull the prebuilt image instead of building it yourself; it " +
+          "already has all of that baked in.",
+        code: "docker pull possibleplanets/hector\ndocker run --rm possibleplanets/hector",
         language: "bash",
+        note: "Or build it yourself from this repo's sandboxes/hector/Dockerfile (`docker build -t hector-sandbox sandboxes/hector`) if you'd rather not use a prebuilt image.",
       },
       localResourceStep(
         "Building the Docker image installs about 800MB of dependencies, mostly Boost headers and a C/C++ " +
-          "compiler used once to build Hector's core. After that, each run takes about 1 to 2 seconds on 1 to 2 " +
-          "CPUs, with no meaningful memory requirement.",
+          "compiler used once to build Hector's core -- the prebuilt image skips all of that. Each run takes " +
+          "about 1 to 2 seconds on 1 to 2 CPUs, with no meaningful memory requirement.",
       ),
     ],
     [
@@ -346,16 +352,18 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     [
       {
         text:
-          "Build and run this repo's own sandboxes/magicc/Dockerfile, which installs Wine (pymagicc wraps a real " +
-          "Windows MAGICC6.exe binary via it) and pins xarray to a version confirmed to work -- pymagicc's current " +
-          "pip dependency resolution otherwise pulls a newer xarray it can't import.",
-        code: "docker build -t magicc-sandbox sandboxes/magicc\ndocker run --rm magicc-sandbox",
+          "pymagicc wraps a real Windows MAGICC6.exe binary via Wine, and its current pip dependency resolution " +
+          "pulls a newer xarray it can't import. Pull the prebuilt image instead of installing Wine yourself -- " +
+          "it already has Wine and a working xarray version baked in.",
+        code: "docker pull possibleplanets/magicc\ndocker run --rm possibleplanets/magicc",
         language: "bash",
+        note: "Or build it yourself from this repo's sandboxes/magicc/Dockerfile (`docker build -t magicc-sandbox sandboxes/magicc`) if you'd rather not use a prebuilt image.",
       },
       localResourceStep(
         "Wine alone needs at least 2 to 3GB of free disk space, on top of pymagicc's own small (tens of MB) " +
-          "footprint. That didn't fit in the environment used to write this guide, which had only about 1.6GB " +
-          "free, so budget more than that if you're installing it yourself.",
+          "footprint, if you build it yourself -- the prebuilt image skips that install entirely. That disk " +
+          "requirement didn't fit in the environment used to write this guide, which had only about 1.6GB free, " +
+          "so budget more than that if you do build it locally.",
       ),
     ],
     [
@@ -377,11 +385,12 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
     [
       {
         text:
-          "Build and run this repo's own sandboxes/twolayer/Dockerfile, which patches a 2-line pandas API call " +
-          "openscm-twolayermodel==0.2.3 makes that pandas>=2.0 removed -- no pandas version compatible with both " +
-          "this package and Python 3.11 exists on PyPI, so the installed package itself needs the patch.",
-        code: "docker build -t twolayer-sandbox sandboxes/twolayer\ndocker run --rm twolayer-sandbox",
+          "openscm-twolayermodel==0.2.3 makes a 2-line pandas API call that pandas>=2.0 removed -- no pandas " +
+          "version compatible with both this package and Python 3.11 exists on PyPI, so the installed package " +
+          "itself needs a source patch. Pull the prebuilt image instead; it's already patched.",
+        code: "docker pull possibleplanets/twolayer\ndocker run --rm possibleplanets/twolayer",
         language: "bash",
+        note: "Or build it yourself from this repo's sandboxes/twolayer/Dockerfile (`docker build -t twolayer-sandbox sandboxes/twolayer`) if you'd rather not use a prebuilt image.",
       },
       localResourceStep(
         "Installing openscm-twolayermodel takes about 208MB of disk space, the smallest footprint of any model " +
