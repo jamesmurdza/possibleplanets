@@ -92,17 +92,18 @@ export default function ModelArticlePage() {
           </section>
         )}
 
-        {guide && (
-          <section className="article-section">
-            <h2>How to run {modelAcronym(model)}</h2>
-            {guide.map((step, i) => (
-              <div key={i} className="run-guide-step">
-                <p>{step.text}</p>
-                {step.code && <CodeBlock code={step.code} language={step.language} />}
-              </div>
-            ))}
-          </section>
-        )}
+        {guide &&
+          guide.map((section, si) => (
+            <section className="article-section" key={si}>
+              <h2>{section.heading}</h2>
+              {section.steps.map((step, i) => (
+                <div key={i} className="run-guide-step">
+                  <p>{step.text}</p>
+                  {step.code && <CodeBlock code={step.code} language={step.language} />}
+                </div>
+              ))}
+            </section>
+          ))}
       </main>
       <PublicFooter />
     </div>
