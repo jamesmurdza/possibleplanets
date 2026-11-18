@@ -37,6 +37,14 @@ docker pull possibleplanets/oscar
 docker run --rm possibleplanets/oscar
 ```
 
+This runs the SSP2-4.5 scenario with 1 Monte Carlo sample by default. To
+pick a different scenario or sample size, pass `SCENARIO_PARAMS` as an
+environment variable:
+
+```
+docker run --rm -e SCENARIO_PARAMS='{"scenario": "SSP5-8.5", "nMC": 1}' possibleplanets/oscar
+```
+
 Note: OSCAR is noticeably slower than the other models here -- expect
 the smallest possible run to take a few minutes, not seconds.
 

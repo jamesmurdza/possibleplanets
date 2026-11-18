@@ -31,6 +31,13 @@ docker pull possibleplanets/dice
 docker run --rm possibleplanets/dice
 ```
 
+This runs the "optimal" scenario by default. The only other supported
+scenario is "base" -- pass it via `SCENARIO_PARAMS`:
+
+```
+docker run --rm -e SCENARIO_PARAMS='{"scenario": "base"}' possibleplanets/dice
+```
+
 ## Run natively
 
 (This method is not fully tested. We recommend using the Docker method above.)

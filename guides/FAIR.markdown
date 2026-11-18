@@ -147,18 +147,6 @@ pl.xlabel('year')
 pl.ylabel('Temperature anomaly (K)')
 ```
 
-## Run with Docker
-
-If necessary, download and install Docker: [Link](https://www.docker.com/products/docker-desktop/).
-
-A prebuilt image is published on Docker Hub, so this doesn't require
-cloning any repository -- just pull and run it directly:
-
-```
-docker pull possibleplanets/fair
-docker run --rm possibleplanets/fair
-```
-
 ## Video
 
 (Coming soon.)

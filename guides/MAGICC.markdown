@@ -60,6 +60,14 @@ docker pull possibleplanets/magicc
 docker run --rm possibleplanets/magicc
 ```
 
+This runs the RCP26 scenario by default. To pick a different one, pass
+`SCENARIO_PARAMS` as an environment variable (supported scenarios:
+`RCP26`, `RCP45`, `RCP60`, `RCP85`):
+
+```
+docker run --rm -e SCENARIO_PARAMS='{"scenario": "RCP85"}' possibleplanets/magicc
+```
+
 ## Video
 
 (Coming soon.)
