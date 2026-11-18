@@ -1299,13 +1299,15 @@ a.icon-button {
   margin: 0 0 1rem;
 }
 
-/* Wraps into rows (4 per row at this section's ~870px content width, so
-   7 models -- as of GCAM's addition -- lay out as 4+3) instead of a
-   single row. A single always-on-one-line row (the previous approach,
-   shrinking cards to fit or scrolling horizontally past that) stopped
-   being readable once a 7th model card pushed the row past this
-   section's width -- wrapping keeps every card at a legible size
-   instead of cramming or requiring horizontal scroll to see them all. */
+/* Fixed-width cards that wrap into rows (at this section's ~870px
+   content width, that's 4 per row, so 7 models -- as of GCAM's addition
+   -- lay out as 4+3). A single always-on-one-line row (shrinking cards
+   to fit, or scrolling horizontally past that) stopped being readable
+   once a 7th model card pushed the row past this section's width, and a
+   stretch-to-fill-the-row approach (cards sized as a % of row width)
+   made every card's size depend on how many happened to be in that row
+   -- fixed width keeps every card the same size regardless of row
+   count or how many models there are in total. */
 .public-card-grid {
   display: flex;
   flex-wrap: wrap;
@@ -1314,8 +1316,8 @@ a.icon-button {
 
 .public-card {
   display: block;
-  flex: 1 1 calc(25% - 0.45rem);
-  min-width: 9rem;
+  flex: 0 0 9rem;
+  width: 9rem;
   border: 1px solid var(--pp-grey-light);
   border-radius: 4px;
   background: #fff;
