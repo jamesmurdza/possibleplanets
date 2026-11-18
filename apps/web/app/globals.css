@@ -1347,6 +1347,25 @@ a.icon-button {
   line-height: 1.5;
 }
 
+/* Shown in place of the last visible card when a grid has more items
+   than fit in VISIBLE_ROWS (app/page.tsx's truncateToRows) -- a plain
+   "there's more than this" indicator, not a link, so no hover/pointer
+   styling. */
+.public-card-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+  color: var(--pp-grey);
+}
+
+.public-card-more .public-card-title {
+  margin-bottom: 0;
+  text-transform: none;
+  font-weight: 400;
+  letter-spacing: 0.15em;
+}
+
 /* --- Article pages (one model or one scenario) --- */
 
 .article-back-link {
