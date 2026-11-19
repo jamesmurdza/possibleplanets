@@ -763,7 +763,13 @@ th.runs-table-checkbox-col {
   font-weight: 500;
 }
 
-.form-field input {
+/* Also matches a .param-field-row's <input> -- that label uses
+   display: contents (see .param-field-row above) so its input is no
+   longer boxed inside anything named .form-field, just placed straight
+   into .param-fields-grid's own grid, but still wants the exact same
+   visual treatment as every other text input in this form. */
+.form-field input,
+.param-fields-grid input {
   font-family: inherit;
   font-size: 0.8125rem;
   border-radius: var(--radius-sm);
@@ -775,7 +781,8 @@ th.runs-table-checkbox-col {
   width: 100%;
 }
 
-.form-field input:focus-visible {
+.form-field input:focus-visible,
+.param-fields-grid input:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }
@@ -811,13 +818,28 @@ th.runs-table-checkbox-col {
 
 /* Parameter inputs laid out as a proper grid (fixed, aligned column
    widths) rather than .form-row's flex-wrap (used elsewhere for dropdown
-   filter rows, where ragged widths don't matter) -- each parameter field
-   lines up into clean columns instead of floating at its own
-   content-driven width. */
+   filter rows, where ragged widths don't matter) -- every field's label,
+   input, and unit line up into three shared columns (label column sized
+   to the widest label, unit column to the widest unit) instead of each
+   field being its own self-contained flex row whose input width depends
+   on that one field's own label length. Each parameter is one row; see
+   .param-field-row below for how its 3 children become 3 grid cells of
+   THIS grid rather than their own separate little box. */
 .param-fields-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-  gap: 1rem 1.25rem;
+  grid-template-columns: max-content minmax(6rem, 16rem) max-content;
+  column-gap: 0.75rem;
+  row-gap: 0.6rem;
+  align-items: center;
+}
+
+/* display: contents makes this <label> itself generate no box at all --
+   its 3 children (label text, input, unit) become direct grid items of
+   .param-fields-grid above instead of being boxed together, which is
+   what lets them land in that grid's 3 columns and align with every
+   other row instead of each row being independently laid out. */
+.param-field-row {
+  display: contents;
 }
 
 .form-field-block > .form-field-label {
@@ -840,7 +862,7 @@ th.runs-table-checkbox-col {
   flex-direction: row;
   align-items: center;
   gap: 0.6rem;
-  min-width: 13rem;
+  min-width: 17rem;
   max-width: none;
 }
 
@@ -852,11 +874,22 @@ th.runs-table-checkbox-col {
 .run-form .form-field input {
   width: auto;
   flex: 1 1 auto;
-  min-width: 0;
+  /* Was 0 -- with a long label (e.g. "Climate feedback parameter") eating
+     most of a narrow grid cell's width, the input itself could shrink to
+     just a couple of characters wide. A real floor keeps it usable
+     regardless of how long the label next to it is. */
+  min-width: 5rem;
 }
 
-.run-form .param-fields-grid {
-  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+/* The unit shown after the input (e.g. "°C per CO2 doubling", "seconds")
+   -- see ParameterSpec's own `unit` doc comment in lib/models.ts. Doesn't
+   grow/shrink, so a long unit string doesn't squeeze the input back down
+   the way folding it into the label used to. */
+.form-field-unit {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: var(--color-text-faint);
+  font-size: 0.75rem;
 }
 
 /* --- Model picker cards --- */

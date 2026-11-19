@@ -978,6 +978,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                       onChange={(e) => setMaxRunTimeInput(e.target.value)}
                       aria-label="Max run time in seconds"
                     />
+                    <span className="form-field-unit">seconds</span>
                     <button type="button" onClick={updateDeadline} disabled={deadlineBusy || !maxRunTimeInput.trim()}>
                       {deadlineBusy ? "Updating..." : "Update deadline"}
                     </button>
