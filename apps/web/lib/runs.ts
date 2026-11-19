@@ -64,6 +64,16 @@ const PROGRESS_FILE_PATH = "/tmp/progress.json";
 // back -- separate from PROGRESS_FILE_PATH, which is a different file
 // run.py itself writes mid-run for live progress, not the final output.
 const RUN_OUTPUT_LOG_PATH = "/tmp/run_output.log";
+// Written by buildWrappedCommand the INSTANT the real run command exits --
+// before the webhook follow-up step even starts, let alone finishes. See
+// advanceRun's own comment on why this exists: Daytona's getSessionCommand
+// API can apparently fail to ever report an exit code for a command with a
+// large enough captured output (confirmed against a real stuck gcam run:
+// its process tree had fully exited and /tmp/run_output.log -- 13.7MB --
+// had stopped changing 18 minutes earlier, yet getSessionCommand still had
+// no exitCode field at all). advanceRun now checks THIS file directly
+// instead of depending on that API being reliable for a big-output run.
+const RUN_EXIT_CODE_PATH = "/tmp/run_exit_code";
 // Backstop auto-delete, in minutes -- same reasoning as the Python version's
 // SANDBOX_AUTO_DELETE_MINUTES: a sandbox we fail to explicitly delete (e.g.
 // the process crashes mid-run, or the webhook POST below never reaches
@@ -85,6 +95,14 @@ const SANDBOX_AUTO_DELETE_MINUTES = 15;
 // models.ts for how that number was chosen) -- this margin isn't trying
 // to second-guess that number or protect against it being wrong.
 const AUTO_STOP_SAFETY_MARGIN_MINUTES = 5;
+
+// How long a row is allowed to sit in 'finalizing' before advanceRun gives
+// up on whoever claimed it and marks it failed outright -- see that
+// branch's own comment. A real finalize (parse + cache write + a couple
+// DB updates) should complete in well under a second; this is generous
+// purely to avoid racing a finalize that's merely slow (a big cache write,
+// a slow DB round-trip) rather than genuinely stuck.
+const FINALIZING_STUCK_THRESHOLD_MS = 60_000;
 
 function autoStopMinutes(execTimeoutSeconds: number): number {
   return Math.ceil(execTimeoutSeconds / 60) + AUTO_STOP_SAFETY_MARGIN_MINUTES;
@@ -134,16 +152,19 @@ function webhookUrl(runId: string): string {
  *     installs (for run.jl's own use) for dice specifically.
  *
  * `> RUN_OUTPUT_LOG_PATH 2>&1` captures the real run command's combined
- * stdout/stderr (same content advanceRun's poll path reads via
- * getSessionCommandLogs) so the follow-up step can read it back and send
- * it along. `EXIT=$?` captures the real run command's own exit code
- * (deliberately captured before the follow-up step can touch $?), and
- * `exit $EXIT` at the very end makes the WHOLE wrapped command's own exit
- * code equal to that -- not the follow-up POST's exit code -- so
- * advanceRun()'s existing poll-based fallback still sees the true outcome
- * if the webhook call itself fails to reach this app for any reason.
- * Nothing here uses `set -e`/`&&`: the follow-up step must still run even
- * when the real run command exits non-zero.
+ * stdout/stderr so the follow-up step can read it back and send it along.
+ * `EXIT=$?` captures the real run command's own exit code (deliberately
+ * captured before the follow-up step can touch $?), immediately written
+ * to RUN_EXIT_CODE_PATH -- see that constant's own comment on why
+ * advanceRun reads THAT file rather than trusting Daytona's
+ * getSessionCommand API or the webhook's own outbound POST to ever
+ * reliably report this for a run with a large captured output. `exit
+ * $EXIT` at the very end makes the WHOLE wrapped command's own exit code
+ * equal to that too -- not the follow-up POST's exit code -- belt and
+ * suspenders alongside RUN_EXIT_CODE_PATH, in case Daytona's own tracking
+ * DOES work for a given run. Nothing here uses `set -e`/`&&`: the
+ * follow-up step must still run even when the real run command exits
+ * non-zero.
  */
 function buildWrappedCommand(runId: string, runCommand: string, params: Record<string, unknown>): string {
   const url = webhookUrl(runId);
@@ -179,6 +200,7 @@ except Exception:
   return (
     `SCENARIO_PARAMS='${JSON.stringify(params)}' ${runCommand} > ${RUN_OUTPUT_LOG_PATH} 2>&1\n` +
     `EXIT=$?\n` +
+    `echo "$EXIT" > ${RUN_EXIT_CODE_PATH}\n` +
     `${reportStep}\n` +
     `exit $EXIT`
   );
@@ -599,9 +621,30 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
     return toView(row);
   }
 
-  // Someone else is mid-finalize for this exact run right now -- nothing for
-  // this call to do but report the current (pre-finalize) view.
+  // Someone else is mid-finalize for this exact run right now -- normally
+  // nothing for this call to do but report the current (pre-finalize)
+  // view, since whoever holds the claim is expected to finish quickly.
+  // BUT if it's been stuck here for longer than any real finalize should
+  // take, something crashed mid-finalize before finalizeOutcome's own
+  // try/catch (see its doc comment) existed to catch it -- a run can be
+  // left here forever otherwise, since this branch is the only thing that
+  // ever looks at a 'finalizing' row and it was just returning the stale
+  // view unconditionally. The sandbox is virtually certain to already be
+  // gone by this point (cleanupSandboxAndSession runs before
+  // finalizeOutcome in both the poll and webhook paths), so there's no
+  // real result left to recover -- just surface it as failed instead of
+  // leaving it stuck at whatever progress% it last reported, forever.
   if (row.status === "finalizing") {
+    const stuckForMs = Date.now() - Date.parse(row.updated_at);
+    if (stuckForMs > FINALIZING_STUCK_THRESHOLD_MS) {
+      console.error(`[advanceRun ${runId}] stuck 'finalizing' for ${Math.round(stuckForMs / 1000)}s -- marking failed`);
+      // finishRunFailed has no status guard (unlike claimRunForFinalize,
+      // which only ever matches 'running') -- fine here, since the worst
+      // case of two concurrent polls both hitting this branch is two
+      // redundant, identical writes, not a double sandbox-cleanup race.
+      await finishRunFailed(runId, { code: "gateway_error", message: "finalize got stuck and never completed" }, 0);
+      row = (await getRun(runId))!;
+    }
     return toView(row);
   }
 
@@ -658,16 +701,49 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
   // RunView's own live_stdout_tail comment) -- just attached directly to
   // whatever view this poll ends up returning, below.
   let liveStdoutTail: string | null = null;
+  // The FULL file content, not just the tail -- needed if this poll turns
+  // out to be the one that finalizes the run (see RUN_EXIT_CODE_PATH's own
+  // comment on why this, not getSessionCommandLogs, is now the source of
+  // truth for finalizeOutcome's stdout). Comes from the same download as
+  // liveStdoutTail -- no reason to fetch the file twice.
+  let fullStdout: string | null = null;
   try {
     const raw = await sandbox.fs.downloadFile(RUN_OUTPUT_LOG_PATH);
     if (raw && raw.length) {
-      liveStdoutTail = raw.toString().slice(-2000);
+      fullStdout = raw.toString();
+      liveStdoutTail = fullStdout.slice(-2000);
     }
   } catch {
     // not written yet, or transient -- ignore
   }
 
-  let cmdInfo;
+  // Whether the real run command has exited -- checked via TWO
+  // independent signals, since either alone has been observed to fail:
+  //   1. RUN_EXIT_CODE_PATH, written by buildWrappedCommand the instant
+  //      the real run command exits (see that constant's own comment --
+  //      added after a real gcam run whose 13.7MB output left Daytona's
+  //      own exit-code tracking never reporting anything at all, even
+  //      though the process had long since exited).
+  //   2. cmdInfo.exitCode from Daytona's getSessionCommand, kept as a
+  //      fallback for the (presumably common) case where that tracking
+  //      DOES work, and for any sandbox created before this file existed.
+  // Whichever reports a numeric exit code first wins; sentinelExitCode is
+  // preferred when both are present since it reflects the real run
+  // command's own exit status (not the whole wrapped script's, which
+  // could differ in principle if something upstream of `exit $EXIT` were
+  // ever changed) and was observed to be the more reliable of the two.
+  let sentinelExitCode: number | null = null;
+  try {
+    const raw = await sandbox.fs.downloadFile(RUN_EXIT_CODE_PATH);
+    if (raw && raw.length) {
+      const parsed = parseInt(raw.toString().trim(), 10);
+      if (Number.isFinite(parsed)) sentinelExitCode = parsed;
+    }
+  } catch {
+    // not written yet (run command hasn't exited), or transient -- ignore
+  }
+
+  let cmdInfo: { exitCode?: number | null } = {};
   try {
     cmdInfo = await sandbox.process.getSessionCommand(row.session_id, row.cmd_id);
   } catch (err) {
@@ -677,23 +753,28 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
     // got the "sandbox lookup failed" treatment at all. It instead threw
     // all the way up to the route handler, which 502'd without ever
     // marking the run failed -- so the row just sat "running" forever,
-    // with nothing in its own `error` column to explain why). Fail the
-    // run here the same way, carrying along whatever liveStdoutTail we
-    // already downloaded above.
-    console.error(`[advanceRun ${runId}] session command lookup failed`, err);
-    const claimed = await claimRunForFinalize(runId);
-    if (claimed) {
-      await finishRunFailed(
-        runId,
-        { code: "gateway_error", message: `session command lookup failed: ${String(err)}`, stdout_tail: liveStdoutTail ?? undefined },
-        elapsedSeconds(startedAt),
-      );
+    // with nothing in its own `error` column to explain why). Only fail
+    // the run here if the sentinel ALSO doesn't already have an answer --
+    // a thrown getSessionCommand shouldn't override a perfectly good
+    // sentinel-reported exit code.
+    if (sentinelExitCode === null) {
+      console.error(`[advanceRun ${runId}] session command lookup failed`, err);
+      const claimed = await claimRunForFinalize(runId);
+      if (claimed) {
+        await finishRunFailed(
+          runId,
+          { code: "gateway_error", message: `session command lookup failed: ${String(err)}`, stdout_tail: liveStdoutTail ?? undefined },
+          elapsedSeconds(startedAt),
+        );
+      }
+      row = (await getRun(runId))!;
+      return toView(row);
     }
-    row = (await getRun(runId))!;
-    return toView(row);
   }
 
-  if (cmdInfo.exitCode === undefined || cmdInfo.exitCode === null) {
+  const exitCode = sentinelExitCode ?? cmdInfo.exitCode;
+
+  if (exitCode === undefined || exitCode === null) {
     if (deadlinePassed) {
       const claimed = await claimRunForFinalize(runId);
       if (claimed) {
@@ -733,9 +814,25 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
     return toView(row);
   }
 
-  const exitCode = cmdInfo.exitCode;
-  const logs = await sandbox.process.getSessionCommandLogs(row.session_id, row.cmd_id);
-  const stdout = logs.stdout || logs.output || "";
+  // fullStdout -- read straight off RUN_OUTPUT_LOG_PATH a few lines up --
+  // is now the source of truth, not getSessionCommandLogs: the real run
+  // command's own stdout/stderr never reaches that API at all (it's
+  // redirected into this file at the shell level, inside the SAME command
+  // getSessionCommandLogs is asked about -- it was only ever going to see
+  // the follow-up webhook step's own output, which prints nothing on
+  // success). Falls back to re-downloading the file fresh only if the
+  // earlier read somehow came back empty (e.g. a transient failure on
+  // that particular poll).
+  let stdout = fullStdout ?? "";
+  if (!stdout) {
+    try {
+      const raw = await sandbox.fs.downloadFile(RUN_OUTPUT_LOG_PATH);
+      if (raw && raw.length) stdout = raw.toString();
+    } catch {
+      // Genuinely nothing captured -- finalizeOutcome's own jsonLine ===
+      // null handling covers this (reported as a failure either way).
+    }
+  }
   const runSeconds = elapsedSeconds(startedAt);
 
   await cleanupSandboxAndSession(daytona, sandbox, row.session_id);
@@ -800,8 +897,34 @@ export async function completeRunFromWebhook(
  * see lastJsonLine), write it to run_cache, and mark the run terminal.
  * Must be called only AFTER claimRunForFinalize() has already succeeded
  * for this runId -- this function itself does no claiming.
+ *
+ * Wraps its own body in a try/catch (confirmed necessary by hitting
+ * exactly this with a real gcam run: its result can carry thousands of
+ * Hector output rows, and something in parsing/caching/storing a result
+ * that large threw). Without this, any exception here -- JSON.parse on a
+ * huge string, a DB write exceeding some limit, anything -- left the row
+ * stuck at 'finalizing' forever: claimRunForFinalize had already moved it
+ * OFF 'running' (so nothing else would ever re-attempt it), but nothing
+ * ever moved it on to 'succeeded'/'failed' either. toView maps
+ * 'finalizing' to "running" for display, so this looked exactly like a
+ * run hanging at whatever progress% it last reported, permanently, even
+ * though the model process itself had already finished and printed a
+ * complete result.
  */
 async function finalizeOutcome(runId: string, row: RunRow, exitCode: number, stdout: string, runSeconds: number) {
+  try {
+    await finalizeOutcomeInner(runId, row, exitCode, stdout, runSeconds);
+  } catch (err) {
+    console.error(`[finalizeOutcome ${runId}] threw -- marking failed instead of leaving it stuck "finalizing"`, err);
+    await finishRunFailed(
+      runId,
+      { code: "gateway_error", message: `finalize failed: ${String(err)}`, stdout_tail: stdout.slice(-2000) },
+      runSeconds,
+    );
+  }
+}
+
+async function finalizeOutcomeInner(runId: string, row: RunRow, exitCode: number, stdout: string, runSeconds: number) {
   const jsonLine = lastJsonLine(stdout);
 
   if (exitCode !== 0 || jsonLine === null) {
