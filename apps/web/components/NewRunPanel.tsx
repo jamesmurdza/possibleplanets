@@ -421,14 +421,46 @@ export default function NewRunPanel({
   // would be misleading about what's about to happen. Whether this exact
   // (model, params) happens to have a cached result is instead surfaced
   // only via the separate "View cached" button below.
+  // "5.3s" under a minute, "1.3m" at or above one -- same cutoff/precision
+  // for every number this badge shows, whether it's a single estimate or
+  // the low/high end of a multi-model range.
+  function formatEtaSeconds(seconds: number): string {
+    return seconds < 60 ? `${seconds.toFixed(1)}s` : `${(seconds / 60).toFixed(1)}m`;
+  }
+
   function etaBadge(): { text: string; kind: "estimate" | "warn" } | null {
+    const selectedModels = [modelName, ...extraModels];
+    // Multiple models selected (shift-click batch) -- each has its own
+    // real run time (a gcam run is ~1000x a hector run), so one single
+    // number would be misleading either way. Show the range spanning the
+    // fastest and slowest of the selected models' own median instead.
+    // Deliberately ignores the single primary model's own live
+    // cacheable/cached check here -- every extra model's own run is
+    // always submitted with refresh:true regardless (see
+    // submitExtraRuns), so there's no cache state to report for them.
+    if (selectedModels.length > 1) {
+      const medians = selectedModels
+        .map((m) => statsByModel[m]?.median_seconds)
+        .filter((v): v is number => typeof v === "number");
+      if (medians.length === 0) {
+        return { text: "No run history yet", kind: "estimate" };
+      }
+      const min = Math.min(...medians);
+      const max = Math.max(...medians);
+      const text =
+        min === max
+          ? `~${formatEtaSeconds(min)} estimated`
+          : `~${formatEtaSeconds(min)}–${formatEtaSeconds(max)} estimated`;
+      return { text, kind: "estimate" };
+    }
+
     if (!checkResult) return null;
     if (!checkResult.cacheable) {
       return { text: "Won't be cached (see Advanced)", kind: "warn" };
     }
     const stats = statsByModel[modelName];
     if (stats) {
-      return { text: `~${stats.median_seconds.toFixed(1)}s estimated`, kind: "estimate" };
+      return { text: `~${formatEtaSeconds(stats.median_seconds)} estimated`, kind: "estimate" };
     }
     return { text: "No run history yet", kind: "estimate" };
   }
