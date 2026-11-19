@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Chart from "chart.js/auto";
 import Dropdown from "./Dropdown";
 import { fetchJson, CHART_ADAPTERS, chartAspectRatio, nativeScenarioOf, canonicalScenario, alignSeriesByYear } from "../lib/clientApi";
+import { sortByResourceUsage } from "../lib/modelOrder";
 import type { ModelMeta, ModelListItem, RunJob, RunListItem } from "../lib/clientTypes";
 
 type Axis = "model" | "scenario" | "parameter";
@@ -60,8 +61,15 @@ export default function ComparePanel() {
   useEffect(() => {
     fetchJson("/v1/models")
       .then((data) => {
-        setModels(data.models ?? []);
-        if (data.models?.length) onModelChange(data.models[0].model);
+        // Same ordering as the home page/New Run's model cards and the
+        // public nav's Models dropdown (all three call this same
+        // function) -- this model dropdown's own list previously used
+        // GET /v1/models's raw (registry-insertion-order) response
+        // instead, so it disagreed with every other model listing in the
+        // app.
+        const ordered = sortByResourceUsage<ModelListItem>(data.models ?? []);
+        setModels(ordered);
+        if (ordered.length) onModelChange(ordered[0].model);
       })
       .catch((err) => setError(err.message));
     refreshRuns();

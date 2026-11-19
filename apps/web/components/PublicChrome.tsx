@@ -14,12 +14,22 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { MODEL_FULL_NAMES, modelAcronym } from "../lib/modelFullNames";
+import { sortByResourceUsage } from "../lib/modelOrder";
 
-// Static key order of lib/modelFullNames.ts's own MODEL_FULL_NAMES map --
-// not fetched from GET /v1/models, since the header renders on every
-// public page (including ones with nothing to do with the model list)
-// and shouldn't need a network round-trip just to draw its own nav.
-const MODELS_NAV_ORDER = Object.keys(MODEL_FULL_NAMES);
+// Same resource-usage order as the home page's legend/cards (app/page.tsx)
+// and New Run's model cards (NewRunPanel.tsx) -- both call
+// sortByResourceUsage on the real GET /v1/models list; this one instead
+// sorts lib/modelFullNames.ts's own static key list (MODEL_FULL_NAMES),
+// since the header renders on every public page (including ones with
+// nothing to do with the model list) and shouldn't need a network
+// round-trip just to draw its own nav. Keeping all three call sites on
+// the one sortByResourceUsage function (rather than each hand-rolling an
+// order) is what keeps this nav menu's ordering from drifting out of
+// sync with the other two if a model's measured resource profile ever
+// changes.
+const MODELS_NAV_ORDER = sortByResourceUsage(Object.keys(MODEL_FULL_NAMES).map((model) => ({ model }))).map(
+  (m) => m.model,
+);
 
 function ModelsNavDropdown() {
   const [open, setOpen] = useState(false);
