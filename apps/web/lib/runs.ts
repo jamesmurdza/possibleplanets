@@ -403,6 +403,11 @@ export async function submitRun(
           cached: true,
           progress: { percent: 100 },
           duration_seconds: 0,
+          // Nothing actually ran just now, so there's no real started_at
+          // for this exact response -- "now" is as good as anything else
+          // (the result is immediate either way), and matches this
+          // branch's own duration_seconds: 0.
+          started_at: new Date().toISOString(),
           // Nothing actually ran just now -- this is an existing
           // run_cache answer, not a fresh process invocation, so there's
           // no new stdout to show. The real run that originally produced
@@ -499,6 +504,11 @@ export interface RunView {
   cached: boolean;
   progress: { percent: number } | null;
   duration_seconds: number | null;
+  // Same column the Runs table's own "Started" column and sort order read
+  // (see lib/db.ts's RunListItem) -- added here so the run drawer can show
+  // it too without reaching into the already-fetched list row for it like
+  // the Duration fallback below still does.
+  started_at: string;
   // The model process's raw captured stdout+stderr, tail-capped -- see
   // this app's db.ts stdout_tail column comment. Present for both
   // succeeded and failed runs (falls back to error.stdout_tail for an
@@ -559,6 +569,7 @@ function toView(row: RunRow): RunView {
     cached: row.cached,
     progress: row.progress,
     duration_seconds: row.duration_seconds,
+    started_at: row.started_at,
     stdout_tail: row.stdout_tail ?? error?.stdout_tail ?? null,
     // Never persisted -- see RunView's own live_stdout_tail comment.
     // advanceRun fills this in after calling toView, for a still-running
@@ -652,7 +663,16 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
         await cleanupSandboxAndSession(daytona, sandbox, row.session_id);
         await finishRunFailed(
           runId,
-          { code: "gateway_error", message: `run did not finish within the allotted time` },
+          {
+            code: "gateway_error",
+            message: `run did not finish within the allotted time`,
+            // Without this, whatever the process had printed so far is
+            // gone for good the moment cleanupSandboxAndSession tears the
+            // sandbox down above -- we already downloaded it into
+            // liveStdoutTail a few lines up, so pass it through instead of
+            // losing it.
+            stdout_tail: liveStdoutTail ?? undefined,
+          },
           elapsedSeconds(startedAt),
         );
       }
@@ -773,7 +793,18 @@ async function finalizeOutcome(runId: string, row: RunRow, exitCode: number, std
   }
 
   if (parsed.status !== "succeeded") {
-    await finishRunFailed(runId, { code: "model_run_failed", message: parsed.error || "unknown error" }, runSeconds);
+    // Same reasoning as the parse-failure branch above -- keep stdout_tail
+    // around rather than dropping it just because the model's own JSON
+    // parsed fine but reported a failure (e.g. gcam's run.py prints
+    // {"status": "failed", ..., "log_tail": ...} and exits 1, which
+    // actually lands in the branch above since that's a non-zero exit --
+    // this branch is for exit 0 + self-reported failure specifically, but
+    // there's no reason to treat it differently).
+    await finishRunFailed(
+      runId,
+      { code: "model_run_failed", message: parsed.error || "unknown error", stdout_tail: stdout.slice(-2000) },
+      runSeconds,
+    );
     return;
   }
 
