@@ -23,12 +23,13 @@ just mapping a scenario name to one of the already-shipped
 repeat of the expensive `gcamdata` generation step (per
 `architecture.md`'s scenario-independence finding).
 
-No tunable parameters are exposed either, for the same reason
-`architecture.md` flags: GCAM has no equivalent of hector's config-dict
-overrides reachable without either regenerating `gcamdata`'s database
-per request (reopens the memory problem) or editing
-`configuration_ref.xml`'s own values, which hasn't been tested against
-anything but what's already shipped.
+No curated ParameterSpec sliders (like every other model's `parameters`
+array) are exposed -- but a general `config_overrides` escape hatch now
+is: any existing value in `configuration_ref.xml` can be overridden per
+request (any section, not just a "safe" allowlisted subset). See
+`config-overrides.md` for the full mechanism, and `oom-fix.md` for why
+it needed a dedicated snapshot (v5) just like the other two gcam fixes
+did.
 
 ## `ceds_ghg_en_R_S_T_Y` OOM -- intentionally unpatched
 

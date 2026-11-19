@@ -545,10 +545,35 @@ export function chartAspectRatio() {
 // valid value are included in the submitted params -- see lib/models.ts's
 // module docstring for why omitted and explicit-default are deliberately
 // never treated as equivalent for caching.
+/**
+ * configOverridesText and coresText are only ever meaningful for a model
+ * with meta.supports_config_overrides (currently just gcam) -- silently
+ * ignored otherwise, so callers don't need to gate passing them
+ * themselves (e.g. a multi-model batch submission reusing the same
+ * text/value across models that may not all support it). configOverridesText
+ * THROWS (not a silent drop) on invalid JSON or a non-flat-object shape --
+ * unlike the numeric parameters above, which just skip a value that
+ * doesn't parse, a config override typo is exactly the kind of mistake
+ * that should block submission with a clear message instead of quietly
+ * running without the override the user thought they were setting.
+ * Callers must catch this.
+ *
+ * coresText is a convenience, structured shortcut living in the same
+ * Advanced section as the raw config_overrides textarea, NOT a separate
+ * mechanism -- it just sets config_overrides["max-parallelism"] under
+ * the hood (merged in AFTER the textarea's own parsed object, so it wins
+ * if someone also typed "max-parallelism" into the raw JSON -- the
+ * dedicated field is the more deliberate signal of the two). The raw
+ * textarea stays fully general for every other config value; this is
+ * only here because cores is expected to be common enough to deserve its
+ * own plain number field instead of making someone type JSON for it.
+ */
 export function buildParams(
   meta: ModelMeta,
   scenario: string,
   paramValues: Record<string, string>,
+  configOverridesText?: string,
+  coresText?: string,
 ): Record<string, unknown> {
   const params: Record<string, unknown> =
     meta.params_shape === "scenarios" ? { scenarios: [scenario] } : { scenario };
@@ -558,6 +583,30 @@ export function buildParams(
     if (raw === undefined || raw === "") continue;
     const value = Number(raw);
     if (!Number.isNaN(value)) params[spec.key] = value;
+  }
+
+  if (meta.supports_config_overrides) {
+    let overrides: Record<string, unknown> | undefined;
+    if (configOverridesText && configOverridesText.trim() !== "") {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(configOverridesText);
+      } catch {
+        throw new Error("config overrides: not valid JSON");
+      }
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        throw new Error("config overrides: must be a flat JSON object of {name: value}");
+      }
+      overrides = { ...(parsed as Record<string, unknown>) };
+    }
+    if (coresText && coresText.trim() !== "") {
+      const cores = Number(coresText);
+      if (!Number.isFinite(cores) || cores < 1) {
+        throw new Error("cores: must be a positive number");
+      }
+      overrides = { ...(overrides ?? {}), "max-parallelism": cores };
+    }
+    if (overrides) params.config_overrides = overrides;
   }
 
   return params;

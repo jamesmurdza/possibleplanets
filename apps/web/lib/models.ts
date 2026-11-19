@@ -172,6 +172,18 @@ export interface ModelMeta {
   // draw and serving it forever as "the" answer would misrepresent
   // something that's genuinely different every time.
   nonDeterministicUnless?: string;
+  // True only for gcam so far -- lets a run's params include a
+  // "config_overrides" object, an arbitrary {name: value} map applied
+  // directly to configuration_ref.xml's own <Value name="...">...</Value>
+  // tags before gcam.exe runs (see sandboxes/gcam/run.py's
+  // apply_config_overrides). Not a ParameterSpec entry -- there's no
+  // fixed list of "safe" keys to enumerate ahead of time; validateParams
+  // (lib/runs.ts) just checks this is a plain object and skips its usual
+  // per-key numeric-range check for it. A bad override fails loudly from
+  // inside run.py itself (unmatched key, or gcam.exe's own failure) --
+  // visible in the drawer the same way any other run failure is, which
+  // is the actual safety net here instead of pre-validation.
+  supportsConfigOverrides?: boolean;
 }
 
 export const MODELS: Record<string, ModelMeta> = {
@@ -655,7 +667,35 @@ export const MODELS: Record<string, ModelMeta> = {
     // hand into this project's own postgres, produced a `runs` row
     // whose result.result.csv parses into 355 real global_tas points --
     // see run_id bc380140-64bd-4f5c-9ded-c2ffb934202d.
-    daytona_snapshot: "gcam-production-v4",
+    //
+    // v5, not v4 -- carries the apply_config_overrides mechanism in
+    // run.py (see supportsConfigOverrides below and
+    // docs/gcam/config-overrides.md), no gcamdata/gcam.exe rebuild
+    // needed as usual. Verified live (2026-11-19) against this exact
+    // snapshot: a config_overrides of {"stop-period": 2,
+    // "max-parallelism": 2} produced a patched /tmp/configuration_run.xml
+    // with both values changed, gcam.exe itself printing "Running
+    // period 2" (confirms the override changed real behavior, not just
+    // the file text) and exiting 0 after only 3 periods instead of 21;
+    // a bad key (config_overrides: {"totally-not-a-real-key": 1}) failed
+    // immediately with a clear "no matching <Value> found" error,
+    // before gcam.exe ever launched.
+    //
+    // v6, not v5 -- bumped configuration_ref.xml's baked-in
+    // max-parallelism default from 1 to 2. Measured live (2026-11-19,
+    // real gcam-production-v5 snapshot) across all three values on the
+    // same 8GB sandbox tier: -1 (4 cores) OOM-kills intermittently near
+    // period 20 despite being fastest (~20-24min); 1 core never risks
+    // the ceiling (anon maxes ~7.3GB) but takes ~50min; 2 cores reached
+    // period 20 (the exact point every -1 failure died) with anon
+    // 7.25GB / cgroup peak ~7.9GiB of 8GiB, 0 oom_kills, in ~32min --
+    // the best balance found so far, so it's now the default rather
+    // than something you have to opt into per run. Still overridable
+    // per run via config_overrides or the New Run form's "Cores" field
+    // for 1 (max safety) or 4 (max speed, more OOM risk). No
+    // gcamdata/gcam.exe/run.py changes -- same patch-and-resnapshot
+    // process as v3-v5.
+    daytona_snapshot: "gcam-production-v6",
     // Dockerfile clones JGCRI/gcam-core@main unpinned, so the Dockerfile
     // text alone doesn't tell you which release that resolved to -- verified
     // directly instead by spinning up the real snapshot and running
@@ -677,12 +717,13 @@ export const MODELS: Record<string, ModelMeta> = {
     params_shape: "scenario",
     // Default run_command (python3 -u /app/run.py) applies -- gcam's own
     // run.py is Python, same as every model except dice's Julia entrypoint.
-    // Confirmed by direct testing (docs/gcam/trial-log.md): a full
-    // 21-period run (1975-2100) takes ~30-31 minutes at cpu:4 -- two to
-    // three orders of magnitude longer than every other model here, since
-    // this is a real multi-region economic equilibrium solve, not a
-    // closed-form/ODE integration. 5000s gives a healthy buffer above the
-    // observed ~1860s.
+    // A full 21-period run (1975-2100) is two to three orders of
+    // magnitude longer than every other model here, since this is a real
+    // multi-region economic equilibrium solve, not a closed-form/ODE
+    // integration -- how long exactly now depends on the cores setting
+    // above (daytona_snapshot's own comment): ~20-24min at 4 cores,
+    // ~32min at 2 (the default), ~50min at 1. 5000s gives a healthy
+    // buffer above even the slowest (1-core) case.
     exec_timeout_seconds: 5000,
     // gcam.exe logs a "Period N: YYYY" line at the start of each of its 21
     // periods (observed directly during this project's validation runs --
@@ -708,10 +749,24 @@ export const MODELS: Record<string, ModelMeta> = {
     // because the image bakes in the full 5.2GB generated XML database
     // plus the 294MB binary.
     resources: { cpu: 4, memory: 8, disk: 12 },
-    // No tunable parameters exposed yet -- see sandboxes/gcam/run.py's
-    // module docstring for why (changing anything beyond the shipped
-    // Reference config either reopens the gcamdata memory problem or is
-    // simply untested).
+    // No curated ParameterSpec sliders exposed yet -- but see
+    // supportsConfigOverrides just below for a general escape hatch that
+    // doesn't need one of these added per knob.
+    //
+    // config_overrides lets a request override ANY existing
+    // <Value name="...">...</Value> in configuration_ref.xml (any
+    // section -- Files, ScenarioComponents, Strings, Bools, Ints,
+    // Doubles), applied by sandboxes/gcam/run.py's
+    // apply_config_overrides before gcam.exe runs. Deliberately
+    // unrestricted rather than an allowlist: see that function's own
+    // docstring for why a bad override is meant to fail loudly and
+    // visibly (in the drawer, same as any other run failure) rather
+    // than be pre-validated here. This needed exactly one snapshot
+    // deploy (gcam-production-v5, which carries the apply_config_overrides
+    // mechanism in run.py) -- every individual value anyone wants to
+    // try from here on is just a request parameter, no further snapshot
+    // rebuild needed.
+    supportsConfigOverrides: true,
   },
 };
 

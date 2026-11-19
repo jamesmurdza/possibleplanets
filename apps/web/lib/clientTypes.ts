@@ -33,6 +33,16 @@ export interface ModelMeta {
   // lib/models.ts's exec_timeout_seconds. Shown as the New Run form's
   // Advanced "max run time" field's placeholder.
   exec_timeout_seconds: number;
+  // True only for gcam so far -- lets a run's params include a
+  // "config_overrides" object, an arbitrary {name: value} map applied
+  // directly to the model's own native config file before it runs (see
+  // sandboxes/gcam/run.py's apply_config_overrides). Deliberately NOT a
+  // validated/typed ParameterSpec entry -- there's no fixed list of
+  // "safe" keys to enumerate ahead of time, so this is rendered as a
+  // raw JSON field in the Advanced section instead of a slider, with
+  // the model's own failure output (visible in the drawer either way)
+  // as the feedback loop for a bad override, not client-side validation.
+  supports_config_overrides?: boolean;
 }
 
 // Shape returned by GET /v1/models -- used for the model-picker cards on

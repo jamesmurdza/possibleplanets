@@ -1235,6 +1235,25 @@ th.runs-table-checkbox-col {
   color: var(--color-text-faint);
 }
 
+/* New Run form's "Config overrides (advanced)" raw JSON field -- only
+   rendered for a model with supports_config_overrides (gcam). Not part
+   of .param-fields-grid's 3-column layout (label/input/unit) since this
+   is a multi-line field with no unit, just its own label-above-textarea
+   block, spaced the same as the rest of the Advanced section. */
+.config-overrides-field {
+  margin-top: 0.75rem;
+}
+
+.config-overrides-textarea {
+  width: 100%;
+  min-width: 0;
+  margin-top: 0.3rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  resize: vertical;
+}
+
 /* New Run form's collapsible "Advanced" section header -- a <button>
    (for the click/toggle), but meant to look exactly like the plain
    .form-field-block > .form-field-label text "Parameters (optional)"
