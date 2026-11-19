@@ -142,19 +142,15 @@
 		memory about 4x and reliably hit the 8GiB cgroup ceiling by
 		period ~20 of 21, intermittently getting SIGKILL'd by the
 		kernel OOM killer right at the finish line (see
-		docs/gcam/known-gaps.md). Measured live, same memory-sampling
-		method each time, all on the same sandbox tier: -1 (4 cores)
-		peaked at anon=7.7GB by 80% progress and OOM-killed
-		non-deterministically near period 20 (~20-24min total); 1 core
-		(serial) never exceeded anon=7.3GB, 0 oom_kills, but took
-		~50min; 2 cores reached period 20 (the exact point every -1
-		failure died) with anon=7.25GB / cgroup peak ~7.9GiB of 8GiB, 0
-		oom_kills, in ~32min: the default here, as the best balance of
-		speed vs memory headroom found so far. Overridable per run via
-		config_overrides (see docs/gcam/config-overrides.md) or the New
-		Run form's own "Cores" field for anyone who wants 1 for max
-		safety or willing to risk 4 for max speed. -->
-		<Value name="max-parallelism">2</Value>
+		docs/gcam/known-gaps.md). Measured live in the real
+		gcam-production-v2 snapshot: max-parallelism=-1 peaked at
+		anon=7.7GB by 80% progress and OOM-killed non-deterministically
+		near period 20, while max-parallelism=1 (serial solving)
+		completed with anon never exceeding about 7.3GB and 0 oom_kills
+		(verified via /sys/fs/cgroup/memory.events), at the cost of a
+		slower run (about 50min vs the earlier 20min baseline), still
+		well inside exec_timeout_seconds (5000s). -->
+		<Value name="max-parallelism">1</Value>
 	</Ints>
 	<Doubles>
 	</Doubles>

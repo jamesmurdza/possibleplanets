@@ -106,42 +106,38 @@ instead) and re-run cleanly on a fresh sandbox.
 
 ### Results
 
-| | `-1` (4 cores, baseline) | `2` (current default, see update below) | `1` (serial, shipped first) |
-|---|---|---|---|
-| anon @ ~66% progress | 7.15GB | 6.14GB | 5.94GB |
-| anon @ period 20 (the failure point) | hits ceiling, OOM-kills intermittently | 7.25GB, no ceiling hit | n/a (reached it at ~80% anyway, see above) |
-| cgroup `memory.peak` | exactly the 8GiB limit | ~7.9GiB of 8GiB | ceiling+8KB (survived via reclaim) |
-| `oom_kill` count | nonzero on 2 of 3 observed runs | **0** | **0** |
-| final result | 13,766,812-byte success (when it didn't OOM) | correct, byte-exact result | **13,766,812-byte success** (byte-identical) |
-| wall-clock time | ~20-24 min | **~32 min** | ~50 min |
-| exit code | 0 (when it didn't OOM) | **0** | **0** |
+| | `max-parallelism=-1` (baseline) | `max-parallelism=1` (fix) |
+|---|---|---|
+| anon @ ~66-80% progress | 7.15-7.7GB | 5.94-6.85GB |
+| peak behavior | hits the 8GiB ceiling, OOM-kills intermittently | peaked at ~7.3GB, no ceiling hit |
+| `oom_kill` count | nonzero on 2 of 3 observed runs | **0** |
+| final result | 13,766,812-byte success (when it didn't OOM) | **13,766,812-byte success** (byte-identical) |
+| wall-clock time | ~20-24 min | ~50 min |
+| exit code | 0 (when it didn't OOM) | **0** |
 
-The `2`-core run reached period 20 -- the exact point every `-1`
-failure died -- with still real headroom, then finished periods 20-21
-and the final CSV/JSON serialization with `0` recorded OOM kills.
-Confirmed via `/sys/fs/cgroup/memory.events` immediately after
-completion, same method as every other row in this table.
+The clean (patched) run reached period 20 -- the exact point every
+prior failure died -- with memory still comfortably below the ceiling,
+then ran periods 20-21 and the final CSV/JSON serialization to
+completion with `0` recorded OOM kills throughout. Confirmed via
+`/sys/fs/cgroup/memory.events` immediately after completion.
 
-### The tradeoff, and the update to 2 cores as the new default
+### The tradeoff
 
 Serial solving (`max-parallelism=1`) is roughly 2-2.5x slower than the
-4-core baseline when the baseline doesn't OOM -- that's what shipped
-first (v3), since it was the only value actually measured at the time.
-~50 minutes is still comfortably inside `exec_timeout_seconds` (5000s /
-~83 min, per `apps/web/lib/models.ts`).
+4-core baseline when the baseline doesn't OOM. ~50 minutes is still
+comfortably inside `exec_timeout_seconds` (5000s / ~83 min, per
+`apps/web/lib/models.ts`), so this doesn't risk hitting the app's own
+deadline.
 
-Once `config_overrides` existed (see `config-overrides.md`), `2` cores
-got measured live the same way, on the real production snapshot --
-confirming it's a genuinely better balance, not just an interpolated
-guess: meaningfully faster than serial (~32min vs ~50min) while still
-clearing the exact period where every `-1` run died, with real margin
-left before the ceiling (~7.9GiB of 8GiB, not pinned to it the way `-1`
-was). `max-parallelism`'s baked-in default in `configuration_ref.xml`
-was bumped from `1` to `2` on this basis, shipped as
-`gcam-production-v6`. `1` (max safety, slowest) and `4` (max speed,
-real OOM risk) both remain available per run via `config_overrides` or
-the New Run form's "Cores" field for anyone who wants to trade
-differently than the new default.
+**Update:** `2` cores was later measured live too (once
+`config_overrides` existed -- see `config-overrides.md`), and found to
+be a better-balanced middle ground: it reached period 20 (the exact
+point every `-1` run OOM-killed) with anon=7.25GB / cgroup peak ~7.9GiB
+of 8GiB, `0` oom_kills, in ~32min -- clearly faster than serial without
+ever approaching the ceiling the way `-1` does. This is now the app's
+own DEFAULT (not the snapshot's) -- see `config-overrides.md`'s
+"Defaulting a value at the app layer" section for why that distinction
+matters and how it's implemented.
 
 ## Deploying the fix
 
@@ -218,36 +214,4 @@ Fixed the same way as the OOM fix -- no `gcamdata`/`gcam.exe` rebuild:
    `"gcam-production-v4"`.
 
 `gcam-production-v2` and `v3` are both left in place, unused, as
-rollback options.
-
-## v6: bumping the default from 1 to 2 cores
-
-Once `config_overrides` (v5, see `config-overrides.md`) made it
-possible to test a specific value live without a snapshot rebuild just
-to try it, `2` cores was measured the same way as `-1`/`1` above (see
-the Results table's update) and confirmed as a better default than the
-`1` that originally shipped. Deployed the same way as every prior gcam
-fix:
-
-1. Edited `sandboxes/gcam/runtime/exe/configuration_ref.xml`'s
-   `max-parallelism` from `1` to `2` (comment updated with the
-   measured numbers).
-2. Created a sandbox from `gcam-production-v5`, uploaded the updated
-   `configuration_ref.xml`, confirmed it's still well-formed XML and
-   the value reads back correctly.
-3. Ran a real (no `config_overrides` at all, to specifically confirm
-   the BAKED-IN default -- not an override -- is what takes effect)
-   scenario on that sandbox (kept short via a `stop-period`
-   `config_override`, which is a legitimate use of the override
-   mechanism for exactly this kind of fast iteration): completed
-   successfully, "All model periods solved correctly.", `0` oom_kills.
-4. `sandbox.createSnapshot("gcam-production-v6", <timeout>)`, then
-   verified from a fresh sandbox: `max-parallelism` reads `2` in the
-   canonical file, `run.py`'s `md5sum` unchanged from v5, `gcam.exe`
-   size unchanged.
-5. Updated `apps/web/lib/models.ts`'s `daytona_snapshot` to
-   `"gcam-production-v6"`, plus the New Run form's "Cores" field
-   placeholder/note and `exec_timeout_seconds`'s own comment to match.
-
-`gcam-production-v2` through `v5` are all left in place, unused, as
 rollback options.

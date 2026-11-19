@@ -184,6 +184,17 @@ export interface ModelMeta {
   // visible in the drawer the same way any other run failure is, which
   // is the actual safety net here instead of pre-validation.
   supportsConfigOverrides?: boolean;
+  // Applied server-side (lib/runs.ts) to EVERY request for this model --
+  // dashboard or raw API caller alike -- that doesn't already specify
+  // these exact config_overrides keys itself. This is an app-level
+  // default, not anything baked into the Daytona snapshot: it exists so
+  // changing a default value never needs a new snapshot build, just a
+  // code change here. Only takes effect for a model with
+  // supportsConfigOverrides; merged in UNDER whatever the caller already
+  // set (a caller's own config_overrides keys always win), so this never
+  // overrides an explicit choice, including an explicit choice to use
+  // the snapshot's own baked-in value via some other mechanism.
+  defaultConfigOverrides?: Record<string, unknown>;
 }
 
 export const MODELS: Record<string, ModelMeta> = {
@@ -680,22 +691,7 @@ export const MODELS: Record<string, ModelMeta> = {
     // a bad key (config_overrides: {"totally-not-a-real-key": 1}) failed
     // immediately with a clear "no matching <Value> found" error,
     // before gcam.exe ever launched.
-    //
-    // v6, not v5 -- bumped configuration_ref.xml's baked-in
-    // max-parallelism default from 1 to 2. Measured live (2026-11-19,
-    // real gcam-production-v5 snapshot) across all three values on the
-    // same 8GB sandbox tier: -1 (4 cores) OOM-kills intermittently near
-    // period 20 despite being fastest (~20-24min); 1 core never risks
-    // the ceiling (anon maxes ~7.3GB) but takes ~50min; 2 cores reached
-    // period 20 (the exact point every -1 failure died) with anon
-    // 7.25GB / cgroup peak ~7.9GiB of 8GiB, 0 oom_kills, in ~32min --
-    // the best balance found so far, so it's now the default rather
-    // than something you have to opt into per run. Still overridable
-    // per run via config_overrides or the New Run form's "Cores" field
-    // for 1 (max safety) or 4 (max speed, more OOM risk). No
-    // gcamdata/gcam.exe/run.py changes -- same patch-and-resnapshot
-    // process as v3-v5.
-    daytona_snapshot: "gcam-production-v6",
+    daytona_snapshot: "gcam-production-v5",
     // Dockerfile clones JGCRI/gcam-core@main unpinned, so the Dockerfile
     // text alone doesn't tell you which release that resolved to -- verified
     // directly instead by spinning up the real snapshot and running
@@ -717,13 +713,12 @@ export const MODELS: Record<string, ModelMeta> = {
     params_shape: "scenario",
     // Default run_command (python3 -u /app/run.py) applies -- gcam's own
     // run.py is Python, same as every model except dice's Julia entrypoint.
-    // A full 21-period run (1975-2100) is two to three orders of
-    // magnitude longer than every other model here, since this is a real
-    // multi-region economic equilibrium solve, not a closed-form/ODE
-    // integration -- how long exactly now depends on the cores setting
-    // above (daytona_snapshot's own comment): ~20-24min at 4 cores,
-    // ~32min at 2 (the default), ~50min at 1. 5000s gives a healthy
-    // buffer above even the slowest (1-core) case.
+    // Confirmed by direct testing (docs/gcam/trial-log.md): a full
+    // 21-period run (1975-2100) takes ~30-31 minutes at cpu:4 -- two to
+    // three orders of magnitude longer than every other model here, since
+    // this is a real multi-region economic equilibrium solve, not a
+    // closed-form/ODE integration. 5000s gives a healthy buffer above the
+    // observed ~1860s.
     exec_timeout_seconds: 5000,
     // gcam.exe logs a "Period N: YYYY" line at the start of each of its 21
     // periods (observed directly during this project's validation runs --
@@ -767,6 +762,23 @@ export const MODELS: Record<string, ModelMeta> = {
     // try from here on is just a request parameter, no further snapshot
     // rebuild needed.
     supportsConfigOverrides: true,
+    // App-level default, NOT a snapshot change -- the snapshot's own
+    // baked-in configuration_ref.xml still ships max-parallelism=1
+    // (serial, maximally safe). This is lib/runs.ts applying
+    // {"max-parallelism": 2} to every gcam request that doesn't already
+    // set that key itself, regardless of caller.
+    //
+    // Measured live (2026-11-19, config_overrides against the real
+    // gcam-production-v5 snapshot, same memory-sampling method used
+    // throughout docs/gcam/oom-fix.md): 2 cores reached period 20 (the
+    // exact point every 4-core/-1 run OOM-killed) with anon=7.25GB,
+    // cgroup peak ~7.9GiB of 8GiB, 0 oom_kills, in ~32min -- clearly
+    // better balanced than the shipped-first default of 1 core
+    // (never risks the ceiling but takes ~50min). 1 (max safety) and 4
+    // (max speed, real OOM risk) both remain reachable by explicitly
+    // setting config_overrides: {"max-parallelism": N} -- an explicit
+    // value always overrides this default, never the other way around.
+    defaultConfigOverrides: { "max-parallelism": 2 },
   },
 };
 
