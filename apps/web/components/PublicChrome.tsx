@@ -45,7 +45,12 @@ function ModelsNavDropdown() {
   }, [pathname]);
 
   return (
-    <div className={`site-nav-dropdown${open ? " open" : ""}`} ref={containerRef}>
+    <div
+      className={`site-nav-dropdown${open ? " open" : ""}`}
+      ref={containerRef}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
       <button
         type="button"
         className="site-nav-dropdown-toggle page-link"
@@ -100,7 +105,7 @@ export function PublicHeader() {
         <nav className="site-nav">
           <ModelsNavDropdown />
           <Link href="/account" className="page-link">
-            Dashboard login
+            Dashboard
           </Link>
         </nav>
       </div>

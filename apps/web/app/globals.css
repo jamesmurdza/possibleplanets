@@ -1604,6 +1604,7 @@ th.runs-table-checkbox-col {
 
 .site-nav {
   display: flex;
+  align-items: center;
   gap: 20px;
 }
 
@@ -1635,6 +1636,12 @@ th.runs-table-checkbox-col {
   gap: 0.3rem;
   font-family: inherit;
   font-size: 0.9375rem;
+  /* A <button>'s UA-default line-height ("normal") isn't necessarily the
+     same as the surrounding text's -- inheriting it explicitly keeps
+     this lined up with the plain .page-link anchor right next to it
+     (see .site-nav's own align-items: center) instead of sitting a
+     couple pixels off from it. */
+  line-height: inherit;
   color: var(--pp-text);
   background: none;
   border: none;
