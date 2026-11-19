@@ -1499,6 +1499,15 @@ th.runs-table-checkbox-col {
   gap: 0.4rem;
 }
 
+/* "Run again" button, right below the meta rows / above the chart. */
+.drawer-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-bottom: 0.9rem;
+}
+
 .drawer-meta-label {
   font-weight: 600;
   color: var(--color-text);
