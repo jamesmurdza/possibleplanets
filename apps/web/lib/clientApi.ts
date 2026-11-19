@@ -369,10 +369,21 @@ export function nativeScenarioOf(params: Record<string, unknown>): string | unde
 
 /** Short, human label for a run's params -- e.g. "SSP1-2.6" or "RCP26 · climate_sensitivity=4.5" -- used in the Runs list and Compare legend. Scenario is shown in its canonical form (see canonicalScenario) so the same scenario reads identically regardless of which model ran it. */
 export function summarizeParams(params: Record<string, unknown>): string {
+  const scenario = summarizeScenario(params);
+  const extras = summarizeExtraParams(params);
+  return [scenario, extras].filter(Boolean).join(" · ");
+}
+
+/** Just the scenario half of summarizeParams, in its canonical form -- "" if this run's params carry no scenario at all (shouldn't normally happen, but every params_shape ultimately reduces to one). */
+export function summarizeScenario(params: Record<string, unknown>): string {
   const native = nativeScenarioOf(params);
-  const scenario = native ? canonicalScenario(native) : undefined;
-  const extras = Object.entries(params)
+  return native ? canonicalScenario(native) : "";
+}
+
+/** Just the non-scenario half of summarizeParams -- e.g. "climate_sensitivity=4.5", or "" for a run with no extra params set (the Runs table's Params column shows "(default)" in that case, not this function's job). */
+export function summarizeExtraParams(params: Record<string, unknown>): string {
+  return Object.entries(params)
     .filter(([k]) => k !== "scenario" && k !== "scenarios")
-    .map(([k, v]) => `${k}=${v}`);
-  return [scenario, ...extras].filter(Boolean).join(" · ");
+    .map(([k, v]) => `${k}=${v}`)
+    .join(" · ");
 }

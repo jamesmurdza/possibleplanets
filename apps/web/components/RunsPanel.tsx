@@ -5,7 +5,15 @@ import Chart from "chart.js/auto";
 import Dropdown from "./Dropdown";
 import Drawer from "./Drawer";
 import Modal from "./Modal";
-import { fetchJson, CHART_ADAPTERS, summarizeParams, nativeScenarioOf, canonicalScenario } from "../lib/clientApi";
+import {
+  fetchJson,
+  CHART_ADAPTERS,
+  summarizeParams,
+  summarizeScenario,
+  summarizeExtraParams,
+  nativeScenarioOf,
+  canonicalScenario,
+} from "../lib/clientApi";
 import type { RunJob, RunListItem, ModelMeta } from "../lib/clientTypes";
 
 const ALL = "__all__";
@@ -289,7 +297,8 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
   const SORT_ACCESSORS: Record<string, (r: RunListItem) => string | number> = {
     model: (r) => r.model,
     version: (r) => r.model_version_number ?? "",
-    params: (r) => summarizeParams(r.params),
+    scenario: (r) => summarizeScenario(r.params),
+    params: (r) => summarizeExtraParams(r.params),
     status: (r) => r.status,
     duration: sortableDurationSeconds,
     started: (r) => new Date(r.started_at).getTime(),
@@ -542,6 +551,13 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                 </th>
                 <SortableHeader label="Model" sortKeyName="model" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableHeader label="Version" sortKeyName="version" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHeader
+                  label="Scenario"
+                  sortKeyName="scenario"
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={toggleSort}
+                />
                 <SortableHeader label="Params" sortKeyName="params" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableHeader label="Status" sortKeyName="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableHeader
@@ -563,7 +579,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
             <tbody>
               {sortedRuns.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="runs-table-empty">
+                  <td colSpan={8} className="runs-table-empty">
                     {loading
                       ? "Loading runs..."
                       : runs.length === 0
@@ -588,8 +604,9 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                   </td>
                   <td>{r.model}</td>
                   <td className="mono">{r.model_version_number ?? "--"}</td>
-                  <td className="mono runs-table-params" title={summarizeParams(r.params)}>
-                    {summarizeParams(r.params)}
+                  <td className="mono">{summarizeScenario(r.params) || "--"}</td>
+                  <td className="mono runs-table-params" title={summarizeExtraParams(r.params)}>
+                    {summarizeExtraParams(r.params) || "(default)"}
                   </td>
                   <td>
                     <StatusBadge status={r.status} />
