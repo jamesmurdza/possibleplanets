@@ -317,6 +317,12 @@ export interface RunListItem {
   model_version_number: string | null;
   params: unknown;
   status: string;
+  // Just {code, message} -- NOT the full error column (see getRun/RunRow),
+  // which can also carry a stdout_tail up to ~2000 chars. That's still too
+  // heavy for a list view polled every second; a failed run's full error
+  // (including stdout_tail) is still just a GET /v1/runs/{run_id} away.
+  // Only ever present when status is "failed".
+  error: { code: string; message: string } | null;
   cached: boolean;
   progress: { percent: number } | null;
   duration_seconds: number | null;
@@ -326,9 +332,10 @@ export interface RunListItem {
 
 /**
  * Powers the dashboard's "Runs" and "Compare" tabs -- deliberately a
- * lighter projection than getRun() (no `result`/`error` payload, which can
- * be large) since this is meant to be polled/refreshed cheaply for a list
- * view; a row's full detail is still just a GET /v1/runs/{run_id} away.
+ * lighter projection than getRun() (no `result` payload, and `error` is
+ * trimmed down to {code, message} -- see RunListItem's own comment) since
+ * this is meant to be polled/refreshed cheaply for a list view; a row's
+ * full detail is still just a GET /v1/runs/{run_id} away.
  *
  * No default/max cap -- the Runs tab wants every run, not just the most
  * recent 50/200 (a user explicitly asked for this: don't limit the runs
@@ -339,9 +346,9 @@ export async function listRuns(limit?: number): Promise<RunListItem[]> {
   await ensureDb();
   const { rows } = await getPool().query(
     limit
-      ? `SELECT run_id, model, model_version, model_version_number, params, status, cached, progress, duration_seconds, started_at, updated_at
+      ? `SELECT run_id, model, model_version, model_version_number, params, status, error, cached, progress, duration_seconds, started_at, updated_at
          FROM runs ORDER BY started_at DESC LIMIT $1`
-      : `SELECT run_id, model, model_version, model_version_number, params, status, cached, progress, duration_seconds, started_at, updated_at
+      : `SELECT run_id, model, model_version, model_version_number, params, status, error, cached, progress, duration_seconds, started_at, updated_at
          FROM runs ORDER BY started_at DESC`,
     limit ? [limit] : [],
   );
@@ -350,6 +357,9 @@ export async function listRuns(limit?: number): Promise<RunListItem[]> {
     // Same internal-state collapsing as lib/runs.ts's toView -- "finalizing"
     // isn't a status API consumers should need to handle separately.
     status: r.status === "finalizing" ? "running" : r.status,
+    // Trim stdout_tail off -- see RunListItem's own comment on why the
+    // list only ever carries {code, message}.
+    error: r.error ? { code: r.error.code, message: r.error.message } : null,
   }));
 }
 

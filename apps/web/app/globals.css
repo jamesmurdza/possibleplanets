@@ -630,6 +630,22 @@ a.icon-button {
   color: var(--color-text-faint);
 }
 
+/* A failed run's error message, right next to its status pill -- full
+   text is on `title` (a native tooltip) since this is too narrow a
+   table cell to show a potentially long message in full; truncated with
+   an ellipsis here instead of wrapping and blowing up the row height. */
+.error-tag {
+  display: inline-block;
+  margin-left: 0.4rem;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  font-size: 0.7rem;
+  color: var(--color-error);
+}
+
 /* --- New Run form --- */
 
 .run-form {

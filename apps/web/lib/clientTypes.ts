@@ -76,6 +76,9 @@ export interface RunListItem {
   model_version_number: string | null;
   params: Record<string, unknown>;
   status: "queued" | "running" | "succeeded" | "failed";
+  // {code, message} only (no stdout_tail) -- see lib/db.ts's RunListItem
+  // comment. Only ever present when status is "failed".
+  error: { code: string; message: string } | null;
   cached: boolean;
   progress: { percent: number } | null;
   duration_seconds: number | null;
