@@ -11,7 +11,19 @@ import ModelIcon from "./ModelIcon";
 import { sortByResourceUsage } from "../lib/modelOrder";
 import type { ModelMeta, ModelListItem, ModelDurationStats, CheckResult } from "../lib/clientTypes";
 
-export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId: string) => void }) {
+export default function NewRunPanel({
+  onRunSubmitted,
+  onViewCached,
+}: {
+  // Called after a successful (or cache-hit) submission -- just switches to
+  // the Runs tab, no drawer (see runModel's own comment: a submission can
+  // be a whole batch, which never had one single run to open anyway).
+  onRunSubmitted: () => void;
+  // Called by the "View cached" button -- switches to the Runs tab AND
+  // opens that exact run's drawer, since the whole point there is to look
+  // at one specific historical result.
+  onViewCached: (runId: string) => void;
+}) {
   const [models, setModels] = useState<ModelListItem[]>([]);
   const [modelName, setModelName] = useState("");
   const [modelMeta, setModelMeta] = useState<ModelMeta | null>(null);
@@ -260,12 +272,13 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
   }
 
   // Submitting no longer renders anything locally -- it either navigates to
-  // the Runs tab (via onRunSubmitted) with the new run's drawer open, or --
-  // on a genuine submission failure -- shows an inline error and stays on
-  // this form so the user can fix and retry. Clicking "Run" always forces a
-  // fresh run (refresh: true) -- showing a cached result on a "Run" click
-  // would be surprising; cached results are only ever surfaced through the
-  // explicit "View cached" button (see viewCachedRun/checkResult.cached).
+  // the Runs tab (via onRunSubmitted, no drawer -- see that prop's own
+  // comment) or -- on a genuine submission failure -- shows an inline error
+  // and stays on this form so the user can fix and retry. Clicking "Run"
+  // always forces a fresh run (refresh: true) -- showing a cached result on
+  // a "Run" click would be surprising; cached results are only ever
+  // surfaced through the explicit "View cached" button (see
+  // viewCachedRun/checkResult.cached).
   async function runModel() {
     setRunDisabled(true);
 
@@ -297,23 +310,13 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
       setRunDisabled(false);
       // refresh: true above means this normally won't be a cache hit (the
       // whole point of forcing a fresh run on "Run" -- see runModel's own
-      // comment). Keep this branch anyway as a defensive fallback: a cache
-      // hit still comes back as a finished job inline rather than a run_id
-      // to poll (see submitRun's module comment), and that inline run_id
-      // was never written to the `runs` table, so opening it in the drawer
-      // would 404 -- look up the real historical run_id behind the hit
-      // instead (the check we already ran has it, see checkResult).
-      if (submitted.status === "succeeded") {
-        const realRunId = checkResult?.cached_run_id;
-        if (realRunId) {
-          onRunSubmitted(realRunId);
-        } else {
-          setStatusText(`${modelName}: succeeded, but couldn't locate its run history -- see the Runs tab.`);
-        }
-      } else if (submitted.status === "failed") {
+      // comment) -- but either way, a plain "Run" submission never opens
+      // the drawer (see onRunSubmitted's own comment), so there's no need
+      // to look up a cache hit's real run_id here any more.
+      if (submitted.status === "failed") {
         setStatusText(`${modelName}: failed - ${submitted.error?.message || "unknown error"}`, true);
       } else {
-        onRunSubmitted(submitted.run_id);
+        onRunSubmitted();
       }
     } catch (err: any) {
       setRunDisabled(false);
@@ -326,7 +329,7 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
   // (model, params), without resubmitting anything.
   function viewCachedRun() {
     if (checkResult?.cached_run_id) {
-      onRunSubmitted(checkResult.cached_run_id);
+      onViewCached(checkResult.cached_run_id);
     } else {
       setStatusText(`${modelName}: couldn't locate the cached run's history -- see the Runs tab.`, true);
     }
