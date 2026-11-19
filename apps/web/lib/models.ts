@@ -56,6 +56,10 @@ export interface NumberParameterSpec {
   max: number;
   step?: number;
   placeholderHint?: string;
+  // Shown after the input itself (not folded into `label`, which sits
+  // beside it) -- e.g. "°C per CO2 doubling" for climate sensitivity. Most
+  // parameters don't have one (a plain count, a random seed, etc.).
+  unit?: string;
 }
 
 export type ParameterSpec = NumberParameterSpec;
@@ -231,7 +235,8 @@ export const MODELS: Record<string, ModelMeta> = {
     parameters: [
       {
         key: "climate_sensitivity",
-        label: "Climate sensitivity (°C per CO2 doubling)",
+        label: "Climate sensitivity",
+        unit: "°C per CO2 doubling",
         type: "number",
         default: 3.0,
         min: 1.5,
@@ -525,7 +530,8 @@ export const MODELS: Record<string, ModelMeta> = {
     parameters: [
       {
         key: "climate_sensitivity",
-        label: "Climate sensitivity (°C per CO2 doubling)",
+        label: "Climate sensitivity",
+        unit: "°C per CO2 doubling",
         type: "number",
         default: 3.0,
         min: 1.5,
@@ -578,7 +584,8 @@ export const MODELS: Record<string, ModelMeta> = {
     parameters: [
       {
         key: "climate_feedback_parameter",
-        label: "Climate feedback parameter (W/m² per °C)",
+        label: "Climate feedback parameter",
+        unit: "W/m² per °C",
         type: "number",
         default: 1.2467,
         min: 0.5,

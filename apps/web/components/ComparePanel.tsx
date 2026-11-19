@@ -251,7 +251,7 @@ export default function ComparePanel() {
   const scenarioOptionsForModel = scenariosForModel.map((s) => ({ value: s, label: s }));
   const scenarioOptionsAnyModel = scenariosAnyModel.map((s) => ({ value: s, label: s }));
   const parameters = modelMeta?.parameters ?? [];
-  const parameterOptions = parameters.map((p) => ({ value: p.key, label: p.label }));
+  const parameterOptions = parameters.map((p) => ({ value: p.key, label: p.unit ? `${p.label} (${p.unit})` : p.label }));
 
   const summaryText = (() => {
     if (axis === "model") {

@@ -13,6 +13,9 @@ export interface ParameterSpec {
   max: number;
   step?: number;
   placeholderHint?: string;
+  // Shown after the input itself -- see lib/models.ts's own doc comment
+  // on this same field.
+  unit?: string;
 }
 
 export interface ModelMeta {

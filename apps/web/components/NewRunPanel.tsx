@@ -623,6 +623,7 @@ export default function NewRunPanel({
                     value={paramValues[spec.key] ?? ""}
                     onChange={(e) => onParamChange(spec.key, e.target.value)}
                   />
+                  {spec.unit && <span className="form-field-unit">{spec.unit}</span>}
                 </label>
               ))}
             </div>
@@ -651,7 +652,7 @@ export default function NewRunPanel({
             </button>
             {advancedOpen && (
               <label className="form-field">
-                <span className="form-field-label">Max run time (seconds)</span>
+                <span className="form-field-label">Max run time</span>
                 <input
                   type="number"
                   placeholder={`${modelMeta.exec_timeout_seconds}`}
@@ -660,6 +661,7 @@ export default function NewRunPanel({
                   value={maxRunTime}
                   onChange={(e) => setMaxRunTime(e.target.value)}
                 />
+                <span className="form-field-unit">seconds</span>
               </label>
             )}
           </div>

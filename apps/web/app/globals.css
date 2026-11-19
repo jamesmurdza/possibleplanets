@@ -840,7 +840,7 @@ th.runs-table-checkbox-col {
   flex-direction: row;
   align-items: center;
   gap: 0.6rem;
-  min-width: 13rem;
+  min-width: 17rem;
   max-width: none;
 }
 
@@ -852,11 +852,26 @@ th.runs-table-checkbox-col {
 .run-form .form-field input {
   width: auto;
   flex: 1 1 auto;
-  min-width: 0;
+  /* Was 0 -- with a long label (e.g. "Climate feedback parameter") eating
+     most of a narrow grid cell's width, the input itself could shrink to
+     just a couple of characters wide. A real floor keeps it usable
+     regardless of how long the label next to it is. */
+  min-width: 5rem;
+}
+
+/* The unit shown after the input (e.g. "°C per CO2 doubling", "seconds")
+   -- see ParameterSpec's own `unit` doc comment in lib/models.ts. Doesn't
+   grow/shrink, so a long unit string doesn't squeeze the input back down
+   the way folding it into the label used to. */
+.form-field-unit {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: var(--color-text-faint);
+  font-size: 0.75rem;
 }
 
 .run-form .param-fields-grid {
-  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
 }
 
 /* --- Model picker cards --- */
