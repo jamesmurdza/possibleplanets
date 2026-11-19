@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { fetchJson, buildParams, scenarioDescription, canonicalScenario } from "../lib/clientApi";
 import { scenarioDriverSeries } from "../lib/scenarioDrivers";
 import { scenarioAssumptions, type AssumptionSection } from "../lib/assumptions";
-import { modelFullName } from "../lib/modelFullNames";
+import { modelAcronym, modelFullName } from "../lib/modelFullNames";
 import Sparkline from "./Sparkline";
 import Modal, { AssumptionsModalBody } from "./Modal";
 import InfoButton from "./InfoButton";
@@ -549,7 +549,7 @@ export default function NewRunPanel({
                   <span className="model-card-icon">
                     <ModelIcon model={m.model} />
                   </span>
-                  <span className="model-card-name">{m.model}</span>
+                  <span className="model-card-name">{modelAcronym(m.model)}</span>
                 </div>
                 <p className="model-card-description">{modelFullName(m.model)}</p>
                 <InfoButton
