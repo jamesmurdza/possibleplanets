@@ -434,6 +434,15 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
     } catch (err: any) {
       if (activeDetailId.current !== id) return;
       setDetailErr(err.message);
+      // Keep polling through a transient failure (e.g. a 502 from a
+      // gateway error advanceRun hit) instead of silently giving up after
+      // the first one -- without this, one blip permanently froze the
+      // drawer on whatever selectedJob it last had, with no way to find
+      // out the run actually went on to finish (or fail) afterwards short
+      // of closing and reopening the drawer. Guarded by activeDetailId the
+      // same way the success path is, so this can't outlive the user
+      // switching to a different run or closing the drawer.
+      detailPollTimer.current = setTimeout(() => pollDetail(id), 500);
     }
   }
 
@@ -579,6 +588,11 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
         </div>
 
         <div className="table-toolbar-actions">
+          {selectedJob && (
+            <button type="button" className="text-button" onClick={runAgain} disabled={runAgainBusy}>
+              {runAgainBusy ? "Submitting..." : "Run again"}
+            </button>
+          )}
           <button
             type="button"
             className={`icon-button danger${checkedIds.size > 0 ? " active" : ""}`}
@@ -677,7 +691,10 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                     />
                   </td>
                   <td>{r.model}</td>
-                  <td className="mono">{r.model_version_number ?? "--"}</td>
+                  <td className="mono runs-table-params" title={r.model_version ?? undefined}>
+                    {r.model_version_number ?? "--"}
+                    {r.model_version ? ` (${r.model_version})` : ""}
+                  </td>
                   <td className="mono">{summarizeScenario(r.params) || "--"}</td>
                   <td className="mono runs-table-params" title={summarizeExtraParams(r.params)}>
                     {summarizeExtraParams(r.params)}
@@ -849,14 +866,12 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
               unmounting/remounting the canvas on every tab switch would
               lose the chart until the next poll redraws it. */}
           <div style={{ display: drawerTab === "details" ? undefined : "none" }}>
-            {selectedJob && (
-              <div className="drawer-actions">
-                <button type="button" onClick={runAgain} disabled={runAgainBusy}>
-                  {runAgainBusy ? "Submitting..." : "Run again"}
-                </button>
-                {runAgainErr && <p className="panel-error">{runAgainErr}</p>}
-              </div>
-            )}
+            {/* Run again's own button lives in the table toolbar now (next
+                to the delete icon button), since it already needs
+                selectedJob to be the one it acts on -- just the error from
+                that same action stays here, in the drawer, not floating
+                in the toolbar. */}
+            {runAgainErr && <p className="panel-error">{runAgainErr}</p>}
             {selectedJob?.status === "succeeded" ? (
               <canvas ref={canvasRef} height={380}></canvas>
             ) : (
@@ -881,20 +896,16 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
               return (
                 <div className="drawer-raw-output">
                   {rawOutput ? (
-                    <>
-                      {/* The run command's stdout and stderr are combined
-                          into one stream before this app ever sees them
-                          (`> file 2>&1` in buildWrappedCommand, plus most
-                          models' own run.py merging their subprocess's
-                          stderr the same way) -- there's no separate
-                          stderr to show, this already includes it. */}
-                      <p className="chart-hint">Combined stdout + stderr.</p>
-                      {/* Tail-capped -- see RunJob's own stdout_tail/
-                          live_stdout_tail comments -- for debugging a run
-                          whose result doesn't make sense, not reformatted/
-                          parsed in any way. */}
-                      <pre className="drawer-raw-output-pre">{rawOutput}</pre>
-                    </>
+                    // The run command's stdout and stderr are combined into
+                    // one stream before this app ever sees them (`> file
+                    // 2>&1` in buildWrappedCommand, plus most models' own
+                    // run.py merging their subprocess's stderr the same
+                    // way) -- there's no separate stderr to show, this
+                    // already includes it. Tail-capped -- see RunJob's own
+                    // stdout_tail/live_stdout_tail comments -- for
+                    // debugging a run whose result doesn't make sense, not
+                    // reformatted/parsed in any way.
+                    <pre className="drawer-raw-output-pre">{rawOutput}</pre>
                   ) : (
                     <p className="chart-hint">{isRunning ? "No output captured yet." : "No output was captured for this run."}</p>
                   )}
