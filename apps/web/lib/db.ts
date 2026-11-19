@@ -276,6 +276,9 @@ export interface RunRow {
   // into its own column (it may still only live in `error.stdout_tail`
   // on those older rows -- see RunJob's own comment in lib/runs.ts).
   stdout_tail: string | null;
+  // When this row was last written -- used by advanceRun to detect a row
+  // that's been stuck in 'finalizing' for too long (see its own comment).
+  updated_at: string;
 }
 
 export async function insertRun(row: {
