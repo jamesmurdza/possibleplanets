@@ -418,6 +418,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
                 <th>Version</th>
                 <th>Params</th>
                 <th>Status</th>
+                <th>Progress</th>
                 <th>Duration</th>
                 <th>Started</th>
               </tr>
@@ -425,7 +426,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
             <tbody>
               {filteredRuns.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="runs-table-empty">
+                  <td colSpan={8} className="runs-table-empty">
                     {runs.length === 0 ? 'No runs yet -- start one from "New Run".' : "No runs match these filters."}
                   </td>
                 </tr>
@@ -457,10 +458,15 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
                     )}
                   </td>
                   <td>
+                    {(r.status === "running" || r.status === "queued") &&
+                    r.progress &&
+                    typeof r.progress.percent === "number"
+                      ? `${r.progress.percent}%`
+                      : "--"}
+                  </td>
+                  <td>
                     {r.status === "running" || r.status === "queued"
-                      ? `${formatElapsed(r.started_at)}${
-                          r.progress && typeof r.progress.percent === "number" ? ` (${r.progress.percent}%)` : ""
-                        }`
+                      ? formatElapsed(r.started_at)
                       : typeof r.duration_seconds === "number"
                         ? `${r.duration_seconds.toFixed(1)}s`
                         : "--"}
@@ -518,6 +524,14 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
                   <span className="mono">{summarizeParams(selectedJob.params)}</span>
                 </div>
               )}
+              {(selectedJob.status === "running" || selectedJob.status === "queued") &&
+                selectedJob.progress &&
+                typeof selectedJob.progress.percent === "number" && (
+                  <div className="drawer-meta-row">
+                    <span className="drawer-meta-label">Progress</span>
+                    <span>{selectedJob.progress.percent}%</span>
+                  </div>
+                )}
               {typeof selectedJob.duration_seconds === "number" ? (
                 <div className="drawer-meta-row">
                   <span className="drawer-meta-label">Duration</span>
@@ -535,12 +549,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
                   return listRow ? (
                     <div className="drawer-meta-row">
                       <span className="drawer-meta-label">Duration</span>
-                      <span>
-                        {formatElapsed(listRow.started_at)}
-                        {selectedJob.progress && typeof selectedJob.progress.percent === "number"
-                          ? ` (${selectedJob.progress.percent}%)`
-                          : ""}
-                      </span>
+                      <span>{formatElapsed(listRow.started_at)}</span>
                     </div>
                   ) : null;
                 })()
