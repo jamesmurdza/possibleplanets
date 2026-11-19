@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { fetchJson } from "../../../lib/clientApi";
 import { modelAssumptions } from "../../../lib/assumptions";
+import { modelChangelog } from "../../../lib/changelogs";
 import { useChartSeries } from "../../../lib/useRunsData";
 import TemperatureChart from "../../../components/TemperatureChart";
 import CodeBlock from "../../../components/CodeBlock";
@@ -57,6 +58,7 @@ export default function ModelArticlePage() {
   const ownSeries = series.filter((r) => r.model === model);
   const assumptions = modelAssumptions(model);
   const guide = runGuide(model);
+  const changelog = modelChangelog(model);
 
   if (notFound) {
     return (
@@ -111,6 +113,19 @@ export default function ModelArticlePage() {
             <ul className="assumptions-list">
               {assumptions.items.map((item, i) => (
                 <li key={i}>{item}</li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {changelog && (
+          <section className="article-section">
+            <SectionHeading>Changelog</SectionHeading>
+            <ul className="assumptions-list">
+              {changelog.map((entry, i) => (
+                <li key={i}>
+                  <strong>{entry.version}</strong> &mdash; {entry.summary}
+                </li>
               ))}
             </ul>
           </section>
