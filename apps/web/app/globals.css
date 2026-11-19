@@ -765,6 +765,11 @@ a.icon-button {
   padding: 0.55rem 0.7rem 1.4rem;
   cursor: pointer;
   transition: border-color 0.12s ease;
+  /* Shift-clicking (the batch-select gesture, see onModelCardClick) is
+     exactly the browser's own "extend a text selection" chord -- without
+     this, shift-clicking a second/third card selects everything in
+     between as text instead of just toggling it into the batch. */
+  user-select: none;
 }
 
 .model-card:focus-visible {
@@ -902,6 +907,9 @@ a.icon-button {
   padding: 0.55rem 0.7rem 1.4rem;
   cursor: pointer;
   transition: border-color 0.12s ease;
+  /* See .model-card's own comment -- same shift-click batch-select
+     gesture, same browser text-selection chord to suppress. */
+  user-select: none;
 }
 
 .scenario-card:focus-visible {
