@@ -71,10 +71,11 @@ function StatusBadge({ status }: { status: string }) {
 // the first GET /v1/runs is still in flight -- matches the real table's
 // column count/shape (8: checkbox, Model, Version, Scenario, Params,
 // Status, Duration, Started) so nothing reflows once real rows swap in.
-// Uses the dashboard's own --color-* theme (via .runs-table-skeleton-bar,
+// Uses the dashboard's own --color-* theme (via .dashboard-skeleton-bar,
 // not the public site's .skeleton-bar -- that one's background resolves
 // against --pp-grey-light, a custom property only defined under
-// .public-page, which this dashboard table is never inside).
+// .public-page, which this dashboard table is never inside). Shared with
+// the run drawer's own loading skeleton below.
 const SKELETON_ROW_COUNT = 6;
 
 function SkeletonRows() {
@@ -85,12 +86,38 @@ function SkeletonRows() {
           <td className="runs-table-checkbox-col" />
           {Array.from({ length: 7 }).map((_, j) => (
             <td key={j}>
-              <span className="runs-table-skeleton-bar" />
+              <span className="dashboard-skeleton-bar" />
             </td>
           ))}
         </tr>
       ))}
     </>
+  );
+}
+
+// Run drawer's own loading skeleton -- shown between the drawer opening
+// (selectedRunId set) and its first GET /v1/runs/{id} response landing
+// (selectedJob still null), instead of a near-empty drawer with just a
+// title and a lone "Loading..." label. See its own CSS rules' comment for
+// why this mimics the real layout's shape.
+const DRAWER_SKELETON_ROW_COUNT = 5;
+
+function DrawerSkeleton() {
+  return (
+    <div aria-hidden="true">
+      <div className="drawer-skeleton-tabs">
+        <span className="dashboard-skeleton-bar" />
+        <span className="dashboard-skeleton-bar" />
+        <span className="dashboard-skeleton-bar" />
+      </div>
+      {Array.from({ length: DRAWER_SKELETON_ROW_COUNT }).map((_, i) => (
+        <div className="drawer-skeleton-row" key={i}>
+          <span className="dashboard-skeleton-bar" />
+          <span className="dashboard-skeleton-bar" />
+        </div>
+      ))}
+      <div className="drawer-skeleton-chart" />
+    </div>
   );
 }
 
@@ -759,6 +786,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
       {selectedRunId && (
         <Drawer title={selectedJob ? `${selectedJob.model} run` : "Run"} onClose={() => onSelectRun(null)}>
           {detailErr && <p className="panel-error">{detailErr}</p>}
+          {!selectedJob && !detailErr && <DrawerSkeleton />}
           {selectedJob && (
             <div className="drawer-tabs" role="tablist">
               <button
@@ -901,32 +929,35 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
               when the Output tab is active -- canvasRef's chart-drawing
               effect runs off selectedJob changes, not drawerTab, so
               unmounting/remounting the canvas on every tab switch would
-              lose the chart until the next poll redraws it. */}
-          <div style={{ display: drawerTab === "details" ? undefined : "none" }}>
-            {/* Run again's own button lives in the table toolbar now (next
-                to the delete icon button), since it already needs
-                selectedJob to be the one it acts on -- just the error from
-                that same action stays here, in the drawer, not floating
-                in the toolbar. */}
-            {runAgainErr && <p className="panel-error">{runAgainErr}</p>}
-            {/* The centered placeholder below is sized for a short status
-                word, not a sentence -- a failed run's error.message can be
-                an arbitrarily long raw string (e.g. a Daytona 502's whole
-                HTML body, seen in practice), which looked bizarre dumped
-                into the middle of the empty chart area. Keep the
-                placeholder itself short and put the real message in its
-                own normally-flowing paragraph instead. */}
-            {selectedJob?.status === "failed" && (
-              <p className="panel-error">{selectedJob.error?.message || "unknown error"}</p>
-            )}
-            {selectedJob?.status === "succeeded" ? (
-              <canvas ref={canvasRef} height={380}></canvas>
-            ) : (
-              <div className="chart-placeholder">
-                {selectedJob ? (selectedJob.status === "failed" ? "Failed" : `${selectedJob.status}...`) : "Loading..."}
-              </div>
-            )}
-          </div>
+              lose the chart until the next poll redraws it. Doesn't need
+              to render at all before selectedJob exists in the first
+              place -- DrawerSkeleton covers that gap now -- so this is
+              never mounted any earlier than it would have been anyway. */}
+          {selectedJob && (
+            <div style={{ display: drawerTab === "details" ? undefined : "none" }}>
+              {/* Run again's own button lives in the table toolbar now
+                  (next to the delete icon button), since it already needs
+                  selectedJob to be the one it acts on -- just the error
+                  from that same action stays here, in the drawer, not
+                  floating in the toolbar. */}
+              {runAgainErr && <p className="panel-error">{runAgainErr}</p>}
+              {/* The centered placeholder below is sized for a short
+                  status word, not a sentence -- a failed run's
+                  error.message can be an arbitrarily long raw string (e.g.
+                  a Daytona 502's whole HTML body, seen in practice), which
+                  looked bizarre dumped into the middle of the empty chart
+                  area. Keep the placeholder itself short and put the real
+                  message in its own normally-flowing paragraph instead. */}
+              {selectedJob.status === "failed" && (
+                <p className="panel-error">{selectedJob.error?.message || "unknown error"}</p>
+              )}
+              {selectedJob.status === "succeeded" ? (
+                <canvas ref={canvasRef} height={380}></canvas>
+              ) : (
+                <div className="chart-placeholder">{selectedJob.status === "failed" ? "Failed" : `${selectedJob.status}...`}</div>
+              )}
+            </div>
+          )}
           {selectedJob && drawerTab === "output" && (
             (() => {
               // While still running, stdout_tail hasn't been written yet
