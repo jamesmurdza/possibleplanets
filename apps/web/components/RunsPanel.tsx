@@ -5,7 +5,15 @@ import Chart from "chart.js/auto";
 import Dropdown from "./Dropdown";
 import Drawer from "./Drawer";
 import Modal from "./Modal";
-import { fetchJson, CHART_ADAPTERS, summarizeParams, nativeScenarioOf, canonicalScenario } from "../lib/clientApi";
+import {
+  fetchJson,
+  CHART_ADAPTERS,
+  summarizeParams,
+  summarizeScenario,
+  summarizeExtraParams,
+  nativeScenarioOf,
+  canonicalScenario,
+} from "../lib/clientApi";
 import type { RunJob, RunListItem, ModelMeta } from "../lib/clientTypes";
 
 const ALL = "__all__";
@@ -30,6 +38,18 @@ function formatWhen(iso: string): string {
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+// Every duration in this panel (a finished run's duration_seconds, and a
+// still-running one's live elapsed time below) renders through this one
+// function, always as "Xm Ys" -- including under a minute (e.g. "0m 7s"),
+// not a special-cased bare "7s" -- so every row in the Duration column
+// reads in the same shape regardless of how long that particular run
+// took.
+function formatDuration(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ${seconds % 60}s`;
+}
+
 // Live "how long has this been running" for a still-in-progress run --
 // just now() - started_at, recomputed on every render. No interval timer
 // of its own needed: both the table (refreshList, every 1s -- see
@@ -40,14 +60,41 @@ function formatWhen(iso: string): string {
 // out of sync with a second, independent setInterval.
 function formatElapsed(startedAtIso: string): string {
   const elapsedSeconds = Math.max(0, (Date.now() - new Date(startedAtIso).getTime()) / 1000);
-  if (elapsedSeconds < 60) return `${Math.floor(elapsedSeconds)}s`;
-  const minutes = Math.floor(elapsedSeconds / 60);
-  const seconds = Math.floor(elapsedSeconds % 60);
-  return `${minutes}m ${seconds}s`;
+  return formatDuration(elapsedSeconds);
 }
 
 function StatusBadge({ status }: { status: string }) {
   return <span className={`status-pill status-pill-${status}`}>{status}</span>;
+}
+
+// A clickable <th> for the Runs table -- shows an up/down arrow only on
+// whichever column is the current sort key (see RunsPanel's toggleSort),
+// nothing on the rest. Clicking the already-active column flips direction
+// instead of resorting by a different key -- see toggleSort.
+function SortableHeader({
+  label,
+  sortKeyName,
+  sortKey,
+  sortDir,
+  onSort,
+}: {
+  label: string;
+  sortKeyName: string;
+  sortKey: string | null;
+  sortDir: "asc" | "desc";
+  onSort: (key: string) => void;
+}) {
+  const active = sortKey === sortKeyName;
+  return (
+    <th>
+      <button type="button" className="runs-table-sort-button" onClick={() => onSort(sortKeyName)}>
+        {label}
+        <span className="runs-table-sort-arrow" aria-hidden="true">
+          {active ? (sortDir === "asc" ? "▲" : "▼") : ""}
+        </span>
+      </button>
+    </th>
+  );
 }
 
 export interface RunsPanelProps {
@@ -61,16 +108,35 @@ export interface RunsPanelProps {
   // the top right of this panel (Runs is the default landing tab now, so
   // starting a run needs to be reachable from here, not just the sidebar).
   onNewRun: () => void;
+  // Bumped by the dashboard (see app/dashboard/page.tsx's onRunSubmitted)
+  // every time a New Run submission completes, so a just-submitted run
+  // shows up immediately on switching to this tab instead of only
+  // appearing once refreshList's own poll loop happens to catch it (or
+  // never, if nothing else in the list is in progress -- see this
+  // component's own useEffect on `runs` below: the 1s poll is keyed on
+  // whether anything already IN the list is active, which a run that
+  // hasn't been fetched into the list yet doesn't satisfy). This stays
+  // mounted across tab switches (app/dashboard/page.tsx toggles
+  // display:none, not unmount/remount), so there's no mount effect to
+  // rely on here either.
+  refreshSignal?: number;
 }
 
-export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: RunsPanelProps) {
+export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refreshSignal }: RunsPanelProps) {
   const [runs, setRuns] = useState<RunListItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [selectedJob, setSelectedJob] = useState<RunJob | null>(null);
   const [detailErr, setDetailErr] = useState<string | null>(null);
   const [filterModel, setFilterModel] = useState(ALL);
   const [filterScenario, setFilterScenario] = useState(ALL);
   const [filterStatus, setFilterStatus] = useState(ALL);
+  // Null sortKey means "server's own default order" (started_at DESC,
+  // already how GET /v1/runs returns rows -- see lib/db.ts) -- sorting is
+  // otherwise purely client-side over the already-fetched/filtered list,
+  // same reasoning as filtering above.
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   // Checkbox selection for bulk delete -- independent of selectedRunId
   // (which run's drawer is open), see the header comment above.
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -105,6 +171,14 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
       setLoadErr(null);
     } catch (err: any) {
       setLoadErr(err.message);
+    } finally {
+      // Only ever matters for the very first call (the mount effect
+      // below) -- every later refreshList (the background poll,
+      // advanceInProgressRuns) is a no-op here since loading is already
+      // false by then. Set in `finally` so an error on that first load
+      // still clears the "Loading runs..." state instead of leaving the
+      // table stuck there forever.
+      setLoading(false);
     }
   }
 
@@ -165,6 +239,22 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runs]);
 
+  // Fires an immediate refetch whenever the dashboard bumps refreshSignal
+  // -- see this prop's own doc comment for why the regular poll loop
+  // alone can't be relied on to pick up a just-submitted run. Skipped on
+  // the very first render (refreshSignal starts at 0/undefined and the
+  // mount effect above already does this same fetch) via the ref below,
+  // so this doesn't double-fetch on initial mount.
+  const sawRefreshSignal = useRef(false);
+  useEffect(() => {
+    if (!sawRefreshSignal.current) {
+      sawRefreshSignal.current = true;
+      return;
+    }
+    refreshList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
+
   // Filtering is purely client-side over the already-fetched list -- the
   // list is already a lightweight, capped-size projection (GET /v1/runs),
   // so there's no need for the server to know about filters.
@@ -190,6 +280,51 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
     if (filterStatus !== ALL && r.status !== filterStatus) return false;
     return true;
   });
+
+  // A run's own duration for sort purposes -- duration_seconds once
+  // finished, otherwise its live elapsed time (same value the Duration
+  // column itself shows while running/queued -- see formatElapsed), so
+  // sorting by Duration doesn't just always push every still-in-progress
+  // row to one end regardless of how long it's actually been running.
+  function sortableDurationSeconds(r: RunListItem): number {
+    if (typeof r.duration_seconds === "number") return r.duration_seconds;
+    if (r.status === "running" || r.status === "queued") {
+      return Math.max(0, (Date.now() - new Date(r.started_at).getTime()) / 1000);
+    }
+    return -1;
+  }
+
+  const SORT_ACCESSORS: Record<string, (r: RunListItem) => string | number> = {
+    model: (r) => r.model,
+    version: (r) => r.model_version_number ?? "",
+    scenario: (r) => summarizeScenario(r.params),
+    params: (r) => summarizeExtraParams(r.params),
+    status: (r) => r.status,
+    duration: sortableDurationSeconds,
+    started: (r) => new Date(r.started_at).getTime(),
+  };
+
+  const sortedRuns = sortKey
+    ? [...filteredRuns].sort((a, b) => {
+        const av = SORT_ACCESSORS[sortKey](a);
+        const bv = SORT_ACCESSORS[sortKey](b);
+        const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
+        return sortDir === "asc" ? cmp : -cmp;
+      })
+    : filteredRuns;
+
+  function toggleSort(key: string) {
+    if (sortKey !== key) {
+      setSortKey(key);
+      // Started defaults to newest-first (matching the server's own
+      // ORDER BY started_at DESC -- see lib/db.ts) since that's the
+      // existing/expected order; every other column defaults to
+      // ascending on its first click, the more conventional default.
+      setSortDir(key === "started" ? "desc" : "asc");
+    } else {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    }
+  }
 
   // Dropped from `checkedIds` whenever the list is refreshed and a
   // previously-checked run has disappeared from it (deleted by someone
@@ -340,8 +475,8 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
     <div>
       <div className="panel-header">
         <h2 className="panel-title">Runs</h2>
-        <button type="button" className="primary-button" onClick={onNewRun}>
-          New Run
+        <button type="button" className="new-run-button" onClick={onNewRun}>
+          <span aria-hidden="true">+</span> New Run
         </button>
       </div>
 
@@ -414,23 +549,46 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
                     onChange={toggleCheckAll}
                   />
                 </th>
-                <th>Model</th>
-                <th>Version</th>
-                <th>Params</th>
-                <th>Status</th>
-                <th>Duration</th>
-                <th>Started</th>
+                <SortableHeader label="Model" sortKeyName="model" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHeader label="Version" sortKeyName="version" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHeader
+                  label="Scenario"
+                  sortKeyName="scenario"
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableHeader label="Params" sortKeyName="params" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHeader label="Status" sortKeyName="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHeader
+                  label="Duration"
+                  sortKeyName="duration"
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableHeader
+                  label="Started"
+                  sortKeyName="started"
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={toggleSort}
+                />
               </tr>
             </thead>
             <tbody>
-              {filteredRuns.length === 0 && (
+              {sortedRuns.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="runs-table-empty">
-                    {runs.length === 0 ? 'No runs yet -- start one from "New Run".' : "No runs match these filters."}
+                  <td colSpan={8} className="runs-table-empty">
+                    {loading
+                      ? "Loading runs..."
+                      : runs.length === 0
+                        ? 'No runs yet -- start one from "New Run".'
+                        : "No runs match these filters."}
                   </td>
                 </tr>
               )}
-              {filteredRuns.map((r) => (
+              {sortedRuns.map((r) => (
                 <tr
                   key={r.run_id}
                   className={r.run_id === selectedRunId ? "selected" : ""}
@@ -446,7 +604,10 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
                   </td>
                   <td>{r.model}</td>
                   <td className="mono">{r.model_version_number ?? "--"}</td>
-                  <td className="mono">{summarizeParams(r.params)}</td>
+                  <td className="mono">{summarizeScenario(r.params) || "--"}</td>
+                  <td className="mono runs-table-params" title={summarizeExtraParams(r.params)}>
+                    {summarizeExtraParams(r.params) || "(default)"}
+                  </td>
                   <td>
                     <StatusBadge status={r.status} />
                     {(r.status === "running" || r.status === "queued") &&
@@ -465,7 +626,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
                     {r.status === "running" || r.status === "queued"
                       ? formatElapsed(r.started_at)
                       : typeof r.duration_seconds === "number"
-                        ? `${r.duration_seconds.toFixed(1)}s`
+                        ? formatDuration(r.duration_seconds)
                         : "--"}
                   </td>
                   <td>{formatWhen(r.started_at)}</td>
@@ -536,7 +697,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
               {typeof selectedJob.duration_seconds === "number" ? (
                 <div className="drawer-meta-row">
                   <span className="drawer-meta-label">Duration</span>
-                  <span>{selectedJob.duration_seconds.toFixed(1)}s</span>
+                  <span>{formatDuration(selectedJob.duration_seconds)}</span>
                 </div>
               ) : (
                 (selectedJob.status === "running" || selectedJob.status === "queued") &&

@@ -18,29 +18,34 @@ import { modelColor } from "../lib/clientApi";
 import ModelIcon from "../components/ModelIcon";
 import type { ModelListItem } from "../lib/clientTypes";
 
-// Plain "branching paths" glyph -- stands in for "a scenario" in general
-// (not any specific one), for the single combined "SSPs" legend item
-// below (see SSP_ICON_COLOR's own comment for why it's neutral, not
-// per-scenario).
-function ScenarioIcon() {
+// Lucide's "road" icon (https://lucide.dev/icons/road), reproduced
+// inline rather than pulling in the lucide-react package -- same
+// "hand-drawn inline SVG" convention every other icon on this page/
+// ModelIcon.tsx already follows. One per SSP in the legend row below
+// (see SSP_ICON_COLOR's own comment for why they're all this same
+// neutral color, not per-scenario).
+function RoadIcon() {
   return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M3 13V8a3 3 0 0 1 3-3h4M8 2 11 5l-3 3"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 17v4" />
+      <path d="M12 5V3" />
+      <path d="M12 9v3" />
+      <path d="M2.077 18.449A2 2 0 0 0 4 21h16a2 2 0 0 0 1.924-2.55l-4-14A2 2 0 0 0 16 3H8a2 2 0 0 0-1.924 1.45z" />
     </svg>
   );
 }
 
-// The SSPs legend item is deliberately neutral (not colored like each
-// model's own line) -- it stands for the whole SSP framework across every
-// model that uses it, not one specific line's color the way a model's
-// legend entry does.
+// Every SSP legend item is this same neutral color, not colored like
+// each model's own line -- there's nothing scenario-specific to tie a
+// distinct color to the way there is for a model's own chart line.
 const SSP_ICON_COLOR = "var(--pp-grey)";
 
 // Matches .public-card-grid's own grid-template-columns (4 columns) and
@@ -123,8 +128,28 @@ export default function HomePage() {
   const [models, setModels] = useState<ModelListItem[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [hovered, setHovered] = useState<HoverFilter>(null);
+  // Click-to-stick version of the model legend's hover highlight -- set by
+  // clicking a model legend entry, cleared by clicking that same entry
+  // again or clicking a different one (never by plain mouse-leave, unlike
+  // `hovered` above). While set, it's what's actually passed to the chart
+  // (see `effectiveHovered` below) instead of the transient hover, and
+  // mouse hover on the legend is ignored entirely so it can't interrupt
+  // the pin -- see onModelLegendEnter/Leave.
+  const [pinnedModel, setPinnedModel] = useState<string | null>(null);
+  const effectiveHovered: HoverFilter = pinnedModel ? { type: "model", value: pinnedModel } : hovered;
   const { series, loading } = useChartSeries();
   const columnsPerRow = useColumnsPerRow();
+
+  function onModelLegendEnter(model: string) {
+    if (!pinnedModel) setHovered({ type: "model", value: model });
+  }
+  function onModelLegendLeave() {
+    if (!pinnedModel) setHovered(null);
+  }
+  function onModelLegendClick(model: string) {
+    setPinnedModel((prev) => (prev === model ? null : model));
+    setHovered(null);
+  }
 
   useEffect(() => {
     fetchJson("/v1/models")
@@ -167,50 +192,60 @@ export default function HomePage() {
           {loading ? (
             <div className="skeleton skeleton-chart" aria-hidden="true" />
           ) : (
-            <TemperatureChart series={series} windowMin={2000} windowMax={2100} hovered={hovered} />
+            <TemperatureChart series={series} windowMin={2000} windowMax={2100} hovered={effectiveHovered} />
           )}
 
           <div className="public-chart-legend">
             {modelsLoading ? (
+              <span className="skeleton-bar skeleton-legend-item" aria-hidden="true" />
+            ) : (
               <div className="public-chart-legend-group">
-                {Array.from({ length: MODEL_SKELETON_COUNT }).map((_, i) => (
+                {modelsByResourceUsage.map((m) => (
+                  <button
+                    key={m.model}
+                    type="button"
+                    className={`public-legend-item${pinnedModel === m.model ? " pinned" : ""}`}
+                    style={{ color: modelColor(m.model) }}
+                    aria-pressed={pinnedModel === m.model}
+                    onMouseEnter={() => onModelLegendEnter(m.model)}
+                    onMouseLeave={() => onModelLegendLeave()}
+                    onClick={() => onModelLegendClick(m.model)}
+                  >
+                    <span className="public-legend-icon">
+                      <ModelIcon model={m.model} />
+                    </span>
+                    {modelAcronym(m.model)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="public-chart-legend public-chart-legend-ssps">
+            {modelsLoading ? (
+              <div className="public-chart-legend-group">
+                {Array.from({ length: SCENARIO_SKELETON_COUNT }).map((_, i) => (
                   <span key={i} className="skeleton-bar skeleton-legend-item" aria-hidden="true" />
                 ))}
               </div>
             ) : (
-              <>
-                <div className="public-chart-legend-group">
-                  {modelsByResourceUsage.map((m) => (
-                    <button
-                      key={m.model}
-                      type="button"
-                      className="public-legend-item"
-                      style={{ color: modelColor(m.model) }}
-                      onMouseEnter={() => setHovered({ type: "model", value: m.model })}
-                      onMouseLeave={() => setHovered(null)}
-                    >
-                      <span className="public-legend-icon">
-                        <ModelIcon model={m.model} />
-                      </span>
-                      {modelAcronym(m.model)}
-                    </button>
-                  ))}
-                </div>
-                <div className="public-chart-legend-group">
+              <div className="public-chart-legend-group">
+                {sharedSsps.map((s) => (
                   <button
+                    key={s}
                     type="button"
                     className="public-legend-item"
                     style={{ color: SSP_ICON_COLOR }}
-                    onMouseEnter={() => setHovered({ type: "ssp" })}
+                    onMouseEnter={() => setHovered({ type: "scenario", value: s })}
                     onMouseLeave={() => setHovered(null)}
                   >
                     <span className="public-legend-icon">
-                      <ScenarioIcon />
+                      <RoadIcon />
                     </span>
-                    SSPs
+                    {s}
                   </button>
-                </div>
-              </>
+                ))}
+              </div>
             )}
           </div>
         </section>

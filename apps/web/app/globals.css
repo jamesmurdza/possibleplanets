@@ -567,9 +567,34 @@ a.icon-button {
   text-align: left;
   font-weight: 500;
   color: var(--color-text-muted);
-  padding: 0.6rem 1rem;
+  padding: 0;
   border-bottom: 1px solid var(--color-border);
   white-space: nowrap;
+}
+
+/* Fills the whole <th> (padding moved here from .runs-table th itself)
+   so the entire header cell is clickable, not just the label text. */
+.runs-table-sort-button {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  font: inherit;
+  font-weight: 500;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+}
+
+.runs-table-sort-button:hover {
+  color: var(--color-text);
+}
+
+.runs-table-sort-arrow {
+  font-size: 0.65rem;
+  color: var(--color-accent);
 }
 
 .runs-table td {
@@ -595,9 +620,32 @@ a.icon-button {
   border-bottom: none;
 }
 
+/* Params can carry an arbitrary number of model-native extras
+   (summarizeParams joins scenario + every non-scenario key=value pair) --
+   left uncapped, this cell's content alone could stretch far wider than
+   every other column combined, visually shoving Status/Duration/Started
+   out past the table's own container (still just as wide as its content,
+   not actually clipped -- .table-scroll's overflow-x: auto handling
+   that). Capped the same way .error-tag already is (ellipsis + a native
+   title tooltip for the full value) instead of letting one row's worth
+   of params dictate every row's column widths. */
+.runs-table-params {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .runs-table-checkbox-col {
   width: 2rem;
   padding-right: 0 !important;
+}
+
+/* .runs-table th's own padding moved onto .runs-table-sort-button above
+   (the bare <th> is 0 padding now, so the button can fill and make the
+   whole header cell clickable) -- this one column has no sort button,
+   so it needs its vertical/left padding restored directly. */
+th.runs-table-checkbox-col {
+  padding: 0.6rem 0 0.6rem 1rem !important;
 }
 
 .runs-table-checkbox-col input[type="checkbox"] {
@@ -765,6 +813,39 @@ a.icon-button {
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--color-text-muted);
+}
+
+/* New Run form only -- every individual field (each parameter input,
+   the Advanced section's max-run-time field) gets its label beside the
+   input instead of stacked above it. Scoped to .run-form, not a change
+   to .form-field generally: Overview's filter row and Compare's own
+   fields still want the stacked layout (narrower columns, and -- for
+   Overview's filter row -- a dropdown rather than a plain input, which
+   reads oddly side-by-side with a short label). The Model/Emissions
+   scenario sections above aren't affected either -- those labels sit
+   above a whole grid of cards, not a single input, so "beside" doesn't
+   apply the same way. */
+.run-form .form-field {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 13rem;
+  max-width: none;
+}
+
+.run-form .form-field-label {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.run-form .form-field input {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.run-form .param-fields-grid {
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
 }
 
 /* --- Model picker cards --- */
@@ -1044,6 +1125,17 @@ a.icon-button {
   border-color: var(--color-accent-hover);
 }
 
+/* The Runs panel's "New Run" button -- plain neutral `button` styling
+   (not .primary-button's blue fill), just with a "+" ahead of the label
+   and a little extra horizontal padding/gap to match. */
+.new-run-button {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 1.1rem;
+  font-weight: 500;
+}
+
 /* Note shown under the parameter fields when a model has a
    non-deterministic-unless-seeded param (see run-form above). */
 
@@ -1056,11 +1148,25 @@ a.icon-button {
 /* New Run form's collapsible "Advanced" section (currently just the
    max-run-time override) -- the toggle button itself needs a bit of
    breathing room above/below since .text-button alone is meant for
-   inline use next to other controls, not as a standalone section header. */
+   inline use next to other controls, not as a standalone section header.
+   display: inline-flex (not block/full-width) so the button is only as
+   wide as its own label+triangle, not stretched across the form. */
 .advanced-toggle {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   margin-bottom: 0.5rem;
   padding: 0;
+}
+
+.disclosure-triangle {
+  display: inline-block;
+  font-size: 0.6rem;
+  transition: transform 0.12s ease;
+}
+
+.disclosure-triangle.open {
+  transform: rotate(90deg);
 }
 
 .chart-hint {
@@ -1793,13 +1899,14 @@ a.icon-button {
 }
 
 /* --- Chart legend (below the home page's main chart) ---
-   Two groups: one colored entry per model (matching TemperatureChart's
-   own modelColor -- hovering highlights that model's lines), and a
-   single neutral "SSPs" entry standing for the whole SSP framework
-   across every model that uses it (hovering highlights every SSP line
-   at once, see TemperatureChart's hovered.type === "ssp"). Deliberately
-   NOT one entry per scenario -- with up to 8 SSPs that'd be a wall of
-   near-identically-colored text, not a useful legend. */
+   Two separate rows, each its own .public-chart-legend: one colored
+   entry per model (matching TemperatureChart's own modelColor --
+   hovering highlights that model's lines), directly below it one
+   neutral-colored (SSP_ICON_COLOR) road-icon entry per SSP (hovering
+   highlights that one scenario's lines across every model, same
+   {type: "scenario", value} TemperatureChart already uses for the
+   Emissions scenarios cards below) -- not one combined row, so the
+   models row doesn't get crowded out by up to 8 SSP entries. */
 .public-chart-legend {
   display: flex;
   flex-wrap: wrap;
@@ -1809,6 +1916,14 @@ a.icon-button {
   margin-top: 1rem;
   padding-top: 0.9rem;
   border-top: 1px solid var(--pp-grey-light);
+}
+
+/* The second row (one road icon per SSP) sits directly under the first
+   -- no second border/top-padding repeating the chart/legend divider. */
+.public-chart-legend-ssps {
+  margin-top: 0.6rem;
+  padding-top: 0;
+  border-top: none;
 }
 
 .public-chart-legend-group {
@@ -1834,6 +1949,15 @@ a.icon-button {
 
 .public-legend-item:hover {
   opacity: 0.75;
+}
+
+/* Click-to-stick state (see app/page.tsx's pinnedModel) -- a persistent
+   underline so it's visually obvious this legend entry is actively
+   filtering the chart/tooltips, not just the usual transient hover. */
+.public-legend-item.pinned {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
 }
 
 .public-legend-icon {

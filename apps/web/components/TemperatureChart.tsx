@@ -37,6 +37,16 @@ function scenarioOf(params: Record<string, unknown>): string | undefined {
   return native ? canonicalScenario(native) : undefined;
 }
 
+// Shared by both the per-dataset dim/highlight logic below and the
+// tooltip filter further down -- a run "matches" a HoverFilter exactly
+// the same way in both places, so this is the one place that decides it.
+function matchesHover(hovered: HoverFilter | undefined, model: string, scenario: string | undefined): boolean {
+  if (!hovered) return false;
+  if (hovered.type === "model") return hovered.value === model;
+  if (hovered.type === "scenario") return hovered.value === scenario;
+  return !!scenario && isSspScenario(scenario);
+}
+
 // Used only when colorBy="scenario" (a model's own article page, where
 // every line is already the same model -- modelColor() would make every
 // line identical). Purely a display palette, not derived from anything
@@ -132,13 +142,7 @@ export default function TemperatureChart({
       const run = series[i];
       const model = run.model;
       const scenario = scenarioOf(run.params);
-      const isMatch =
-        !!hovered &&
-        (hovered.type === "model"
-          ? hovered.value === model
-          : hovered.type === "scenario"
-            ? hovered.value === scenario
-            : !!scenario && isSspScenario(scenario));
+      const isMatch = matchesHover(hovered, model, scenario);
       const dimmed = !!hovered && !isMatch;
       const label = colorBy === "scenario" ? scenario ?? "unknown" : model;
       const baseColor = colorBy === "scenario" ? scenarioColors.get(scenario ?? "unknown")! : modelColor(model);
@@ -151,6 +155,14 @@ export default function TemperatureChart({
         pointHoverRadius: 4,
         spanGaps: true,
         order: 2,
+        // Not real Chart.js dataset properties -- read back in the
+        // tooltip filter below (via chartRef's live data, see
+        // hoveredRef) to decide whether this run matches the current
+        // HoverFilter, without re-deriving model/scenario from a
+        // tooltip item's label (which is just display text, and for
+        // colorBy="scenario" doesn't even include the model).
+        __model: model,
+        __scenario: scenario,
       };
     });
 
@@ -165,10 +177,21 @@ export default function TemperatureChart({
       pointHoverRadius: 4,
       spanGaps: true,
       order: 1,
+      // Always shown in the tooltip regardless of any active
+      // HoverFilter -- see the tooltip filter below.
+      __isAverage: true,
     };
 
     return { datasets: [...perRun, average] };
   }, [series, hovered, colorBy]);
+
+  // Read inside the tooltip filter below instead of closing over `hovered`
+  // directly -- the chart-creation effect (right below) deliberately only
+  // runs once (see its own comment), so a filter callback defined inside
+  // it would otherwise always see whatever `hovered` was at mount time.
+  // Kept current by the hover-update effect further down, the same place
+  // that already pushes new dataset colors into the live chart instance.
+  const hoveredRef = useRef<HoverFilter>(hovered ?? null);
 
   // Creates the chart once per (windowMin/windowMax/aspectRatio/canvas
   // presence) -- deliberately NOT re-run on every `hovered` change. A
@@ -209,7 +232,24 @@ export default function TemperatureChart({
         },
         plugins: {
           legend: { display: legend, position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } },
-          tooltip: { mode: "nearest", intersect: false },
+          tooltip: {
+            mode: "nearest",
+            intersect: false,
+            // While a HoverFilter is active (plain mouse hover, or a
+            // click-pinned legend item sticking it -- see the home
+            // page's own pinned/hovered split), only show tooltip
+            // entries for runs that actually match it, same "model"/
+            // "scenario"/"ssp" semantics as the dim/highlight logic
+            // above (matchesHover) -- not every nearby line regardless
+            // of what's highlighted. The average line is always shown.
+            filter: (item) => {
+              const h = hoveredRef.current;
+              if (!h) return true;
+              const ds = item.dataset as any;
+              if (ds.__isAverage) return true;
+              return matchesHover(h, ds.__model, ds.__scenario);
+            },
+          },
         },
       },
     });
@@ -235,10 +275,11 @@ export default function TemperatureChart({
   // Hover (and any other dataset-only change) updates the existing
   // instance in place instead of recreating it -- no resize flash.
   useEffect(() => {
+    hoveredRef.current = hovered ?? null;
     if (!chartData || !chartRef.current) return;
     chartRef.current.data.datasets = chartData.datasets as any;
     chartRef.current.update();
-  }, [chartData]);
+  }, [chartData, hovered]);
 
   if (!chartData) return <p className="public-chart-empty">No runs to plot yet.</p>;
 

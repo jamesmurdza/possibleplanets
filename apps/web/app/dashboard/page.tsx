@@ -27,8 +27,15 @@ export default function DashboardPage() {
   // new run shows up in the list (including any shift-clicked batch
   // extras, which never had a single drawer to open anyway).
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  // Bumped on every submission (plain or cache-hit) so RunsPanel -- which
+  // stays mounted across tab switches, see this file's own module comment
+  // -- knows to refetch right away instead of waiting on its own poll
+  // loop, which can't pick up a run it doesn't know exists yet. See
+  // RunsPanel.tsx's refreshSignal prop doc comment for the full why.
+  const [runsRefreshSignal, setRunsRefreshSignal] = useState(0);
 
   function onRunSubmitted() {
+    setRunsRefreshSignal((n) => n + 1);
     setTab("runs");
   }
 
@@ -48,7 +55,12 @@ export default function DashboardPage() {
           <NewRunPanel onRunSubmitted={onRunSubmitted} onViewCached={onViewCached} />
         </div>
         <div style={{ display: tab === "runs" ? "block" : "none" }}>
-          <RunsPanel selectedRunId={selectedRunId} onSelectRun={setSelectedRunId} onNewRun={() => setTab("new")} />
+          <RunsPanel
+            selectedRunId={selectedRunId}
+            onSelectRun={setSelectedRunId}
+            onNewRun={() => setTab("new")}
+            refreshSignal={runsRefreshSignal}
+          />
         </div>
         <div style={{ display: tab === "compare" ? "block" : "none" }}>
           <ComparePanel />
