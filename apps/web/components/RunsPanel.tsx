@@ -59,6 +59,36 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`status-pill status-pill-${status}`}>{status}</span>;
 }
 
+// A clickable <th> for the Runs table -- shows an up/down arrow only on
+// whichever column is the current sort key (see RunsPanel's toggleSort),
+// nothing on the rest. Clicking the already-active column flips direction
+// instead of resorting by a different key -- see toggleSort.
+function SortableHeader({
+  label,
+  sortKeyName,
+  sortKey,
+  sortDir,
+  onSort,
+}: {
+  label: string;
+  sortKeyName: string;
+  sortKey: string | null;
+  sortDir: "asc" | "desc";
+  onSort: (key: string) => void;
+}) {
+  const active = sortKey === sortKeyName;
+  return (
+    <th>
+      <button type="button" className="runs-table-sort-button" onClick={() => onSort(sortKeyName)}>
+        {label}
+        <span className="runs-table-sort-arrow" aria-hidden="true">
+          {active ? (sortDir === "asc" ? "▲" : "▼") : ""}
+        </span>
+      </button>
+    </th>
+  );
+}
+
 export interface RunsPanelProps {
   // Controlled, not local state -- a New Run submission (see
   // NewRunPanel.tsx's onRunSubmitted) sets this from OUTSIDE this
@@ -93,6 +123,12 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
   const [filterModel, setFilterModel] = useState(ALL);
   const [filterScenario, setFilterScenario] = useState(ALL);
   const [filterStatus, setFilterStatus] = useState(ALL);
+  // Null sortKey means "server's own default order" (started_at DESC,
+  // already how GET /v1/runs returns rows -- see lib/db.ts) -- sorting is
+  // otherwise purely client-side over the already-fetched/filtered list,
+  // same reasoning as filtering above.
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   // Checkbox selection for bulk delete -- independent of selectedRunId
   // (which run's drawer is open), see the header comment above.
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -236,6 +272,50 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
     if (filterStatus !== ALL && r.status !== filterStatus) return false;
     return true;
   });
+
+  // A run's own duration for sort purposes -- duration_seconds once
+  // finished, otherwise its live elapsed time (same value the Duration
+  // column itself shows while running/queued -- see formatElapsed), so
+  // sorting by Duration doesn't just always push every still-in-progress
+  // row to one end regardless of how long it's actually been running.
+  function sortableDurationSeconds(r: RunListItem): number {
+    if (typeof r.duration_seconds === "number") return r.duration_seconds;
+    if (r.status === "running" || r.status === "queued") {
+      return Math.max(0, (Date.now() - new Date(r.started_at).getTime()) / 1000);
+    }
+    return -1;
+  }
+
+  const SORT_ACCESSORS: Record<string, (r: RunListItem) => string | number> = {
+    model: (r) => r.model,
+    version: (r) => r.model_version_number ?? "",
+    params: (r) => summarizeParams(r.params),
+    status: (r) => r.status,
+    duration: sortableDurationSeconds,
+    started: (r) => new Date(r.started_at).getTime(),
+  };
+
+  const sortedRuns = sortKey
+    ? [...filteredRuns].sort((a, b) => {
+        const av = SORT_ACCESSORS[sortKey](a);
+        const bv = SORT_ACCESSORS[sortKey](b);
+        const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
+        return sortDir === "asc" ? cmp : -cmp;
+      })
+    : filteredRuns;
+
+  function toggleSort(key: string) {
+    if (sortKey !== key) {
+      setSortKey(key);
+      // Started defaults to newest-first (matching the server's own
+      // ORDER BY started_at DESC -- see lib/db.ts) since that's the
+      // existing/expected order; every other column defaults to
+      // ascending on its first click, the more conventional default.
+      setSortDir(key === "started" ? "desc" : "asc");
+    } else {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    }
+  }
 
   // Dropped from `checkedIds` whenever the list is refreshed and a
   // previously-checked run has disappeared from it (deleted by someone
@@ -460,16 +540,28 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                     onChange={toggleCheckAll}
                   />
                 </th>
-                <th>Model</th>
-                <th>Version</th>
-                <th>Params</th>
-                <th>Status</th>
-                <th>Duration</th>
-                <th>Started</th>
+                <SortableHeader label="Model" sortKeyName="model" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHeader label="Version" sortKeyName="version" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHeader label="Params" sortKeyName="params" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHeader label="Status" sortKeyName="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHeader
+                  label="Duration"
+                  sortKeyName="duration"
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={toggleSort}
+                />
+                <SortableHeader
+                  label="Started"
+                  sortKeyName="started"
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={toggleSort}
+                />
               </tr>
             </thead>
             <tbody>
-              {filteredRuns.length === 0 && (
+              {sortedRuns.length === 0 && (
                 <tr>
                   <td colSpan={7} className="runs-table-empty">
                     {loading
@@ -480,7 +572,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                   </td>
                 </tr>
               )}
-              {filteredRuns.map((r) => (
+              {sortedRuns.map((r) => (
                 <tr
                   key={r.run_id}
                   className={r.run_id === selectedRunId ? "selected" : ""}

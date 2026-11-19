@@ -567,9 +567,34 @@ a.icon-button {
   text-align: left;
   font-weight: 500;
   color: var(--color-text-muted);
-  padding: 0.6rem 1rem;
+  padding: 0;
   border-bottom: 1px solid var(--color-border);
   white-space: nowrap;
+}
+
+/* Fills the whole <th> (padding moved here from .runs-table th itself)
+   so the entire header cell is clickable, not just the label text. */
+.runs-table-sort-button {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  font: inherit;
+  font-weight: 500;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+}
+
+.runs-table-sort-button:hover {
+  color: var(--color-text);
+}
+
+.runs-table-sort-arrow {
+  font-size: 0.65rem;
+  color: var(--color-accent);
 }
 
 .runs-table td {
@@ -613,6 +638,14 @@ a.icon-button {
 .runs-table-checkbox-col {
   width: 2rem;
   padding-right: 0 !important;
+}
+
+/* .runs-table th's own padding moved onto .runs-table-sort-button above
+   (the bare <th> is 0 padding now, so the button can fill and make the
+   whole header cell clickable) -- this one column has no sort button,
+   so it needs its vertical/left padding restored directly. */
+th.runs-table-checkbox-col {
+  padding: 0.6rem 0 0.6rem 1rem !important;
 }
 
 .runs-table-checkbox-col input[type="checkbox"] {
