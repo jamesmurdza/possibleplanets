@@ -725,9 +725,8 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                     />
                   </td>
                   <td>{r.model}</td>
-                  <td className="mono runs-table-params" title={r.model_version ?? undefined}>
+                  <td className="mono" title={r.model_version ?? undefined}>
                     {r.model_version_number ?? "--"}
-                    {r.model_version ? ` (${r.model_version})` : ""}
                   </td>
                   <td className="mono">{summarizeScenario(r.params) || "--"}</td>
                   <td className="mono runs-table-params" title={summarizeExtraParams(r.params)}>
