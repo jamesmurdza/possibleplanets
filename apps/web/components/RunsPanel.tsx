@@ -434,6 +434,15 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
     } catch (err: any) {
       if (activeDetailId.current !== id) return;
       setDetailErr(err.message);
+      // Keep polling through a transient failure (e.g. a 502 from a
+      // gateway error advanceRun hit) instead of silently giving up after
+      // the first one -- without this, one blip permanently froze the
+      // drawer on whatever selectedJob it last had, with no way to find
+      // out the run actually went on to finish (or fail) afterwards short
+      // of closing and reopening the drawer. Guarded by activeDetailId the
+      // same way the success path is, so this can't outlive the user
+      // switching to a different run or closing the drawer.
+      detailPollTimer.current = setTimeout(() => pollDetail(id), 500);
     }
   }
 
@@ -682,7 +691,10 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                     />
                   </td>
                   <td>{r.model}</td>
-                  <td className="mono">{r.model_version_number ?? "--"}</td>
+                  <td className="mono runs-table-params" title={r.model_version ?? undefined}>
+                    {r.model_version_number ?? "--"}
+                    {r.model_version ? ` (${r.model_version})` : ""}
+                  </td>
                   <td className="mono">{summarizeScenario(r.params) || "--"}</td>
                   <td className="mono runs-table-params" title={summarizeExtraParams(r.params)}>
                     {summarizeExtraParams(r.params)}

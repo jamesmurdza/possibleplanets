@@ -654,7 +654,31 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
     // not written yet, or transient -- ignore
   }
 
-  const cmdInfo = await sandbox.process.getSessionCommand(row.session_id, row.cmd_id);
+  let cmdInfo;
+  try {
+    cmdInfo = await sandbox.process.getSessionCommand(row.session_id, row.cmd_id);
+  } catch (err) {
+    // Same reasoning as the daytona.get() catch above -- this throws too
+    // (confirmed by testing: a gcam run whose session had already gone
+    // away hit exactly this, not the daytona.get() lookup, so it never
+    // got the "sandbox lookup failed" treatment at all. It instead threw
+    // all the way up to the route handler, which 502'd without ever
+    // marking the run failed -- so the row just sat "running" forever,
+    // with nothing in its own `error` column to explain why). Fail the
+    // run here the same way, carrying along whatever liveStdoutTail we
+    // already downloaded above.
+    console.error(`[advanceRun ${runId}] session command lookup failed`, err);
+    const claimed = await claimRunForFinalize(runId);
+    if (claimed) {
+      await finishRunFailed(
+        runId,
+        { code: "gateway_error", message: `session command lookup failed: ${String(err)}`, stdout_tail: liveStdoutTail ?? undefined },
+        elapsedSeconds(startedAt),
+      );
+    }
+    row = (await getRun(runId))!;
+    return toView(row);
+  }
 
   if (cmdInfo.exitCode === undefined || cmdInfo.exitCode === null) {
     if (deadlinePassed) {
