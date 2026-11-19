@@ -579,6 +579,11 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
         </div>
 
         <div className="table-toolbar-actions">
+          {selectedJob && (
+            <button type="button" className="text-button" onClick={runAgain} disabled={runAgainBusy}>
+              {runAgainBusy ? "Submitting..." : "Run again"}
+            </button>
+          )}
           <button
             type="button"
             className={`icon-button danger${checkedIds.size > 0 ? " active" : ""}`}
@@ -849,14 +854,12 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
               unmounting/remounting the canvas on every tab switch would
               lose the chart until the next poll redraws it. */}
           <div style={{ display: drawerTab === "details" ? undefined : "none" }}>
-            {selectedJob && (
-              <div className="drawer-actions">
-                <button type="button" onClick={runAgain} disabled={runAgainBusy}>
-                  {runAgainBusy ? "Submitting..." : "Run again"}
-                </button>
-                {runAgainErr && <p className="panel-error">{runAgainErr}</p>}
-              </div>
-            )}
+            {/* Run again's own button lives in the table toolbar now (next
+                to the delete icon button), since it already needs
+                selectedJob to be the one it acts on -- just the error from
+                that same action stays here, in the drawer, not floating
+                in the toolbar. */}
+            {runAgainErr && <p className="panel-error">{runAgainErr}</p>}
             {selectedJob?.status === "succeeded" ? (
               <canvas ref={canvasRef} height={380}></canvas>
             ) : (
