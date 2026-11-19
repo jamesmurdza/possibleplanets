@@ -743,6 +743,18 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                 <span className="mono">{selectedJob.run_id}</span>
               </div>
               <div className="drawer-meta-row">
+                <span className="drawer-meta-label">Status</span>
+                <span>
+                  <StatusBadge status={selectedJob.status} />
+                  {(selectedJob.status === "running" || selectedJob.status === "queued") &&
+                    selectedJob.progress &&
+                    typeof selectedJob.progress.percent === "number" && (
+                      <span className="progress-tag">{selectedJob.progress.percent}%</span>
+                    )}
+                  {selectedJob.cached && <span className="cached-tag">cached</span>}
+                </span>
+              </div>
+              <div className="drawer-meta-row">
                 <span className="drawer-meta-label">Model</span>
                 <span>{selectedJob.model}</span>
               </div>
@@ -807,35 +819,27 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                   <span className="mono">{summarizeParams(selectedJob.params)}</span>
                 </div>
               )}
-              {(selectedJob.status === "running" || selectedJob.status === "queued") &&
-                selectedJob.progress &&
-                typeof selectedJob.progress.percent === "number" && (
-                  <div className="drawer-meta-row">
-                    <span className="drawer-meta-label">Progress</span>
-                    <span>{selectedJob.progress.percent}%</span>
-                  </div>
-                )}
+              <div className="drawer-meta-row">
+                <span className="drawer-meta-label">Started</span>
+                <span>{formatWhen(selectedJob.started_at)}</span>
+              </div>
               {typeof selectedJob.duration_seconds === "number" ? (
                 <div className="drawer-meta-row">
                   <span className="drawer-meta-label">Duration</span>
                   <span>{formatDuration(selectedJob.duration_seconds)}</span>
                 </div>
               ) : (
-                (selectedJob.status === "running" || selectedJob.status === "queued") &&
-                // RunJob (this detail response) doesn't carry started_at --
-                // reuse the already-fetched list row's copy of it instead
-                // of widening that response just for this. Ticks up in
-                // step with pollDetail's own 500ms poll while open, same
-                // as the table's version (see formatElapsed's comment).
-                (() => {
-                  const listRow = runs.find((r) => r.run_id === selectedJob.run_id);
-                  return listRow ? (
-                    <div className="drawer-meta-row">
-                      <span className="drawer-meta-label">Duration</span>
-                      <span>{formatElapsed(listRow.started_at)}</span>
-                    </div>
-                  ) : null;
-                })()
+                // Ticks up in step with pollDetail's own 500ms poll while
+                // open, same as the table's own live "Started" column (see
+                // formatElapsed's comment) -- started_at is now part of
+                // RunJob itself (see its own doc comment), no need to
+                // reach into the already-fetched list row for it.
+                (selectedJob.status === "running" || selectedJob.status === "queued") && (
+                  <div className="drawer-meta-row">
+                    <span className="drawer-meta-label">Duration</span>
+                    <span>{formatElapsed(selectedJob.started_at)}</span>
+                  </div>
+                )
               )}
             </div>
           )}
@@ -877,12 +881,20 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
               return (
                 <div className="drawer-raw-output">
                   {rawOutput ? (
-                    // Exactly what the model process printed to
-                    // stdout/stderr (tail-capped -- see RunJob's own
-                    // stdout_tail/live_stdout_tail comments), for
-                    // debugging a run whose result doesn't make sense --
-                    // not reformatted/parsed in any way.
-                    <pre className="drawer-raw-output-pre">{rawOutput}</pre>
+                    <>
+                      {/* The run command's stdout and stderr are combined
+                          into one stream before this app ever sees them
+                          (`> file 2>&1` in buildWrappedCommand, plus most
+                          models' own run.py merging their subprocess's
+                          stderr the same way) -- there's no separate
+                          stderr to show, this already includes it. */}
+                      <p className="chart-hint">Combined stdout + stderr.</p>
+                      {/* Tail-capped -- see RunJob's own stdout_tail/
+                          live_stdout_tail comments -- for debugging a run
+                          whose result doesn't make sense, not reformatted/
+                          parsed in any way. */}
+                      <pre className="drawer-raw-output-pre">{rawOutput}</pre>
+                    </>
                   ) : (
                     <p className="chart-hint">{isRunning ? "No output captured yet." : "No output was captured for this run."}</p>
                   )}
