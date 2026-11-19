@@ -1235,18 +1235,29 @@ th.runs-table-checkbox-col {
   color: var(--color-text-faint);
 }
 
-/* New Run form's collapsible "Advanced" section (currently just the
-   max-run-time override) -- the toggle button itself needs a bit of
-   breathing room above/below since .text-button alone is meant for
-   inline use next to other controls, not as a standalone section header.
-   display: inline-flex (not block/full-width) so the button is only as
-   wide as its own label+triangle, not stretched across the form. */
+/* New Run form's collapsible "Advanced" section header -- a <button>
+   (for the click/toggle), but meant to look exactly like the plain
+   .form-field-block > .form-field-label text "Parameters (optional)"
+   sits as, with the disclosure triangle as the ONLY visual difference.
+   Resets the generic `button` rule's border/background/padding (that
+   chrome is what made this look like an actual button instead of a
+   section label) -- paired with the "form-field-label" class in
+   NewRunPanel.tsx for the matching font-size/weight/color, and no
+   margin-bottom of its own since .form-field-block's own `gap` already
+   spaces it from whatever's below, same as Parameters' span. display:
+   inline-flex (not block/full-width) so the button is only as wide as
+   its own label+triangle, not stretched across the form. */
 .advanced-toggle {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  margin-bottom: 0.5rem;
+  border: none;
+  background: none;
   padding: 0;
+}
+
+.advanced-toggle:hover:not(:disabled) {
+  border-color: transparent;
 }
 
 .disclosure-triangle {
