@@ -61,9 +61,21 @@ export interface RunsPanelProps {
   // the top right of this panel (Runs is the default landing tab now, so
   // starting a run needs to be reachable from here, not just the sidebar).
   onNewRun: () => void;
+  // Bumped by the dashboard (see app/dashboard/page.tsx's onRunSubmitted)
+  // every time a New Run submission completes, so a just-submitted run
+  // shows up immediately on switching to this tab instead of only
+  // appearing once refreshList's own poll loop happens to catch it (or
+  // never, if nothing else in the list is in progress -- see this
+  // component's own useEffect on `runs` below: the 1s poll is keyed on
+  // whether anything already IN the list is active, which a run that
+  // hasn't been fetched into the list yet doesn't satisfy). This stays
+  // mounted across tab switches (app/dashboard/page.tsx toggles
+  // display:none, not unmount/remount), so there's no mount effect to
+  // rely on here either.
+  refreshSignal?: number;
 }
 
-export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: RunsPanelProps) {
+export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refreshSignal }: RunsPanelProps) {
   const [runs, setRuns] = useState<RunListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -173,6 +185,22 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runs]);
+
+  // Fires an immediate refetch whenever the dashboard bumps refreshSignal
+  // -- see this prop's own doc comment for why the regular poll loop
+  // alone can't be relied on to pick up a just-submitted run. Skipped on
+  // the very first render (refreshSignal starts at 0/undefined and the
+  // mount effect above already does this same fetch) via the ref below,
+  // so this doesn't double-fetch on initial mount.
+  const sawRefreshSignal = useRef(false);
+  useEffect(() => {
+    if (!sawRefreshSignal.current) {
+      sawRefreshSignal.current = true;
+      return;
+    }
+    refreshList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
 
   // Filtering is purely client-side over the already-fetched list -- the
   // list is already a lightweight, capped-size projection (GET /v1/runs),
