@@ -1240,6 +1240,29 @@ th.runs-table-checkbox-col {
   display: none;
 }
 
+/* Run drawer's collapsible "Raw output" section -- same disclosure
+   triangle as New Run's Advanced toggle (see .advanced-toggle/
+   .disclosure-triangle in this file). */
+.drawer-raw-output {
+  margin-top: 1.1rem;
+}
+
+.drawer-raw-output-pre {
+  margin: 0.4rem 0 0;
+  padding: 0.7rem 0.8rem;
+  max-height: 16rem;
+  overflow: auto;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 .loading-overlay {
   position: absolute;
   inset: 0;

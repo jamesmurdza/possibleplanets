@@ -48,6 +48,7 @@ import {
   insertRun,
   getRun,
   updateRunProgress,
+  updateRunLiveOutput,
   claimRunForFinalize,
   finishRunSucceeded,
   finishRunFailed,
@@ -403,6 +404,19 @@ export async function submitRun(
           cached: true,
           progress: { percent: 100 },
           duration_seconds: 0,
+          // Nothing actually ran just now -- this is an existing
+          // run_cache answer, not a fresh process invocation, so there's
+          // no new stdout to show. The real run that originally produced
+          // this result has its own row (and its own stdout_tail) still
+          // sitting in `runs`, findable via findLatestSucceededRun.
+          stdout_tail: null,
+          live_stdout_tail: null,
+          // Same reasoning as stdout_tail above -- no new sandbox was
+          // created for a cache hit, so there's nothing here to show.
+          sandbox_id: null,
+          session_id: null,
+          cmd_id: null,
+          daytona_snapshot: null,
         },
       };
     }
@@ -486,9 +500,44 @@ export interface RunView {
   cached: boolean;
   progress: { percent: number } | null;
   duration_seconds: number | null;
+  // The model process's raw captured stdout+stderr, tail-capped -- see
+  // this app's db.ts stdout_tail column comment. Present for both
+  // succeeded and failed runs (falls back to error.stdout_tail for an
+  // older failed row written before this column existed), null if
+  // there's genuinely nothing captured (e.g. a run that never got far
+  // enough to produce any). Meant for debugging a confusing result, not
+  // part of the model's own (parsed, structured) `result`.
+  stdout_tail: string | null;
+  // Best-effort stdout+stderr captured WHILE the run is still in progress --
+  // see live_stdout_tail's own column comment in lib/db.ts. Only ever
+  // meaningful while status is "running"; once a run finishes, use
+  // stdout_tail above instead (this is left stale after that point).
+  live_stdout_tail: string | null;
+  // The Daytona sandbox this run actually executed in -- null for a
+  // cache-hit inline result (see submitRun's own inline branch; nothing
+  // ran, so there's no sandbox) or a row written before per-run sandbox
+  // tracking existed. Still present after the sandbox itself has been
+  // torn down (cleanupSandboxAndSession deletes the live Daytona
+  // resource once a run finishes, but never clears this column) -- it's
+  // kept purely as a historical reference, not a live handle; there's no
+  // guarantee `daytona.get(sandbox_id)` would still succeed by the time
+  // anyone looks at this.
+  sandbox_id: string | null;
+  session_id: string | null;
+  cmd_id: string | null;
+  // Which pre-built Daytona snapshot that sandbox was created from (see
+  // models.ts's own daytona_snapshot doc comment) -- looked up from the
+  // CURRENT lib/models.ts registry entry for this run's model, so for an
+  // older run this may not exactly match what was actually used if that
+  // model's snapshot has since been rebuilt/renamed (model_version/
+  // model_version_number are the fields actually frozen at submit time
+  // for that reason -- see their own comments). Null if the model's been
+  // removed from the registry entirely since this run.
+  daytona_snapshot: string | null;
 }
 
 function toView(row: RunRow): RunView {
+  const error = row.error as { code: string; message: string; stdout_tail?: string } | null;
   return {
     run_id: row.run_id,
     model: row.model,
@@ -500,10 +549,16 @@ function toView(row: RunRow): RunView {
     // value they need to handle.
     status: row.status === "finalizing" ? "running" : row.status,
     result: row.result,
+    sandbox_id: row.sandbox_id,
+    session_id: row.session_id,
+    cmd_id: row.cmd_id,
+    daytona_snapshot: getModelOrNull(row.model)?.daytona_snapshot ?? null,
     error: row.error,
     cached: row.cached,
     progress: row.progress,
     duration_seconds: row.duration_seconds,
+    stdout_tail: row.stdout_tail ?? error?.stdout_tail ?? null,
+    live_stdout_tail: row.live_stdout_tail ?? null,
   };
 }
 
@@ -563,6 +618,21 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
     } catch {
       // not written yet, or transient -- ignore
     }
+  }
+
+  // Live stdout+stderr snapshot -- unconditional (unlike the progress read
+  // above, which is gated on supports_progress), since every model writes
+  // RUN_OUTPUT_LOG_PATH via the `> ... 2>&1` redirect regardless of whether
+  // it also emits structured progress. Best-effort: the file may not exist
+  // yet (command hasn't started writing), or the download may transiently
+  // fail; neither should fail the poll.
+  try {
+    const raw = await sandbox.fs.downloadFile(RUN_OUTPUT_LOG_PATH);
+    if (raw && raw.length) {
+      await updateRunLiveOutput(runId, raw.toString().slice(-2000));
+    }
+  } catch {
+    // not written yet, or transient -- ignore
   }
 
   const cmdInfo = await sandbox.process.getSessionCommand(row.session_id, row.cmd_id);
@@ -723,7 +793,11 @@ async function finalizeOutcome(runId: string, row: RunRow, exitCode: number, std
       await putCached(row.model, row.params, parsed, runSeconds);
     }
   }
-  await finishRunSucceeded(runId, parsed, runSeconds, false);
+  // Same 2000-char tail cap already used for a failure (finishRunFailed's
+  // own stdout_tail above) -- enough to debug a confusing-but-"succeeded"
+  // result (what did the model actually print/log) without storing a
+  // potentially huge log in full.
+  await finishRunSucceeded(runId, parsed, runSeconds, false, stdout.slice(-2000));
 }
 
 /**

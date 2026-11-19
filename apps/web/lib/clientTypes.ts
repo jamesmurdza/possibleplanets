@@ -71,6 +71,23 @@ export interface RunJob {
   cached: boolean;
   progress: { percent: number } | null;
   duration_seconds: number | null;
+  // The model process's raw captured stdout+stderr, tail-capped -- see
+  // lib/db.ts's stdout_tail column comment. Present for both succeeded
+  // and failed runs; null if nothing was captured, or for a run that
+  // predates this column. Meant for debugging a confusing result (the
+  // run drawer's own "Raw output" section), not part of `result` itself.
+  stdout_tail: string | null;
+  // Best-effort stdout+stderr captured WHILE the run is still "running" --
+  // see lib/db.ts's live_stdout_tail column comment. Only meaningful while
+  // status is "running"; use stdout_tail above once the run finishes.
+  live_stdout_tail: string | null;
+  // Sandbox details -- see lib/runs.ts's RunView doc comments for each.
+  // All null for a cache-hit inline result (nothing ran) or a run that
+  // predates this tracking.
+  sandbox_id: string | null;
+  session_id: string | null;
+  cmd_id: string | null;
+  daytona_snapshot: string | null;
 }
 
 export interface RunListItem {

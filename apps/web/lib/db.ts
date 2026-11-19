@@ -117,6 +117,22 @@ ALTER TABLE runs ADD COLUMN IF NOT EXISTS supports_progress BOOLEAN NOT NULL DEF
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMPTZ;
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS model_version TEXT;
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS model_version_number TEXT;
+-- The model process's own captured stdout+stderr (see lib/runs.ts's
+-- RUN_OUTPUT_LOG_PATH), tail-capped, for a SUCCEEDED run too -- not just
+-- a failed one. Previously this was only ever kept for a failure (as
+-- error.stdout_tail, still populated there for backwards compat), so
+-- there was no way to see what a model actually printed/logged on a run
+-- that "succeeded" but produced a surprising or confusing result --
+-- exactly the case where a user debugging "I don't know what's
+-- happening" has nothing in-app to look at.
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS stdout_tail TEXT;
+-- Same tail-capped capture as stdout_tail above, but written WHILE a run is
+-- still in progress (see advanceRun's live-read in lib/runs.ts), so a run
+-- that hasn't finished yet still has something to show in the drawer rather
+-- than nothing until it succeeds/fails. stdout_tail itself is only ever
+-- written at finalize time, so it stays null/stale for the whole lifetime of
+-- a still-running run -- this column is what fills that gap.
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS live_stdout_tail TEXT;
 `;
 
 // ensureDb() is called at the top of every exported function below rather
@@ -260,6 +276,18 @@ export interface RunRow {
   deadline_at: string | null;
   started_at: string;
   duration_seconds: number | null;
+  // The model process's raw captured stdout+stderr, tail-capped -- see
+  // this column's own migration comment. Populated for both succeeded
+  // and failed runs; null for a row written before this column existed,
+  // or (for a failed run) one written before stdout_tail was pulled out
+  // into its own column (it may still only live in `error.stdout_tail`
+  // on those older rows -- see RunJob's own comment in lib/runs.ts).
+  stdout_tail: string | null;
+  // See this column's own migration comment above -- the in-progress
+  // counterpart to stdout_tail, kept up to date while the run is still
+  // "running" and left untouched (stale) from that point on once
+  // stdout_tail itself is populated at finalize time.
+  live_stdout_tail: string | null;
 }
 
 export async function insertRun(row: {
@@ -428,6 +456,21 @@ export async function updateRunProgress(runId: string, progress: { percent: numb
 }
 
 /**
+ * Best-effort live snapshot of the model process's stdout+stderr so far --
+ * see live_stdout_tail's own column comment. Guarded on status = 'running'
+ * the same way updateRunProgress is, so a write that races against
+ * finalize (claimRunForFinalize having already flipped the row to
+ * 'finalizing') is a harmless no-op rather than clobbering anything.
+ */
+export async function updateRunLiveOutput(runId: string, stdoutTail: string): Promise<void> {
+  await ensureDb();
+  await getPool().query(
+    "UPDATE runs SET live_stdout_tail = $1, updated_at = now() WHERE run_id = $2 AND status = 'running'",
+    [stdoutTail, runId],
+  );
+}
+
+/**
  * Atomic claim: only the caller whose UPDATE actually matches a still-running
  * row gets to finalize (parse the result, write the cache, delete the
  * sandbox). Guards against two concurrent GET /v1/runs/{id} polls both
@@ -448,12 +491,13 @@ export async function finishRunSucceeded(
   result: unknown,
   durationSeconds: number,
   cached: boolean,
+  stdoutTail?: string | null,
 ): Promise<void> {
   await ensureDb();
   await getPool().query(
     `UPDATE runs SET status = 'succeeded', result = $1, progress = $2, cached = $3,
-       duration_seconds = $4, updated_at = now() WHERE run_id = $5`,
-    [JSON.stringify(result), JSON.stringify({ percent: 100 }), cached, durationSeconds, runId],
+       duration_seconds = $4, stdout_tail = $5, updated_at = now() WHERE run_id = $6`,
+    [JSON.stringify(result), JSON.stringify({ percent: 100 }), cached, durationSeconds, stdoutTail ?? null, runId],
   );
 }
 
@@ -464,8 +508,13 @@ export async function finishRunFailed(
 ): Promise<void> {
   await ensureDb();
   await getPool().query(
-    `UPDATE runs SET status = 'failed', error = $1, duration_seconds = $2, updated_at = now() WHERE run_id = $3`,
-    [JSON.stringify(error), durationSeconds, runId],
+    `UPDATE runs SET status = 'failed', error = $1, duration_seconds = $2, stdout_tail = $3, updated_at = now() WHERE run_id = $4`,
+    // error.stdout_tail is still written too (see RunRow's own comment --
+    // kept for backwards compat with anything reading it off `error`
+    // specifically), duplicated into this column so a failed run's raw
+    // output is available the exact same way a succeeded run's is,
+    // rather than two different shapes depending on outcome.
+    [JSON.stringify(error), durationSeconds, error.stdout_tail ?? null, runId],
   );
 }
 
