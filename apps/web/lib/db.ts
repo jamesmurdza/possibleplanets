@@ -444,6 +444,25 @@ export async function updateRunProgress(runId: string, progress: { percent: numb
 }
 
 /**
+ * Lets the run drawer's own Advanced tab move a still-in-flight run's
+ * deadline (see lib/runs.ts's updateRunDeadline, which also has to keep
+ * the sandbox's own Daytona-side autoStopInterval from cutting the run off
+ * first). Guarded on status IN ('queued', 'running') the same way
+ * updateRunProgress is guarded on 'running' alone -- a queued run (rare,
+ * but possible if Daytona itself is slow to hand back a sandbox) should
+ * still be able to have its deadline raised before it's even started
+ * executing, but a row that's already finalizing/terminal must not have
+ * this clobber whatever's about to be (or already was) written there.
+ */
+export async function updateRunDeadline(runId: string, deadlineAt: Date): Promise<void> {
+  await ensureDb();
+  await getPool().query(
+    "UPDATE runs SET deadline_at = $1, updated_at = now() WHERE run_id = $2 AND status IN ('queued', 'running')",
+    [deadlineAt.toISOString(), runId],
+  );
+}
+
+/**
  * Atomic claim: only the caller whose UPDATE actually matches a still-running
  * row gets to finalize (parse the result, write the cache, delete the
  * sandbox). Guards against two concurrent GET /v1/runs/{id} polls both

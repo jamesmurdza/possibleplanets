@@ -160,7 +160,10 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
   // Collapsed by default -- raw stdout/stderr is a debugging aid (see
   // selectedJob.stdout_tail's own comment), not something to show
   // unasked-for every time a run's drawer opens.
-  const [drawerTab, setDrawerTab] = useState<"details" | "output">("details");
+  const [drawerTab, setDrawerTab] = useState<"details" | "output" | "advanced">("details");
+  const [maxRunTimeInput, setMaxRunTimeInput] = useState("");
+  const [deadlineBusy, setDeadlineBusy] = useState(false);
+  const [deadlineErr, setDeadlineErr] = useState<string | null>(null);
   const [filterModel, setFilterModel] = useState(ALL);
   const [filterScenario, setFilterScenario] = useState(ALL);
   const [filterStatus, setFilterStatus] = useState(ALL);
@@ -472,6 +475,35 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
     }
   }
 
+  // Drawer's Advanced tab -- PATCHes the currently-open run's deadline
+  // (total seconds from its own started_at, same convention as submitRun's
+  // initial max_run_time_seconds -- see updateRunDeadline's own doc
+  // comment) and applies the server's response immediately so the
+  // Details tab's Duration/deadline reflect it without waiting for the
+  // next 500ms poll.
+  async function updateDeadline() {
+    if (!selectedJob) return;
+    const seconds = Number(maxRunTimeInput);
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+      setDeadlineErr("Enter a positive number of seconds");
+      return;
+    }
+    setDeadlineBusy(true);
+    setDeadlineErr(null);
+    try {
+      const job: RunJob = await fetchJson(`/v1/runs/${selectedJob.run_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ max_run_time_seconds: seconds }),
+      });
+      if (activeDetailId.current === selectedJob.run_id) setSelectedJob(job);
+    } catch (err: any) {
+      setDeadlineErr(err.message);
+    } finally {
+      setDeadlineBusy(false);
+    }
+  }
+
   // Driven by selectedRunId (a prop, settable from outside this
   // component) rather than a local "selectRun" click handler owning the
   // whole lifecycle -- a row click just calls onSelectRun(id); this
@@ -484,6 +516,8 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
     setDrawerModelMeta(null);
     setRunAgainErr(null);
     setDrawerTab("details");
+    setMaxRunTimeInput("");
+    setDeadlineErr(null);
     activeDetailId.current = selectedRunId;
     if (selectedRunId) pollDetail(selectedRunId);
     return () => {
@@ -751,6 +785,15 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
               >
                 Output
               </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={drawerTab === "advanced"}
+                className={`drawer-tab${drawerTab === "advanced" ? " active" : ""}`}
+                onClick={() => setDrawerTab("advanced")}
+              >
+                Advanced
+              </button>
             </div>
           )}
           {selectedJob && drawerTab === "details" && (
@@ -912,6 +955,39 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                 </div>
               );
             })()
+          )}
+          {selectedJob && drawerTab === "advanced" && (
+            <div className="drawer-meta">
+              {selectedJob.status === "running" || selectedJob.status === "queued" ? (
+                <>
+                  <div className="drawer-meta-row">
+                    <span className="drawer-meta-label">Current deadline</span>
+                    <span className="mono">{selectedJob.deadline_at ? formatWhen(selectedJob.deadline_at) : "unknown"}</span>
+                  </div>
+                  <p className="chart-hint">
+                    Total seconds from when this run started -- entering the same value twice won&apos;t push the
+                    deadline out any further.
+                  </p>
+                  <div className="form-row">
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      placeholder="e.g. 3600"
+                      value={maxRunTimeInput}
+                      onChange={(e) => setMaxRunTimeInput(e.target.value)}
+                      aria-label="Max run time in seconds"
+                    />
+                    <button type="button" onClick={updateDeadline} disabled={deadlineBusy || !maxRunTimeInput.trim()}>
+                      {deadlineBusy ? "Updating..." : "Update deadline"}
+                    </button>
+                  </div>
+                  {deadlineErr && <p className="panel-error">{deadlineErr}</p>}
+                </>
+              ) : (
+                <p className="chart-hint">This run has already finished -- its deadline can no longer be changed.</p>
+              )}
+            </div>
           )}
         </Drawer>
       )}
