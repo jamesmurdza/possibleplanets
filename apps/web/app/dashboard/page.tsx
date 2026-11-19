@@ -16,7 +16,9 @@ import ComparePanel from "../../components/ComparePanel";
 // under /dashboard behind a login. The public site took over / (see
 // app/page.tsx) and has no sidebar at all.
 export default function DashboardPage() {
-  const [tab, setTab] = useState<Tab>("overview");
+  // "runs" is the default landing tab -- see Sidebar.tsx's own ordering
+  // comment for why it leads the nav list too.
+  const [tab, setTab] = useState<Tab>("runs");
   // Which run's drawer is open on the Runs tab -- lifted up here (not
   // RunsPanel's own local state) so New Run can set it directly:
   // submitting a run (or clicking "View cached") switches to the Runs
@@ -39,7 +41,7 @@ export default function DashboardPage() {
           <NewRunPanel onRunSubmitted={onRunSubmitted} />
         </div>
         <div style={{ display: tab === "runs" ? "block" : "none" }}>
-          <RunsPanel selectedRunId={selectedRunId} onSelectRun={setSelectedRunId} />
+          <RunsPanel selectedRunId={selectedRunId} onSelectRun={setSelectedRunId} onNewRun={() => setTab("new")} />
         </div>
         <div style={{ display: tab === "compare" ? "block" : "none" }}>
           <ComparePanel />

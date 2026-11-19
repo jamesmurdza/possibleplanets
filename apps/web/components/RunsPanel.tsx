@@ -41,9 +41,13 @@ export interface RunsPanelProps {
   // time), not just a row click inside this table.
   selectedRunId: string | null;
   onSelectRun: (runId: string | null) => void;
+  // Switches the dashboard's own tab to "New Run" -- backs the button at
+  // the top right of this panel (Runs is the default landing tab now, so
+  // starting a run needs to be reachable from here, not just the sidebar).
+  onNewRun: () => void;
 }
 
-export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps) {
+export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: RunsPanelProps) {
   const [runs, setRuns] = useState<RunListItem[]>([]);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [selectedJob, setSelectedJob] = useState<RunJob | null>(null);
@@ -241,6 +245,9 @@ export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps
     <div>
       <div className="panel-header">
         <h2 className="panel-title">Runs</h2>
+        <button type="button" className="primary-button" onClick={onNewRun}>
+          New Run
+        </button>
       </div>
 
       {loadErr && <p className="panel-error">{loadErr}</p>}

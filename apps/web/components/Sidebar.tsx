@@ -2,10 +2,13 @@
 
 export type Tab = "overview" | "new" | "runs" | "compare";
 
+// Runs is the default landing tab (see dashboard/page.tsx) and leads the
+// list to match -- New Run right below it, Charts (formerly "Overview",
+// moved down to make room) after that, Compare last.
 const ITEMS: { id: Tab; label: string }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "new", label: "New Run" },
   { id: "runs", label: "Runs" },
+  { id: "new", label: "New Run" },
+  { id: "overview", label: "Charts" },
   { id: "compare", label: "Compare" },
 ];
 
