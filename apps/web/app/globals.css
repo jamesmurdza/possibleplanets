@@ -1899,13 +1899,14 @@ th.runs-table-checkbox-col {
 }
 
 /* --- Chart legend (below the home page's main chart) ---
-   Two groups: one colored entry per model (matching TemperatureChart's
-   own modelColor -- hovering highlights that model's lines), and a
-   single neutral "SSPs" entry standing for the whole SSP framework
-   across every model that uses it (hovering highlights every SSP line
-   at once, see TemperatureChart's hovered.type === "ssp"). Deliberately
-   NOT one entry per scenario -- with up to 8 SSPs that'd be a wall of
-   near-identically-colored text, not a useful legend. */
+   Two separate rows, each its own .public-chart-legend: one colored
+   entry per model (matching TemperatureChart's own modelColor --
+   hovering highlights that model's lines), directly below it one
+   neutral-colored (SSP_ICON_COLOR) road-icon entry per SSP (hovering
+   highlights that one scenario's lines across every model, same
+   {type: "scenario", value} TemperatureChart already uses for the
+   Emissions scenarios cards below) -- not one combined row, so the
+   models row doesn't get crowded out by up to 8 SSP entries. */
 .public-chart-legend {
   display: flex;
   flex-wrap: wrap;
@@ -1915,6 +1916,14 @@ th.runs-table-checkbox-col {
   margin-top: 1rem;
   padding-top: 0.9rem;
   border-top: 1px solid var(--pp-grey-light);
+}
+
+/* The second row (one road icon per SSP) sits directly under the first
+   -- no second border/top-padding repeating the chart/legend divider. */
+.public-chart-legend-ssps {
+  margin-top: 0.6rem;
+  padding-top: 0;
+  border-top: none;
 }
 
 .public-chart-legend-group {
