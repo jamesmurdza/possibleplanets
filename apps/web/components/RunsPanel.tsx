@@ -881,20 +881,16 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
               return (
                 <div className="drawer-raw-output">
                   {rawOutput ? (
-                    <>
-                      {/* The run command's stdout and stderr are combined
-                          into one stream before this app ever sees them
-                          (`> file 2>&1` in buildWrappedCommand, plus most
-                          models' own run.py merging their subprocess's
-                          stderr the same way) -- there's no separate
-                          stderr to show, this already includes it. */}
-                      <p className="chart-hint">Combined stdout + stderr.</p>
-                      {/* Tail-capped -- see RunJob's own stdout_tail/
-                          live_stdout_tail comments -- for debugging a run
-                          whose result doesn't make sense, not reformatted/
-                          parsed in any way. */}
-                      <pre className="drawer-raw-output-pre">{rawOutput}</pre>
-                    </>
+                    // The run command's stdout and stderr are combined into
+                    // one stream before this app ever sees them (`> file
+                    // 2>&1` in buildWrappedCommand, plus most models' own
+                    // run.py merging their subprocess's stderr the same
+                    // way) -- there's no separate stderr to show, this
+                    // already includes it. Tail-capped -- see RunJob's own
+                    // stdout_tail/live_stdout_tail comments -- for
+                    // debugging a run whose result doesn't make sense, not
+                    // reformatted/parsed in any way.
+                    <pre className="drawer-raw-output-pre">{rawOutput}</pre>
                   ) : (
                     <p className="chart-hint">{isRunning ? "No output captured yet." : "No output was captured for this run."}</p>
                   )}
