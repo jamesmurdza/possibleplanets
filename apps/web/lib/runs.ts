@@ -409,6 +409,12 @@ export async function submitRun(
           // this result has its own row (and its own stdout_tail) still
           // sitting in `runs`, findable via findLatestSucceededRun.
           stdout_tail: null,
+          // Same reasoning as stdout_tail above -- no new sandbox was
+          // created for a cache hit, so there's nothing here to show.
+          sandbox_id: null,
+          session_id: null,
+          cmd_id: null,
+          daytona_snapshot: null,
         },
       };
     }
@@ -500,6 +506,27 @@ export interface RunView {
   // enough to produce any). Meant for debugging a confusing result, not
   // part of the model's own (parsed, structured) `result`.
   stdout_tail: string | null;
+  // The Daytona sandbox this run actually executed in -- null for a
+  // cache-hit inline result (see submitRun's own inline branch; nothing
+  // ran, so there's no sandbox) or a row written before per-run sandbox
+  // tracking existed. Still present after the sandbox itself has been
+  // torn down (cleanupSandboxAndSession deletes the live Daytona
+  // resource once a run finishes, but never clears this column) -- it's
+  // kept purely as a historical reference, not a live handle; there's no
+  // guarantee `daytona.get(sandbox_id)` would still succeed by the time
+  // anyone looks at this.
+  sandbox_id: string | null;
+  session_id: string | null;
+  cmd_id: string | null;
+  // Which pre-built Daytona snapshot that sandbox was created from (see
+  // models.ts's own daytona_snapshot doc comment) -- looked up from the
+  // CURRENT lib/models.ts registry entry for this run's model, so for an
+  // older run this may not exactly match what was actually used if that
+  // model's snapshot has since been rebuilt/renamed (model_version/
+  // model_version_number are the fields actually frozen at submit time
+  // for that reason -- see their own comments). Null if the model's been
+  // removed from the registry entirely since this run.
+  daytona_snapshot: string | null;
 }
 
 function toView(row: RunRow): RunView {
@@ -515,6 +542,10 @@ function toView(row: RunRow): RunView {
     // value they need to handle.
     status: row.status === "finalizing" ? "running" : row.status,
     result: row.result,
+    sandbox_id: row.sandbox_id,
+    session_id: row.session_id,
+    cmd_id: row.cmd_id,
+    daytona_snapshot: getModelOrNull(row.model)?.daytona_snapshot ?? null,
     error: row.error,
     cached: row.cached,
     progress: row.progress,

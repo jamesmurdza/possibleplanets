@@ -77,6 +77,13 @@ export interface RunJob {
   // predates this column. Meant for debugging a confusing result (the
   // run drawer's own "Raw output" section), not part of `result` itself.
   stdout_tail: string | null;
+  // Sandbox details -- see lib/runs.ts's RunView doc comments for each.
+  // All null for a cache-hit inline result (nothing ran) or a run that
+  // predates this tracking.
+  sandbox_id: string | null;
+  session_id: string | null;
+  cmd_id: string | null;
+  daytona_snapshot: string | null;
 }
 
 export interface RunListItem {

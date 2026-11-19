@@ -716,6 +716,31 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                 <span className="drawer-meta-label">Build</span>
                 <span className="mono">{selectedJob.model_version ?? "unknown (run predates version tracking)"}</span>
               </div>
+              {selectedJob.sandbox_id ? (
+                <>
+                  <div className="drawer-meta-row">
+                    <span className="drawer-meta-label">Snapshot</span>
+                    <span className="mono">{selectedJob.daytona_snapshot ?? "unknown"}</span>
+                  </div>
+                  <div className="drawer-meta-row">
+                    <span className="drawer-meta-label">Sandbox ID</span>
+                    <span className="mono">{selectedJob.sandbox_id}</span>
+                  </div>
+                  <div className="drawer-meta-row">
+                    <span className="drawer-meta-label">Session ID</span>
+                    <span className="mono">{selectedJob.session_id ?? "--"}</span>
+                  </div>
+                  <div className="drawer-meta-row">
+                    <span className="drawer-meta-label">Command ID</span>
+                    <span className="mono">{selectedJob.cmd_id ?? "--"}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="drawer-meta-row">
+                  <span className="drawer-meta-label">Sandbox</span>
+                  <span>{selectedJob.cached ? "none (cached result)" : "unknown (run predates sandbox tracking)"}</span>
+                </div>
+              )}
               {drawerModelMeta ? (
                 <>
                   <div className="drawer-meta-row">
