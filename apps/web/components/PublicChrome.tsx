@@ -104,7 +104,13 @@ export function PublicHeader() {
         </Link>
         <nav className="site-nav">
           <ModelsNavDropdown />
-          <Link href="/account" className="page-link">
+          {/* Always points at /dashboard itself, not /account -- proxy.ts
+              gates /dashboard/* on the auth cookie and redirects straight
+              to /account (preserving ?next=/dashboard) only if it's
+              missing, so an already-logged-in visitor goes straight to
+              the dashboard in one click instead of landing on the login
+              page again. */}
+          <Link href="/dashboard" className="page-link">
             Dashboard
           </Link>
         </nav>
