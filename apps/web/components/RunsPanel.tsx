@@ -65,6 +65,7 @@ export interface RunsPanelProps {
 
 export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: RunsPanelProps) {
   const [runs, setRuns] = useState<RunListItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [selectedJob, setSelectedJob] = useState<RunJob | null>(null);
   const [detailErr, setDetailErr] = useState<string | null>(null);
@@ -105,6 +106,14 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
       setLoadErr(null);
     } catch (err: any) {
       setLoadErr(err.message);
+    } finally {
+      // Only ever matters for the very first call (the mount effect
+      // below) -- every later refreshList (the background poll,
+      // advanceInProgressRuns) is a no-op here since loading is already
+      // false by then. Set in `finally` so an error on that first load
+      // still clears the "Loading runs..." state instead of leaving the
+      // table stuck there forever.
+      setLoading(false);
     }
   }
 
@@ -426,7 +435,11 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
               {filteredRuns.length === 0 && (
                 <tr>
                   <td colSpan={7} className="runs-table-empty">
-                    {runs.length === 0 ? 'No runs yet -- start one from "New Run".' : "No runs match these filters."}
+                    {loading
+                      ? "Loading runs..."
+                      : runs.length === 0
+                        ? 'No runs yet -- start one from "New Run".'
+                        : "No runs match these filters."}
                   </td>
                 </tr>
               )}
