@@ -487,7 +487,9 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                   </td>
                   <td>{r.model}</td>
                   <td className="mono">{r.model_version_number ?? "--"}</td>
-                  <td className="mono">{summarizeParams(r.params)}</td>
+                  <td className="mono runs-table-params" title={summarizeParams(r.params)}>
+                    {summarizeParams(r.params)}
+                  </td>
                   <td>
                     <StatusBadge status={r.status} />
                     {(r.status === "running" || r.status === "queued") &&

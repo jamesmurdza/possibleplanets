@@ -595,6 +595,21 @@ a.icon-button {
   border-bottom: none;
 }
 
+/* Params can carry an arbitrary number of model-native extras
+   (summarizeParams joins scenario + every non-scenario key=value pair) --
+   left uncapped, this cell's content alone could stretch far wider than
+   every other column combined, visually shoving Status/Duration/Started
+   out past the table's own container (still just as wide as its content,
+   not actually clipped -- .table-scroll's overflow-x: auto handling
+   that). Capped the same way .error-tag already is (ellipsis + a native
+   title tooltip for the full value) instead of letting one row's worth
+   of params dictate every row's column widths. */
+.runs-table-params {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .runs-table-checkbox-col {
   width: 2rem;
   padding-right: 0 !important;
