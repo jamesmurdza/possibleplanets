@@ -915,15 +915,21 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                 that same action stays here, in the drawer, not floating
                 in the toolbar. */}
             {runAgainErr && <p className="panel-error">{runAgainErr}</p>}
+            {/* The centered placeholder below is sized for a short status
+                word, not a sentence -- a failed run's error.message can be
+                an arbitrarily long raw string (e.g. a Daytona 502's whole
+                HTML body, seen in practice), which looked bizarre dumped
+                into the middle of the empty chart area. Keep the
+                placeholder itself short and put the real message in its
+                own normally-flowing paragraph instead. */}
+            {selectedJob?.status === "failed" && (
+              <p className="panel-error">{selectedJob.error?.message || "unknown error"}</p>
+            )}
             {selectedJob?.status === "succeeded" ? (
               <canvas ref={canvasRef} height={380}></canvas>
             ) : (
               <div className="chart-placeholder">
-                {selectedJob
-                  ? selectedJob.status === "failed"
-                    ? `Failed: ${selectedJob.error?.message || "unknown error"}`
-                    : `${selectedJob.status}...`
-                  : "Loading..."}
+                {selectedJob ? (selectedJob.status === "failed" ? "Failed" : `${selectedJob.status}...`) : "Loading..."}
               </div>
             )}
           </div>
