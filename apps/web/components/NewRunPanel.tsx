@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchJson, buildParams, scenarioDescription, canonicalScenario } from "../lib/clientApi";
 import { scenarioDriverSeries } from "../lib/scenarioDrivers";
-import { modelAssumptions, scenarioAssumptions, type AssumptionSection } from "../lib/assumptions";
+import { scenarioAssumptions, type AssumptionSection } from "../lib/assumptions";
+import { modelFullName } from "../lib/modelFullNames";
 import Sparkline from "./Sparkline";
 import Modal, { AssumptionsModalBody } from "./Modal";
 import InfoButton from "./InfoButton";
@@ -508,28 +509,12 @@ export default function NewRunPanel({
                   </span>
                   <span className="model-card-name">{m.model}</span>
                 </div>
-                <p className="model-card-description">{m.description}</p>
-                {m.website && (
-                  <a
-                    className="model-card-link"
-                    href={m.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Model website &rarr;
-                  </a>
-                )}
-                {modelAssumptions(m.model) && (
-                  <InfoButton
-                    className="card-info-button"
-                    label={`${m.model} assumptions`}
-                    onClick={() => {
-                      const section = modelAssumptions(m.model);
-                      if (section) setInfoModal({ title: `${m.model}: assumptions`, section });
-                    }}
-                  />
-                )}
+                <p className="model-card-description">{modelFullName(m.model)}</p>
+                <InfoButton
+                  className="card-info-button"
+                  label={`${m.model} info`}
+                  onClick={() => window.open(`/models/${m.model}`, "_blank", "noopener,noreferrer")}
+                />
               </div>
             ))}
           </div>
