@@ -11,6 +11,83 @@
  * 850px content width, 30px spacing unit), not a new, unrelated look.
  */
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+import { MODEL_FULL_NAMES, modelAcronym } from "../lib/modelFullNames";
+
+// Static key order of lib/modelFullNames.ts's own MODEL_FULL_NAMES map --
+// not fetched from GET /v1/models, since the header renders on every
+// public page (including ones with nothing to do with the model list)
+// and shouldn't need a network round-trip just to draw its own nav.
+const MODELS_NAV_ORDER = Object.keys(MODEL_FULL_NAMES);
+
+function ModelsNavDropdown() {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (!open) return;
+    function onOutsideClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("click", onOutsideClick);
+    return () => document.removeEventListener("click", onOutsideClick);
+  }, [open]);
+
+  // Close whenever navigation actually happens (clicking a link inside
+  // the menu changes pathname), the same belt-and-suspenders reasoning as
+  // Dropdown.tsx's value-keyed close effect.
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  return (
+    <div className={`site-nav-dropdown${open ? " open" : ""}`} ref={containerRef}>
+      <button
+        type="button"
+        className="site-nav-dropdown-toggle page-link"
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        Models
+        <svg className="site-nav-dropdown-chevron" viewBox="0 0 16 16" aria-hidden="true">
+          <path
+            d="M4 6l4 4 4-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      {open && (
+        <ul className="site-nav-dropdown-menu" role="menu">
+          <li>
+            <Link href="/" className={pathname === "/" ? "active" : ""} role="menuitem">
+              All models
+            </Link>
+          </li>
+          {MODELS_NAV_ORDER.map((model) => (
+            <li key={model}>
+              <Link
+                href={`/models/${model}`}
+                className={pathname === `/models/${model}` ? "active" : ""}
+                role="menuitem"
+              >
+                {modelAcronym(model)}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export function PublicHeader() {
   return (
@@ -21,9 +98,7 @@ export function PublicHeader() {
           Possible Planets
         </Link>
         <nav className="site-nav">
-          <Link href="/" className="page-link">
-            Models
-          </Link>
+          <ModelsNavDropdown />
           <Link href="/account" className="page-link">
             Dashboard login
           </Link>

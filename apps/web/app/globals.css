@@ -1471,6 +1471,76 @@ a.icon-button {
   text-decoration: underline;
 }
 
+/* "Models" nav item as a dropdown of every model's article page, for
+   quickly jumping between them without going back through the home page.
+   Deliberately its own small set of rules rather than reusing .dropdown/
+   .dropdown-menu (components/Dropdown.tsx) -- those are styled with the
+   dashboard's own --color-* theme variables, not this public site's
+   minima-derived --pp-* palette, and that dropdown models a <select>
+   (one active value) rather than a list of navigation links. */
+.site-nav-dropdown {
+  position: relative;
+}
+
+.site-nav-dropdown-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  color: var(--pp-text);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.site-nav-dropdown-toggle:hover,
+.site-nav-dropdown.open .site-nav-dropdown-toggle {
+  color: var(--pp-brand);
+}
+
+.site-nav-dropdown-chevron {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  transition: transform 0.12s ease;
+}
+
+.site-nav-dropdown.open .site-nav-dropdown-chevron {
+  transform: rotate(180deg);
+}
+
+.site-nav-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  left: 0;
+  margin: 0;
+  padding: 0.3rem;
+  list-style: none;
+  min-width: 11rem;
+  background: var(--pp-bg);
+  border: 1px solid var(--pp-grey-light);
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  z-index: 20;
+}
+
+.site-nav-dropdown-menu a {
+  display: block;
+  padding: 0.4rem 0.6rem;
+  border-radius: 3px;
+  color: var(--pp-text);
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+
+.site-nav-dropdown-menu a:hover,
+.site-nav-dropdown-menu a.active {
+  background: var(--pp-grey-light);
+  color: var(--pp-brand);
+}
+
 .public-main {
   max-width: var(--pp-content-width);
   margin: 0 auto;
