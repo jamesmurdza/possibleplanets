@@ -637,7 +637,25 @@ export const MODELS: Record<string, ModelMeta> = {
     // identical gcam.exe size/hash, same input database). Verified
     // live on this exact snapshot (2026-11-19): full run completes,
     // anon memory stays under ~7.3GB throughout, 0 oom_kills.
-    daytona_snapshot: "gcam-production-v3",
+    //
+    // v4, not v3 -- v3 still ran the OLD /app/run.py, which parsed
+    // Hector's outputstream.csv with a buggy csv.DictReader (silently
+    // treated Hector's own leading comment line as the header, leaving
+    // every row's real "variable" column missing -- see
+    // "Stop parsing GCAM's CSV output in Python" commit). That fix had
+    // only ever landed in this repo's sandboxes/gcam/run.py, never in a
+    // deployed snapshot, so gcam kept returning malformed rows in
+    // production even after the OOM fix. v4 is v3's own live sandbox
+    // with /app/run.py overwritten by the repo's current version (now
+    // returns Hector's raw CSV text untouched, parsed client-side
+    // instead -- see lib/clientApi.ts's gcamSeries) and re-snapshotted,
+    // again with no gcamdata/gcam.exe rebuild. Verified end to end
+    // (2026-11-19): a full run on this exact snapshot, piped through
+    // the real advanceRun/finalizeOutcome/finishRunSucceeded logic by
+    // hand into this project's own postgres, produced a `runs` row
+    // whose result.result.csv parses into 355 real global_tas points --
+    // see run_id bc380140-64bd-4f5c-9ded-c2ffb934202d.
+    daytona_snapshot: "gcam-production-v4",
     // Dockerfile clones JGCRI/gcam-core@main unpinned, so the Dockerfile
     // text alone doesn't tell you which release that resolved to -- verified
     // directly instead by spinning up the real snapshot and running

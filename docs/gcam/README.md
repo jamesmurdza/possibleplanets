@@ -12,12 +12,12 @@ documentation set instead of a couple of lines in
 
 **Status: wired into the app.** GCAM builds, runs a full 21-period
 scenario (1975-2100) to completion, is packaged into a reusable Daytona
-snapshot (`gcam-production-v3`) and a public Docker Hub backup
+snapshot (`gcam-production-v4`) and a public Docker Hub backup
 (`possibleplanets/gcam:v1`), and is now registered in
 `apps/web/lib/models.ts` with a real `sandboxes/gcam/run.py` entrypoint,
 the same way every other model is. Only one scenario (`"Reference"`) is
 exposed so far -- see `known-gaps.md` for why, and what's left to widen
-that. See `oom-fix.md` for why the snapshot is on v3, not v1/v2.
+that. See `oom-fix.md` for why the snapshot is on v4, not v1/v2/v3.
 
 ## Files in this folder
 
