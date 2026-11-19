@@ -48,7 +48,6 @@ import {
   insertRun,
   getRun,
   updateRunProgress,
-  updateRunLiveOutput,
   claimRunForFinalize,
   finishRunSucceeded,
   finishRunFailed,
@@ -508,10 +507,13 @@ export interface RunView {
   // enough to produce any). Meant for debugging a confusing result, not
   // part of the model's own (parsed, structured) `result`.
   stdout_tail: string | null;
-  // Best-effort stdout+stderr captured WHILE the run is still in progress --
-  // see live_stdout_tail's own column comment in lib/db.ts. Only ever
-  // meaningful while status is "running"; once a run finishes, use
-  // stdout_tail above instead (this is left stale after that point).
+  // Best-effort stdout+stderr captured live, straight off the sandbox, for a
+  // run that's still "running" -- NOT persisted anywhere (unlike
+  // stdout_tail, which is only ever written once at finalize time). Each
+  // advanceRun poll re-downloads RUN_OUTPUT_LOG_PATH and attaches the
+  // current tail directly to that poll's response; there's no column for
+  // this on the runs table. Only ever set while status is "running"/
+  // "queued" -- use stdout_tail once the run finishes.
   live_stdout_tail: string | null;
   // The Daytona sandbox this run actually executed in -- null for a
   // cache-hit inline result (see submitRun's own inline branch; nothing
@@ -558,7 +560,10 @@ function toView(row: RunRow): RunView {
     progress: row.progress,
     duration_seconds: row.duration_seconds,
     stdout_tail: row.stdout_tail ?? error?.stdout_tail ?? null,
-    live_stdout_tail: row.live_stdout_tail ?? null,
+    // Never persisted -- see RunView's own live_stdout_tail comment.
+    // advanceRun fills this in after calling toView, for a still-running
+    // row, from whatever it just downloaded off the live sandbox.
+    live_stdout_tail: null,
   };
 }
 
@@ -625,11 +630,14 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
   // RUN_OUTPUT_LOG_PATH via the `> ... 2>&1` redirect regardless of whether
   // it also emits structured progress. Best-effort: the file may not exist
   // yet (command hasn't started writing), or the download may transiently
-  // fail; neither should fail the poll.
+  // fail; neither should fail the poll. Not persisted anywhere (see
+  // RunView's own live_stdout_tail comment) -- just attached directly to
+  // whatever view this poll ends up returning, below.
+  let liveStdoutTail: string | null = null;
   try {
     const raw = await sandbox.fs.downloadFile(RUN_OUTPUT_LOG_PATH);
     if (raw && raw.length) {
-      await updateRunLiveOutput(runId, raw.toString().slice(-2000));
+      liveStdoutTail = raw.toString().slice(-2000);
     }
   } catch {
     // not written yet, or transient -- ignore
@@ -654,7 +662,7 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
     // Still running -- re-read so the caller sees the progress update we
     // may have just written above.
     row = (await getRun(runId))!;
-    return toView(row);
+    return { ...toView(row), live_stdout_tail: liveStdoutTail };
   }
 
   // Command finished. Atomically claim the right to finalize -- see this

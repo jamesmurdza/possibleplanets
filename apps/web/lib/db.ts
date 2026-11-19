@@ -126,13 +126,6 @@ ALTER TABLE runs ADD COLUMN IF NOT EXISTS model_version_number TEXT;
 -- exactly the case where a user debugging "I don't know what's
 -- happening" has nothing in-app to look at.
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS stdout_tail TEXT;
--- Same tail-capped capture as stdout_tail above, but written WHILE a run is
--- still in progress (see advanceRun's live-read in lib/runs.ts), so a run
--- that hasn't finished yet still has something to show in the drawer rather
--- than nothing until it succeeds/fails. stdout_tail itself is only ever
--- written at finalize time, so it stays null/stale for the whole lifetime of
--- a still-running run -- this column is what fills that gap.
-ALTER TABLE runs ADD COLUMN IF NOT EXISTS live_stdout_tail TEXT;
 `;
 
 // ensureDb() is called at the top of every exported function below rather
@@ -283,11 +276,6 @@ export interface RunRow {
   // into its own column (it may still only live in `error.stdout_tail`
   // on those older rows -- see RunJob's own comment in lib/runs.ts).
   stdout_tail: string | null;
-  // See this column's own migration comment above -- the in-progress
-  // counterpart to stdout_tail, kept up to date while the run is still
-  // "running" and left untouched (stale) from that point on once
-  // stdout_tail itself is populated at finalize time.
-  live_stdout_tail: string | null;
 }
 
 export async function insertRun(row: {
@@ -452,21 +440,6 @@ export async function updateRunProgress(runId: string, progress: { percent: numb
   await getPool().query(
     "UPDATE runs SET progress = $1, updated_at = now() WHERE run_id = $2 AND status = 'running'",
     [JSON.stringify(progress), runId],
-  );
-}
-
-/**
- * Best-effort live snapshot of the model process's stdout+stderr so far --
- * see live_stdout_tail's own column comment. Guarded on status = 'running'
- * the same way updateRunProgress is, so a write that races against
- * finalize (claimRunForFinalize having already flipped the row to
- * 'finalizing') is a harmless no-op rather than clobbering anything.
- */
-export async function updateRunLiveOutput(runId: string, stdoutTail: string): Promise<void> {
-  await ensureDb();
-  await getPool().query(
-    "UPDATE runs SET live_stdout_tail = $1, updated_at = now() WHERE run_id = $2 AND status = 'running'",
-    [stdoutTail, runId],
   );
 }
 

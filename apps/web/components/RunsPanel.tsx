@@ -160,7 +160,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
   // Collapsed by default -- raw stdout/stderr is a debugging aid (see
   // selectedJob.stdout_tail's own comment), not something to show
   // unasked-for every time a run's drawer opens.
-  const [rawOutputOpen, setRawOutputOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<"details" | "output">("details");
   const [filterModel, setFilterModel] = useState(ALL);
   const [filterScenario, setFilterScenario] = useState(ALL);
   const [filterStatus, setFilterStatus] = useState(ALL);
@@ -189,6 +189,13 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
   const chartRef = useRef<Chart | null>(null);
   const listPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const detailPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Which run pollDetail is currently polling for -- checked when each
+  // fetch resolves (see pollDetail below) so a response for a run the user
+  // has since clicked away from can't land in `selectedJob` and flash the
+  // drawer between two different runs' data. Clearing detailPollTimer.current
+  // only stops the *next* scheduled poll; it doesn't cancel a fetch that's
+  // already in flight when the user switches runs.
+  const activeDetailId = useRef<string | null>(null);
   const advancePollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   // Mirrors `runs` for advanceInProgressRuns below -- that function is
   // scheduled via setTimeout (not re-created every render), so it'd
@@ -406,6 +413,12 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
   async function pollDetail(id: string) {
     try {
       const job: RunJob = await fetchJson(`/v1/runs/${id}`);
+      // The user may have clicked a different run (or closed the drawer)
+      // while this fetch was in flight -- activeDetailId has since moved
+      // on, so this response is stale. Drop it instead of overwriting
+      // selectedJob with the wrong run's data (and don't schedule another
+      // poll for an id nothing's tracking anymore).
+      if (activeDetailId.current !== id) return;
       setSelectedJob(job);
       setDetailErr(null);
       if (job.status === "queued" || job.status === "running") {
@@ -419,6 +432,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
       // its default 300x220 blank size, Chart.js never actually drew into
       // it).
     } catch (err: any) {
+      if (activeDetailId.current !== id) return;
       setDetailErr(err.message);
     }
   }
@@ -460,10 +474,12 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
     setDetailErr(null);
     setDrawerModelMeta(null);
     setRunAgainErr(null);
-    setRawOutputOpen(false);
+    setDrawerTab("details");
+    activeDetailId.current = selectedRunId;
     if (selectedRunId) pollDetail(selectedRunId);
     return () => {
       if (detailPollTimer.current) clearTimeout(detailPollTimer.current);
+      activeDetailId.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRunId]);
@@ -699,6 +715,28 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
         <Drawer title={selectedJob ? `${selectedJob.model} run` : "Run"} onClose={() => onSelectRun(null)}>
           {detailErr && <p className="panel-error">{detailErr}</p>}
           {selectedJob && (
+            <div className="drawer-tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={drawerTab === "details"}
+                className={`drawer-tab${drawerTab === "details" ? " active" : ""}`}
+                onClick={() => setDrawerTab("details")}
+              >
+                Details
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={drawerTab === "output"}
+                className={`drawer-tab${drawerTab === "output" ? " active" : ""}`}
+                onClick={() => setDrawerTab("output")}
+              >
+                Output
+              </button>
+            </div>
+          )}
+          {selectedJob && drawerTab === "details" && (
             <div className="drawer-meta">
               <div className="drawer-meta-row">
                 <span className="drawer-meta-label">Run ID</span>
@@ -801,58 +839,57 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
               )}
             </div>
           )}
-          {selectedJob && (
-            <div className="drawer-actions">
-              <button type="button" onClick={runAgain} disabled={runAgainBusy}>
-                {runAgainBusy ? "Submitting..." : "Run again"}
-              </button>
-              {runAgainErr && <p className="panel-error">{runAgainErr}</p>}
-            </div>
-          )}
-          {selectedJob?.status === "succeeded" ? (
-            <canvas ref={canvasRef} height={380}></canvas>
-          ) : (
-            <div className="chart-placeholder">
-              {selectedJob
-                ? selectedJob.status === "failed"
-                  ? `Failed: ${selectedJob.error?.message || "unknown error"}`
-                  : `${selectedJob.status}...`
-                : "Loading..."}
-            </div>
-          )}
-          {(() => {
-            // While still running, stdout_tail hasn't been written yet (it's
-            // only populated at finalize time) -- fall back to the live
-            // snapshot (see RunJob's own live_stdout_tail comment) so a
-            // still-in-progress run has something to show here too, instead
-            // of this section just not appearing until it finishes.
-            const isRunning = selectedJob?.status === "running" || selectedJob?.status === "queued";
-            const rawOutput = isRunning ? selectedJob?.live_stdout_tail : selectedJob?.stdout_tail;
-            if (!rawOutput) return null;
-            return (
-              <div className="drawer-raw-output">
-                <button
-                  type="button"
-                  className="text-button advanced-toggle"
-                  onClick={() => setRawOutputOpen((o) => !o)}
-                  aria-expanded={rawOutputOpen}
-                >
-                  <span className={`disclosure-triangle${rawOutputOpen ? " open" : ""}`} aria-hidden="true">
-                    ▶
-                  </span>
-                  Raw output{isRunning ? " (live)" : ""}
+          {/* Kept mounted (just hidden) rather than conditionally rendered
+              when the Output tab is active -- canvasRef's chart-drawing
+              effect runs off selectedJob changes, not drawerTab, so
+              unmounting/remounting the canvas on every tab switch would
+              lose the chart until the next poll redraws it. */}
+          <div style={{ display: drawerTab === "details" ? undefined : "none" }}>
+            {selectedJob && (
+              <div className="drawer-actions">
+                <button type="button" onClick={runAgain} disabled={runAgainBusy}>
+                  {runAgainBusy ? "Submitting..." : "Run again"}
                 </button>
-                {rawOutputOpen && (
-                  // Exactly what the model process printed to stdout/stderr
-                  // (tail-capped -- see RunJob's own stdout_tail/
-                  // live_stdout_tail comments), for debugging a run whose
-                  // result doesn't make sense -- not reformatted/parsed in
-                  // any way.
-                  <pre className="drawer-raw-output-pre">{rawOutput}</pre>
-                )}
+                {runAgainErr && <p className="panel-error">{runAgainErr}</p>}
               </div>
-            );
-          })()}
+            )}
+            {selectedJob?.status === "succeeded" ? (
+              <canvas ref={canvasRef} height={380}></canvas>
+            ) : (
+              <div className="chart-placeholder">
+                {selectedJob
+                  ? selectedJob.status === "failed"
+                    ? `Failed: ${selectedJob.error?.message || "unknown error"}`
+                    : `${selectedJob.status}...`
+                  : "Loading..."}
+              </div>
+            )}
+          </div>
+          {selectedJob && drawerTab === "output" && (
+            (() => {
+              // While still running, stdout_tail hasn't been written yet
+              // (it's only populated at finalize time) -- fall back to the
+              // live snapshot (see RunJob's own live_stdout_tail comment)
+              // so a still-in-progress run has something to show here too,
+              // instead of this tab just being empty until it finishes.
+              const isRunning = selectedJob.status === "running" || selectedJob.status === "queued";
+              const rawOutput = isRunning ? selectedJob.live_stdout_tail : selectedJob.stdout_tail;
+              return (
+                <div className="drawer-raw-output">
+                  {rawOutput ? (
+                    // Exactly what the model process printed to
+                    // stdout/stderr (tail-capped -- see RunJob's own
+                    // stdout_tail/live_stdout_tail comments), for
+                    // debugging a run whose result doesn't make sense --
+                    // not reformatted/parsed in any way.
+                    <pre className="drawer-raw-output-pre">{rawOutput}</pre>
+                  ) : (
+                    <p className="chart-hint">{isRunning ? "No output captured yet." : "No output was captured for this run."}</p>
+                  )}
+                </div>
+              );
+            })()
+          )}
         </Drawer>
       )}
 
