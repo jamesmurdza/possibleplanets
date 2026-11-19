@@ -418,7 +418,6 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
                 <th>Version</th>
                 <th>Params</th>
                 <th>Status</th>
-                <th>Progress</th>
                 <th>Duration</th>
                 <th>Started</th>
               </tr>
@@ -426,7 +425,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
             <tbody>
               {filteredRuns.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="runs-table-empty">
+                  <td colSpan={7} className="runs-table-empty">
                     {runs.length === 0 ? 'No runs yet -- start one from "New Run".' : "No runs match these filters."}
                   </td>
                 </tr>
@@ -450,19 +449,17 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
                   <td className="mono">{summarizeParams(r.params)}</td>
                   <td>
                     <StatusBadge status={r.status} />
+                    {(r.status === "running" || r.status === "queued") &&
+                      r.progress &&
+                      typeof r.progress.percent === "number" && (
+                        <span className="progress-tag">{r.progress.percent}%</span>
+                      )}
                     {r.cached && <span className="cached-tag">cached</span>}
                     {r.status === "failed" && r.error?.message && (
                       <span className="error-tag" title={r.error.message}>
                         {r.error.message}
                       </span>
                     )}
-                  </td>
-                  <td>
-                    {(r.status === "running" || r.status === "queued") &&
-                    r.progress &&
-                    typeof r.progress.percent === "number"
-                      ? `${r.progress.percent}%`
-                      : "--"}
                   </td>
                   <td>
                     {r.status === "running" || r.status === "queued"

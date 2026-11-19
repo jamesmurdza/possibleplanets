@@ -641,6 +641,16 @@ a.icon-button {
   color: var(--color-text-faint);
 }
 
+/* Live progress percent, shown right next to the status pill while a run
+   is running/queued -- not its own table column, and not folded into the
+   Duration cell (which should always just read as elapsed/total time). */
+.progress-tag {
+  margin-left: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
 /* A failed run's error message, right next to its status pill -- full
    text is on `title` (a native tooltip) since this is too narrow a
    table cell to show a potentially long message in full; truncated with
