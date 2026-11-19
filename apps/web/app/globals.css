@@ -631,9 +631,9 @@ a.icon-button {
    every other column combined, visually shoving Status/Duration/Started
    out past the table's own container (still just as wide as its content,
    not actually clipped -- .table-scroll's overflow-x: auto handling
-   that). Capped the same way .error-tag already is (ellipsis + a native
-   title tooltip for the full value) instead of letting one row's worth
-   of params dictate every row's column widths. */
+   that). Capped with ellipsis + a native title tooltip for the full
+   value instead of letting one row's worth of params dictate every
+   row's column widths. */
 .runs-table-params {
   max-width: 14rem;
   overflow: hidden;
@@ -724,22 +724,6 @@ th.runs-table-checkbox-col {
   font-size: 0.7rem;
   font-weight: 600;
   color: var(--color-accent);
-}
-
-/* A failed run's error message, right next to its status pill -- full
-   text is on `title` (a native tooltip) since this is too narrow a
-   table cell to show a potentially long message in full; truncated with
-   an ellipsis here instead of wrapping and blowing up the row height. */
-.error-tag {
-  display: inline-block;
-  margin-left: 0.4rem;
-  max-width: 16rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  vertical-align: bottom;
-  font-size: 0.7rem;
-  color: var(--color-error);
 }
 
 /* --- New Run form --- */

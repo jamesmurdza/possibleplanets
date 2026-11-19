@@ -740,11 +740,6 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                         <span className="progress-tag">{r.progress.percent}%</span>
                       )}
                     {r.cached && <span className="cached-tag">cached</span>}
-                    {r.status === "failed" && r.error?.message && (
-                      <span className="error-tag" title={r.error.message}>
-                        {r.error.message}
-                      </span>
-                    )}
                   </td>
                   <td>
                     {r.status === "running" || r.status === "queued"
