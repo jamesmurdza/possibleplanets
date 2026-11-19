@@ -612,9 +612,10 @@ export default function NewRunPanel({
             <span className="form-field-label">Parameters (optional)</span>
             <div className="param-fields-grid">
               {parameters.map((spec) => (
-                <label key={spec.key} className="form-field">
+                <label key={spec.key} className="param-field-row" htmlFor={`param-${spec.key}`}>
                   <span className="form-field-label">{spec.label}</span>
                   <input
+                    id={`param-${spec.key}`}
                     type="number"
                     placeholder={spec.placeholderHint ?? `${spec.default}`}
                     min={spec.min}
@@ -623,7 +624,7 @@ export default function NewRunPanel({
                     value={paramValues[spec.key] ?? ""}
                     onChange={(e) => onParamChange(spec.key, e.target.value)}
                   />
-                  {spec.unit && <span className="form-field-unit">{spec.unit}</span>}
+                  <span className="form-field-unit">{spec.unit ?? ""}</span>
                 </label>
               ))}
             </div>
