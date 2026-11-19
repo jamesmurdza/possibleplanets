@@ -30,6 +30,22 @@ function formatWhen(iso: string): string {
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+// Live "how long has this been running" for a still-in-progress run --
+// just now() - started_at, recomputed on every render. No interval timer
+// of its own needed: both the table (refreshList, every 1s -- see
+// listPollTimer) and the drawer (pollDetail, every 500ms while a run is
+// still in progress -- see detailPollTimer) already re-render this
+// component on that same cadence while anything is running/queued, so
+// this naturally ticks up in step with those polls rather than drifting
+// out of sync with a second, independent setInterval.
+function formatElapsed(startedAtIso: string): string {
+  const elapsedSeconds = Math.max(0, (Date.now() - new Date(startedAtIso).getTime()) / 1000);
+  if (elapsedSeconds < 60) return `${Math.floor(elapsedSeconds)}s`;
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = Math.floor(elapsedSeconds % 60);
+  return `${minutes}m ${seconds}s`;
+}
+
 function StatusBadge({ status }: { status: string }) {
   return <span className={`status-pill status-pill-${status}`}>{status}</span>;
 }
@@ -356,9 +372,9 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
                   </td>
                   <td>
                     {r.status === "running" || r.status === "queued"
-                      ? r.progress && typeof r.progress.percent === "number"
-                        ? `${r.progress.percent}%`
-                        : "..."
+                      ? `${formatElapsed(r.started_at)}${
+                          r.progress && typeof r.progress.percent === "number" ? ` (${r.progress.percent}%)` : ""
+                        }`
                       : typeof r.duration_seconds === "number"
                         ? `${r.duration_seconds.toFixed(1)}s`
                         : "--"}
@@ -388,11 +404,32 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
                 <span className="drawer-meta-label">Params</span>
                 <span className="mono">{summarizeParams(selectedJob.params)}</span>
               </div>
-              {typeof selectedJob.duration_seconds === "number" && (
+              {typeof selectedJob.duration_seconds === "number" ? (
                 <div className="drawer-meta-row">
                   <span className="drawer-meta-label">Duration</span>
                   <span>{selectedJob.duration_seconds.toFixed(1)}s</span>
                 </div>
+              ) : (
+                (selectedJob.status === "running" || selectedJob.status === "queued") &&
+                // RunJob (this detail response) doesn't carry started_at --
+                // reuse the already-fetched list row's copy of it instead
+                // of widening that response just for this. Ticks up in
+                // step with pollDetail's own 500ms poll while open, same
+                // as the table's version (see formatElapsed's comment).
+                (() => {
+                  const listRow = runs.find((r) => r.run_id === selectedJob.run_id);
+                  return listRow ? (
+                    <div className="drawer-meta-row">
+                      <span className="drawer-meta-label">Duration</span>
+                      <span>
+                        {formatElapsed(listRow.started_at)}
+                        {selectedJob.progress && typeof selectedJob.progress.percent === "number"
+                          ? ` (${selectedJob.progress.percent}%)`
+                          : ""}
+                      </span>
+                    </div>
+                  ) : null;
+                })()
               )}
             </div>
           )}
