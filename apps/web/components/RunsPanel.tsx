@@ -5,8 +5,8 @@ import Chart from "chart.js/auto";
 import Dropdown from "./Dropdown";
 import Drawer from "./Drawer";
 import Modal from "./Modal";
-import { fetchJson, CHART_ADAPTERS, summarizeParams, chartAspectRatio, nativeScenarioOf, canonicalScenario } from "../lib/clientApi";
-import type { RunJob, RunListItem } from "../lib/clientTypes";
+import { fetchJson, CHART_ADAPTERS, summarizeParams, nativeScenarioOf, canonicalScenario } from "../lib/clientApi";
+import type { RunJob, RunListItem, ModelMeta } from "../lib/clientTypes";
 
 const ALL = "__all__";
 const STATUS_OPTIONS = [
@@ -79,6 +79,12 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
   // click, since this is a bulk/irreversible action (see deleteSelected's
   // own DELETE calls, there's no undo).
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // The open drawer's model schema -- fetched lazily (only once a run of
+  // that model is actually opened) so the field-by-field Params display
+  // below knows each parameter's label and which keys exist at all (to
+  // show "(default)" for ones the run's own params didn't include).
+  const [drawerModelMeta, setDrawerModelMeta] = useState<ModelMeta | null>(null);
+  const schemaCache = useRef<Record<string, ModelMeta>>({});
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -258,6 +264,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
     if (detailPollTimer.current) clearTimeout(detailPollTimer.current);
     setSelectedJob(null);
     setDetailErr(null);
+    setDrawerModelMeta(null);
     if (selectedRunId) pollDetail(selectedRunId);
     return () => {
       if (detailPollTimer.current) clearTimeout(detailPollTimer.current);
@@ -272,6 +279,33 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedJob]);
 
+  // Fetches (and caches) the open drawer's model schema -- see
+  // drawerModelMeta's own comment. Keyed on the model name, not the whole
+  // selectedJob object, so this doesn't refetch on every progress poll.
+  useEffect(() => {
+    const model = selectedJob?.model;
+    if (!model) return;
+    if (schemaCache.current[model]) {
+      setDrawerModelMeta(schemaCache.current[model]);
+      return;
+    }
+    let cancelled = false;
+    fetchJson(`/v1/models/${model}/schema`)
+      .then((schema) => {
+        if (cancelled) return;
+        schemaCache.current[model] = schema;
+        setDrawerModelMeta(schema);
+      })
+      .catch(() => {
+        // Non-critical -- the Params row below just falls back to the
+        // raw summarizeParams() rendering if this never resolves.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedJob?.model]);
+
   function renderChart(job: RunJob) {
     const adapter = CHART_ADAPTERS[job.model];
     if (!adapter || !canvasRef.current) return;
@@ -282,7 +316,12 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
       data: { labels, datasets: [{ label, data: values, borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4 }] },
       options: {
         animation: false,
-        aspectRatio: chartAspectRatio(),
+        // Deliberately NOT chartAspectRatio() -- that's tuned for the
+        // dashboard's own wide main-area chart (3.4), which made this
+        // chart tiny squeezed into the drawer's much narrower ~32rem
+        // panel (32rem / 3.4 is a sliver). A fixed, much taller ratio
+        // reads fine at this panel's width.
+        aspectRatio: 1.3,
         interaction: { mode: "nearest", intersect: false },
         scales: {
           x: { title: { display: true, text: "year" } },
@@ -451,10 +490,34 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
                 <span className="drawer-meta-label">Build</span>
                 <span className="mono">{selectedJob.model_version ?? "unknown (run predates version tracking)"}</span>
               </div>
-              <div className="drawer-meta-row">
-                <span className="drawer-meta-label">Params</span>
-                <span className="mono">{summarizeParams(selectedJob.params)}</span>
-              </div>
+              {drawerModelMeta ? (
+                <>
+                  <div className="drawer-meta-row">
+                    <span className="drawer-meta-label">Scenario</span>
+                    <span className="mono">
+                      {(() => {
+                        const native = nativeScenarioOf(selectedJob.params);
+                        return native ? canonicalScenario(native) : "(default)";
+                      })()}
+                    </span>
+                  </div>
+                  {(drawerModelMeta.parameters ?? []).map((spec) => (
+                    <div className="drawer-meta-row" key={spec.key}>
+                      <span className="drawer-meta-label">{spec.label}</span>
+                      <span className="mono">
+                        {Object.prototype.hasOwnProperty.call(selectedJob.params, spec.key)
+                          ? String((selectedJob.params as Record<string, unknown>)[spec.key])
+                          : "(default)"}
+                      </span>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div className="drawer-meta-row">
+                  <span className="drawer-meta-label">Params</span>
+                  <span className="mono">{summarizeParams(selectedJob.params)}</span>
+                </div>
+              )}
               {typeof selectedJob.duration_seconds === "number" ? (
                 <div className="drawer-meta-row">
                   <span className="drawer-meta-label">Duration</span>
@@ -485,7 +548,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
             </div>
           )}
           {selectedJob?.status === "succeeded" ? (
-            <canvas ref={canvasRef} height={220}></canvas>
+            <canvas ref={canvasRef} height={380}></canvas>
           ) : (
             <div className="chart-placeholder">
               {selectedJob
