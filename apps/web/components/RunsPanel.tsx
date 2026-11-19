@@ -189,6 +189,13 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
   const chartRef = useRef<Chart | null>(null);
   const listPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const detailPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Which run pollDetail is currently polling for -- checked when each
+  // fetch resolves (see pollDetail below) so a response for a run the user
+  // has since clicked away from can't land in `selectedJob` and flash the
+  // drawer between two different runs' data. Clearing detailPollTimer.current
+  // only stops the *next* scheduled poll; it doesn't cancel a fetch that's
+  // already in flight when the user switches runs.
+  const activeDetailId = useRef<string | null>(null);
   const advancePollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   // Mirrors `runs` for advanceInProgressRuns below -- that function is
   // scheduled via setTimeout (not re-created every render), so it'd
@@ -406,6 +413,12 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
   async function pollDetail(id: string) {
     try {
       const job: RunJob = await fetchJson(`/v1/runs/${id}`);
+      // The user may have clicked a different run (or closed the drawer)
+      // while this fetch was in flight -- activeDetailId has since moved
+      // on, so this response is stale. Drop it instead of overwriting
+      // selectedJob with the wrong run's data (and don't schedule another
+      // poll for an id nothing's tracking anymore).
+      if (activeDetailId.current !== id) return;
       setSelectedJob(job);
       setDetailErr(null);
       if (job.status === "queued" || job.status === "running") {
@@ -419,6 +432,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
       // its default 300x220 blank size, Chart.js never actually drew into
       // it).
     } catch (err: any) {
+      if (activeDetailId.current !== id) return;
       setDetailErr(err.message);
     }
   }
@@ -461,9 +475,11 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
     setDrawerModelMeta(null);
     setRunAgainErr(null);
     setDrawerTab("details");
+    activeDetailId.current = selectedRunId;
     if (selectedRunId) pollDetail(selectedRunId);
     return () => {
       if (detailPollTimer.current) clearTimeout(detailPollTimer.current);
+      activeDetailId.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRunId]);
