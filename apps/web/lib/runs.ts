@@ -85,8 +85,22 @@ const SANDBOX_AUTO_DELETE_MINUTES = 15;
 // to second-guess that number or protect against it being wrong.
 const AUTO_STOP_SAFETY_MARGIN_MINUTES = 5;
 
-function autoStopMinutes(model: ModelMeta): number {
-  return Math.ceil(model.exec_timeout_seconds / 60) + AUTO_STOP_SAFETY_MARGIN_MINUTES;
+function autoStopMinutes(execTimeoutSeconds: number): number {
+  return Math.ceil(execTimeoutSeconds / 60) + AUTO_STOP_SAFETY_MARGIN_MINUTES;
+}
+
+// Bounds for a caller-supplied max_run_time_seconds override (New Run
+// form's "Advanced" section) -- not just model.exec_timeout_seconds
+// clamped to "whatever you want". Floor keeps a run from being killed
+// before it could plausibly ever finish anything; ceiling keeps a typo'd
+// huge value from holding a sandbox (and its autoStopInterval) open far
+// longer than this project ever actually runs anything for real, even
+// GCAM's own ~30 minute runs (model.exec_timeout_seconds, see models.ts).
+const MIN_RUN_TIME_SECONDS = 10;
+const MAX_RUN_TIME_SECONDS = 6 * 60 * 60;
+
+export function clampRunTimeSeconds(seconds: number): number {
+  return Math.min(MAX_RUN_TIME_SECONDS, Math.max(MIN_RUN_TIME_SECONDS, Math.round(seconds)));
 }
 
 // Netlify sets this to the site's own deployed origin at build and
@@ -336,11 +350,21 @@ export async function submitRun(
   // in run_cache from an earlier real run, so an unauthenticated caller
   // can still get cached results, just not trigger a new sandbox run.
   isAuthed: boolean,
+  // Advanced override for how long this one run is allowed to take,
+  // before advanceRun's own deadline check (and the sandbox's matching
+  // autoStopInterval) kill it -- see models.ts's exec_timeout_seconds for
+  // why that default exists per model. Clamped via clampRunTimeSeconds
+  // before use; undefined means "just use the model's own default".
+  maxRunTimeSeconds?: number,
 ): Promise<SubmitResult> {
   const model = getModelOrNull(modelName);
   if (!model) {
     return { run_id: "", error: `unknown model '${modelName}'` };
   }
+  const execTimeoutSeconds =
+    typeof maxRunTimeSeconds === "number" && Number.isFinite(maxRunTimeSeconds)
+      ? clampRunTimeSeconds(maxRunTimeSeconds)
+      : model.exec_timeout_seconds;
 
   const validationError = validateParams(model, params);
   if (validationError) {
@@ -406,7 +430,7 @@ export async function submitRun(
     {
       snapshot: model.daytona_snapshot,
       name: `${modelName}-run-${runId.slice(0, 8)}`,
-      autoStopInterval: autoStopMinutes(model),
+      autoStopInterval: autoStopMinutes(execTimeoutSeconds),
       autoDeleteInterval: SANDBOX_AUTO_DELETE_MINUTES,
     },
     { timeout: 600 },
@@ -435,7 +459,7 @@ export async function submitRun(
     session_id: sessionId,
     cmd_id: resp.cmdId,
     supports_progress: !!model.supports_progress,
-    deadline_at: new Date(Date.now() + model.exec_timeout_seconds * 1000),
+    deadline_at: new Date(Date.now() + execTimeoutSeconds * 1000),
   });
 
   return { run_id: runId, error: null };

@@ -1053,6 +1053,16 @@ a.icon-button {
   color: var(--color-text-faint);
 }
 
+/* New Run form's collapsible "Advanced" section (currently just the
+   max-run-time override) -- the toggle button itself needs a bit of
+   breathing room above/below since .text-button alone is meant for
+   inline use next to other controls, not as a standalone section header. */
+.advanced-toggle {
+  display: block;
+  margin-bottom: 0.5rem;
+  padding: 0;
+}
+
 .chart-hint {
   margin: 0.5rem 0 0;
   font-size: 0.75rem;

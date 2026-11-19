@@ -13,7 +13,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ model: 
     return corsJson({ detail: `unknown model '${model}'` }, { status: 404 });
   }
 
-  let body: { params?: Record<string, unknown>; refresh?: boolean };
+  let body: { params?: Record<string, unknown>; refresh?: boolean; max_run_time_seconds?: number };
   try {
     body = await req.json();
   } catch {
@@ -21,6 +21,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ model: 
   }
   const runParams = body.params ?? {};
   const refresh = body.refresh ?? false;
+  const maxRunTimeSeconds =
+    typeof body.max_run_time_seconds === "number" && Number.isFinite(body.max_run_time_seconds)
+      ? body.max_run_time_seconds
+      : undefined;
 
   try {
     // Computed up front, but only enforced INSIDE submitRun, on a cache
@@ -30,7 +34,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ model: 
     // looking up an API key), and that should 502 the same way a
     // submitRun failure does, not bubble up as an unhandled 500.
     const isAuthed = await hasValidApiKey(req);
-    const { run_id, error, inline, unauthorized } = await submitRun(model, runParams, refresh, isAuthed);
+    const { run_id, error, inline, unauthorized } = await submitRun(
+      model,
+      runParams,
+      refresh,
+      isAuthed,
+      maxRunTimeSeconds,
+    );
     if (unauthorized) {
       return corsJson({ detail: "missing or invalid API key" }, { status: 401 });
     }

@@ -26,6 +26,10 @@ export interface ModelMeta {
   params_shape?: "scenario" | "scenarios";
   parameters?: ParameterSpec[];
   non_deterministic_unless?: string;
+  // The model's own default run-time ceiling, in seconds -- see
+  // lib/models.ts's exec_timeout_seconds. Shown as the New Run form's
+  // Advanced "max run time" field's placeholder.
+  exec_timeout_seconds: number;
 }
 
 // Shape returned by GET /v1/models -- used for the model-picker cards on
