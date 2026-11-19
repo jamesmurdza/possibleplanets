@@ -1260,6 +1260,18 @@ th.runs-table-checkbox-col {
     padding: 0.6rem 1rem;
     border-right: none;
     border-bottom: 1px solid var(--color-sidebar-border);
+    /* Reset the desktop layout's "pin to the viewport, never scroll"
+       rules (height: 100vh + position: sticky + overflow: hidden) --
+       those make sense for a tall left-side column, but left in place
+       for this row-at-the-top mobile layout they clip the bar down to
+       (effectively) its own fixed height while claiming the full
+       viewport height for layout purposes, pushing/hiding the real
+       page content below the fold. A plain in-flow row needs none of
+       that; it should just take its own content height and scroll away
+       with the rest of the page like everything else below it. */
+    height: auto;
+    position: static;
+    overflow: visible;
   }
 
   .sidebar-brand {
@@ -1497,6 +1509,15 @@ th.runs-table-checkbox-col {
 .drawer-meta-row {
   display: flex;
   gap: 0.4rem;
+}
+
+/* "Run again" button, right below the meta rows / above the chart. */
+.drawer-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-bottom: 0.9rem;
 }
 
 .drawer-meta-label {

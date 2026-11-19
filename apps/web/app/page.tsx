@@ -128,26 +128,29 @@ export default function HomePage() {
   const [models, setModels] = useState<ModelListItem[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [hovered, setHovered] = useState<HoverFilter>(null);
-  // Click-to-stick version of the model legend's hover highlight -- set by
-  // clicking a model legend entry, cleared by clicking that same entry
-  // again or clicking a different one (never by plain mouse-leave, unlike
-  // `hovered` above). While set, it's what's actually passed to the chart
+  // Click-to-stick version of the legend's hover highlight -- set by
+  // clicking a model OR an SSP legend entry, cleared by clicking that same
+  // entry again, clicking a different entry (model or SSP -- only one
+  // thing can be pinned at a time), or (never) by plain mouse-leave, unlike
+  // `hovered` above. While set, it's what's actually passed to the chart
   // (see `effectiveHovered` below) instead of the transient hover, and
   // mouse hover on the legend is ignored entirely so it can't interrupt
-  // the pin -- see onModelLegendEnter/Leave.
-  const [pinnedModel, setPinnedModel] = useState<string | null>(null);
-  const effectiveHovered: HoverFilter = pinnedModel ? { type: "model", value: pinnedModel } : hovered;
+  // the pin -- see onLegendEnter/Leave.
+  const [pinned, setPinned] = useState<HoverFilter>(null);
+  const effectiveHovered: HoverFilter = pinned ?? hovered;
   const { series, loading } = useChartSeries();
   const columnsPerRow = useColumnsPerRow();
 
-  function onModelLegendEnter(model: string) {
-    if (!pinnedModel) setHovered({ type: "model", value: model });
+  function onLegendEnter(filter: HoverFilter) {
+    if (!pinned) setHovered(filter);
   }
-  function onModelLegendLeave() {
-    if (!pinnedModel) setHovered(null);
+  function onLegendLeave() {
+    if (!pinned) setHovered(null);
   }
-  function onModelLegendClick(model: string) {
-    setPinnedModel((prev) => (prev === model ? null : model));
+  function onLegendClick(filter: { type: "model" | "scenario"; value: string }) {
+    setPinned((prev) =>
+      prev && prev.type !== "ssp" && prev.type === filter.type && prev.value === filter.value ? null : filter,
+    );
     setHovered(null);
   }
 
@@ -200,23 +203,26 @@ export default function HomePage() {
               <span className="skeleton-bar skeleton-legend-item" aria-hidden="true" />
             ) : (
               <div className="public-chart-legend-group">
-                {modelsByResourceUsage.map((m) => (
-                  <button
-                    key={m.model}
-                    type="button"
-                    className={`public-legend-item${pinnedModel === m.model ? " pinned" : ""}`}
-                    style={{ color: modelColor(m.model) }}
-                    aria-pressed={pinnedModel === m.model}
-                    onMouseEnter={() => onModelLegendEnter(m.model)}
-                    onMouseLeave={() => onModelLegendLeave()}
-                    onClick={() => onModelLegendClick(m.model)}
-                  >
-                    <span className="public-legend-icon">
-                      <ModelIcon model={m.model} />
-                    </span>
-                    {modelAcronym(m.model)}
-                  </button>
-                ))}
+                {modelsByResourceUsage.map((m) => {
+                  const isPinned = pinned?.type === "model" && pinned.value === m.model;
+                  return (
+                    <button
+                      key={m.model}
+                      type="button"
+                      className={`public-legend-item${isPinned ? " pinned" : ""}`}
+                      style={{ color: modelColor(m.model) }}
+                      aria-pressed={isPinned}
+                      onMouseEnter={() => onLegendEnter({ type: "model", value: m.model })}
+                      onMouseLeave={onLegendLeave}
+                      onClick={() => onLegendClick({ type: "model", value: m.model })}
+                    >
+                      <span className="public-legend-icon">
+                        <ModelIcon model={m.model} />
+                      </span>
+                      {modelAcronym(m.model)}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -230,21 +236,26 @@ export default function HomePage() {
               </div>
             ) : (
               <div className="public-chart-legend-group">
-                {sharedSsps.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    className="public-legend-item"
-                    style={{ color: SSP_ICON_COLOR }}
-                    onMouseEnter={() => setHovered({ type: "scenario", value: s })}
-                    onMouseLeave={() => setHovered(null)}
-                  >
-                    <span className="public-legend-icon">
-                      <RoadIcon />
-                    </span>
-                    {s}
-                  </button>
-                ))}
+                {sharedSsps.map((s) => {
+                  const isPinned = pinned?.type === "scenario" && pinned.value === s;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      className={`public-legend-item${isPinned ? " pinned" : ""}`}
+                      style={{ color: SSP_ICON_COLOR }}
+                      aria-pressed={isPinned}
+                      onMouseEnter={() => onLegendEnter({ type: "scenario", value: s })}
+                      onMouseLeave={onLegendLeave}
+                      onClick={() => onLegendClick({ type: "scenario", value: s })}
+                    >
+                      <span className="public-legend-icon">
+                        <RoadIcon />
+                      </span>
+                      {s}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

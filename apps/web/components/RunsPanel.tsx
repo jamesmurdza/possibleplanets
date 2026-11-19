@@ -128,6 +128,8 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [selectedJob, setSelectedJob] = useState<RunJob | null>(null);
   const [detailErr, setDetailErr] = useState<string | null>(null);
+  const [runAgainBusy, setRunAgainBusy] = useState(false);
+  const [runAgainErr, setRunAgainErr] = useState<string | null>(null);
   const [filterModel, setFilterModel] = useState(ALL);
   const [filterScenario, setFilterScenario] = useState(ALL);
   const [filterStatus, setFilterStatus] = useState(ALL);
@@ -390,6 +392,32 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
     }
   }
 
+  // Resubmits the currently open run's exact (model, params) as a brand
+  // new run -- same endpoint/body shape as NewRunPanel's own "Run"
+  // (refresh: true, so this never just returns a cached result -- same
+  // "Run always means a real new run" rule as there). Left on the
+  // currently open run's drawer rather than switching to the new one --
+  // refreshList() below makes the new run show up in the table right
+  // away (same refreshSignal-less immediate refetch runAgain can just do
+  // directly, since it already lives in this component).
+  async function runAgain() {
+    if (!selectedJob) return;
+    setRunAgainBusy(true);
+    setRunAgainErr(null);
+    try {
+      await fetchJson(`/v1/models/${selectedJob.model}/runs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ params: selectedJob.params, refresh: true }),
+      });
+      await refreshList();
+    } catch (err: any) {
+      setRunAgainErr(err.message);
+    } finally {
+      setRunAgainBusy(false);
+    }
+  }
+
   // Driven by selectedRunId (a prop, settable from outside this
   // component) rather than a local "selectRun" click handler owning the
   // whole lifecycle -- a row click just calls onSelectRun(id); this
@@ -400,6 +428,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
     setSelectedJob(null);
     setDetailErr(null);
     setDrawerModelMeta(null);
+    setRunAgainErr(null);
     if (selectedRunId) pollDetail(selectedRunId);
     return () => {
       if (detailPollTimer.current) clearTimeout(detailPollTimer.current);
@@ -716,6 +745,14 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                   ) : null;
                 })()
               )}
+            </div>
+          )}
+          {selectedJob && (
+            <div className="drawer-actions">
+              <button type="button" onClick={runAgain} disabled={runAgainBusy}>
+                {runAgainBusy ? "Submitting..." : "Run again"}
+              </button>
+              {runAgainErr && <p className="panel-error">{runAgainErr}</p>}
             </div>
           )}
           {selectedJob?.status === "succeeded" ? (
