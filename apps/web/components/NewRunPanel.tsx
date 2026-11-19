@@ -642,7 +642,7 @@ export default function NewRunPanel({
           <div className="form-field-block">
             <button
               type="button"
-              className="text-button advanced-toggle"
+              className="form-field-label advanced-toggle"
               onClick={() => setAdvancedOpen((o) => !o)}
               aria-expanded={advancedOpen}
             >

@@ -42,9 +42,7 @@ import { randomUUID } from "crypto";
 import { getDaytonaClient } from "./daytona";
 import { getModelOrNull, ModelMeta } from "./models";
 import {
-  getCached,
-  getCachedMeta,
-  putCached,
+  getCachedRun,
   insertRun,
   getRun,
   updateRunProgress,
@@ -53,7 +51,6 @@ import {
   finishRunSucceeded,
   finishRunFailed,
   deleteRunRow,
-  findLatestSucceededRun,
   RunRow,
 } from "./db";
 
@@ -212,9 +209,10 @@ export interface SubmitResult {
   // Present only for a cache hit resolved synchronously, without ever
   // creating a `runs` row -- see submitRun's cache-hit branch. A cache
   // lookup isn't a new generation; persisting one would just be a
-  // duplicate pointer at a result that's already durably stored in
-  // run_cache; the client can render this directly instead of polling
-  // GET /v1/runs/{run_id} for a row that was never written. `run_id` above
+  // duplicate pointer at a result that's already durably stored in the
+  // earlier run's own row (see lib/db.ts's getCachedRun); the client can
+  // render this directly instead of polling GET /v1/runs/{run_id} for a
+  // row that was never written. `run_id` above
   // is still populated (a fresh randomUUID, for display/download-filename
   // purposes only) but is NOT a real, lookup-able run.
   inline?: RunView;
@@ -223,31 +221,6 @@ export interface SubmitResult {
   // The route layer turns this into a 401, distinct from `error` (a 400,
   // e.g. bad params) since they mean different things to a caller.
   unauthorized?: boolean;
-}
-
-/**
- * Structural deep-equality, order-independent on object keys (JSON.parse
- * doesn't guarantee two independently-produced objects enumerate keys in
- * the same order, even when "the same" by value -- a plain
- * `JSON.stringify(a) === JSON.stringify(b)` could false-negative on that).
- * Used only to decide whether a just-finished run's result is genuinely new
- * before writing it to run_cache -- see advanceRun below.
- */
-function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (typeof a !== typeof b || a === null || b === null) return false;
-  if (typeof a !== "object") return false; // primitives already handled by ===
-  if (Array.isArray(a) !== Array.isArray(b)) return false;
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) return false;
-    return a.every((v, i) => deepEqual(v, b[i]));
-  }
-  const aObj = a as Record<string, unknown>;
-  const bObj = b as Record<string, unknown>;
-  const aKeys = Object.keys(aObj);
-  const bKeys = Object.keys(bObj);
-  if (aKeys.length !== bKeys.length) return false;
-  return aKeys.every((k) => Object.prototype.hasOwnProperty.call(bObj, k) && deepEqual(aObj[k], bObj[k]));
 }
 
 /**
@@ -284,10 +257,14 @@ export function validateParams(model: ModelMeta, params: Record<string, unknown>
 
 /**
  * False when the model declares `nonDeterministicUnless` (see models.ts)
- * and the request doesn't supply that key. A non-cacheable run is never
- * read from or written to run_cache: caching one arbitrary random draw and
- * serving it forever as "the" answer for that (model, params) would
- * misrepresent something that is genuinely different every time it's run.
+ * and the request doesn't supply that key. A non-cacheable run's result is
+ * never treated as a cache hit for a later identical request (submitRun/
+ * checkRun both gate their getCachedRun lookup on this) -- serving one
+ * arbitrary random draw forever as "the" answer for that (model, params)
+ * would misrepresent something that is genuinely different every time
+ * it's run. The run itself still gets written to `runs` like any other
+ * (that part was never conditional on this) -- this only ever gated
+ * whether that row is later eligible to answer someone else's request.
  *
  * No model currently sets this -- oscar used to (its Monte Carlo draw was
  * opt-in-seeded), but sandboxes/oscar/run.py now always applies a seed
@@ -312,14 +289,12 @@ export interface CheckResult {
   cached: boolean;
   // Real measured duration of that cached run, or null if there isn't one,
   // or if there is one but it predates this column existing. Never an
-  // estimate -- see lib/db.ts's getCachedMeta.
+  // estimate -- see lib/db.ts's getCachedRun.
   cached_duration_seconds: number | null;
   // The real `runs` row id behind this cache hit, for the New Run form's
   // "View cached" button -- a cache hit itself never gets its own row (see
   // submitRun's doc comment), so the UI needs this to know which run_id to
-  // open in the Runs tab's drawer. Null whenever `cached` is false, or
-  // (rare) if run_cache has an entry but the backing `runs` row aged
-  // out/predates per-run tracking entirely -- see findLatestSucceededRun.
+  // open in the Runs tab's drawer. Null whenever `cached` is false.
   cached_run_id: string | null;
 }
 
@@ -352,14 +327,13 @@ export async function checkRun(modelName: string, params: Record<string, unknown
     return { error: null, cacheable: false, cached: false, cached_duration_seconds: null, cached_run_id: null };
   }
 
-  const meta = await getCachedMeta(modelName, params);
-  const cachedRunId = meta.exists ? await findLatestSucceededRun(modelName, params) : null;
+  const cached = await getCachedRun(modelName, params);
   return {
     error: null,
     cacheable: true,
-    cached: meta.exists,
-    cached_duration_seconds: meta.duration_seconds,
-    cached_run_id: cachedRunId,
+    cached: cached !== null,
+    cached_duration_seconds: cached?.duration_seconds ?? null,
+    cached_run_id: cached?.run_id ?? null,
   };
 }
 
@@ -370,8 +344,9 @@ export async function submitRun(
   // Whether the caller presented valid auth (lib/apiKey.ts's checkApiAuth)
   // -- only consulted below on a cache MISS. A cache hit never touches
   // this: nothing is being authorized when the answer was already sitting
-  // in run_cache from an earlier real run, so an unauthenticated caller
-  // can still get cached results, just not trigger a new sandbox run.
+  // in an earlier run's own row (see lib/db.ts's getCachedRun), so an
+  // unauthenticated caller can still get cached results, just not
+  // trigger a new sandbox run.
   isAuthed: boolean,
   // Advanced override for how long this one run is allowed to take,
   // before advanceRun's own deadline check (and the sandbox's matching
@@ -398,11 +373,12 @@ export async function submitRun(
   const cacheable = isCacheable(model, params);
 
   if (!forceRefresh && cacheable) {
-    const cached = await getCached(modelName, params);
+    const cached = await getCachedRun(modelName, params);
     if (cached !== null) {
       // A cache hit isn't a new generation -- nothing here actually ran,
-      // the answer was already sitting in run_cache from some earlier
-      // real run. Previously this still wrote a `runs` row (queued, then
+      // the answer was already sitting in `runs` from some earlier real
+      // run of this exact (model, params) -- see lib/db.ts's getCachedRun.
+      // Previously this still wrote a `runs` row (queued, then
       // immediately finalized) purely so GET /v1/runs/{run_id} had
       // something to return -- which meant every repeat "Run" click on an
       // already-cached (model, params) kept appending a new row to the
@@ -421,7 +397,7 @@ export async function submitRun(
           model_version_number: model.model_version_number,
           params,
           status: "succeeded",
-          result: cached,
+          result: cached.result,
           error: null,
           cached: true,
           progress: { percent: 100 },
@@ -433,11 +409,11 @@ export async function submitRun(
           started_at: new Date().toISOString(),
           // Nothing ran, so there's no deadline to speak of either.
           deadline_at: null,
-          // Nothing actually ran just now -- this is an existing
-          // run_cache answer, not a fresh process invocation, so there's
-          // no new stdout to show. The real run that originally produced
-          // this result has its own row (and its own stdout_tail) still
-          // sitting in `runs`, findable via findLatestSucceededRun.
+          // Nothing actually ran just now -- this is an existing answer
+          // from some earlier run, not a fresh process invocation, so
+          // there's no new stdout to show. The real run that originally
+          // produced this result has its own row (and its own
+          // stdout_tail) at cached.run_id.
           stdout_tail: null,
           live_stdout_tail: null,
           // Same reasoning as stdout_tail above -- no new sandbox was
@@ -905,9 +881,9 @@ export async function completeRunFromWebhook(
  * Shared by advanceRun() (poll path) and completeRunFromWebhook() (push
  * path): given a finished command's exit code and captured stdout, parse
  * run.py/run.jl's own JSON result (its last line that looks like one --
- * see lastJsonLine), write it to run_cache, and mark the run terminal.
- * Must be called only AFTER claimRunForFinalize() has already succeeded
- * for this runId -- this function itself does no claiming.
+ * see lastJsonLine), persist it to this run's own row, and mark the run
+ * terminal. Must be called only AFTER claimRunForFinalize() has already
+ * succeeded for this runId -- this function itself does no claiming.
  *
  * Wraps its own body in a try/catch (confirmed necessary by hitting
  * exactly this with a real gcam run: its result can carry thousands of
@@ -996,37 +972,15 @@ async function finalizeOutcomeInner(runId: string, row: RunRow, exitCode: number
     return;
   }
 
-  // Real measured wall-clock time for this specific run (sandbox create +
-  // execute), not an estimate -- persisted into run_cache too, same as the
-  // Python version, so duration has a durable history across restarts.
-  // Skipped entirely for a non-cacheable run (see isCacheable/
-  // nonDeterministicUnless in models.ts) -- never write a single random
-  // draw into the cache as if it were "the" answer for these params.
-  //
-  // Also skipped whenever this run's own result is identical to what's
-  // already the latest cached row for this (model, params) -- reached via
-  // the force-refresh path (submitRun's normal cache check is bypassed by
-  // force_refresh, see above), which legitimately re-runs a deterministic
-  // model that's already cached (e.g. to verify a run.py fix actually
-  // changed the output, or just to re-time it). run_cache is an
-  // append-only log by design (see db.ts's module docstring) so refresh
-  // CAN add a new row when the output genuinely differs -- but when it
-  // doesn't, appending an exact duplicate of the row already there buys
-  // nothing and just grows the table forever on repeat no-op refreshes.
-  const model = getModelOrNull(row.model);
-  if (model && isCacheable(model, row.params as Record<string, unknown>)) {
-    const existing = await getCached(row.model, row.params as Record<string, unknown>);
-    log("getCached done");
-    if (existing === null || !deepEqual(existing, parsed)) {
-      log("deepEqual says different (or nothing cached yet) -- writing run_cache");
-      await putCached(row.model, row.params, parsed, runSeconds);
-      log("putCached done");
-    } else {
-      log("deepEqual says identical to existing cache row -- skipping putCached");
-    }
-  } else {
-    log("not cacheable -- skipping run_cache entirely");
-  }
+  // No separate run_cache write anymore -- see lib/db.ts's own module
+  // comment on why. finishRunSucceeded below already persists `parsed`
+  // (the full result) and `runSeconds` into THIS run's own `runs` row,
+  // which is now also the one and only thing getCachedRun reads from for
+  // a future (model, params) cache hit -- nothing more to do here. This
+  // used to be a second full write of `parsed` (isCacheable-gated, with a
+  // deepEqual check against whatever was already cached) -- for gcam's
+  // own multi-megabyte result, that was a second multi-megabyte DB write
+  // on every single successful run, not just the ones that needed it.
   // Same 2000-char tail cap already used for a failure (finishRunFailed's
   // own stdout_tail above) -- enough to debug a confusing-but-"succeeded"
   // result (what did the model actually print/log) without storing a

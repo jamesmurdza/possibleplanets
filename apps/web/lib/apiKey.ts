@@ -28,7 +28,8 @@
  * submitRun(): the auth check there only runs on a cache MISS (i.e. a
  * request that would actually create a sandbox), never on a cache hit.
  * Nothing is being authorized for a cache hit; the answer was already
- * sitting in run_cache from some earlier real, authorized run.
+ * sitting in an earlier real, authorized run's own row (see lib/db.ts's
+ * getCachedRun).
  */
 import { findUserByApiKey, UserRow } from "./db";
 import { DASHBOARD_AUTH_COOKIE, DASHBOARD_AUTH_VALUE } from "./auth";

@@ -5,13 +5,26 @@
  * between a run's POST and its later GET polls. On a serverless platform
  * each invocation can be a fresh, isolated process with empty memory, so job
  * state has to live somewhere that outlives any single invocation --
- * Postgres, same database already used for the result cache.
+ * Postgres, same database that also backs the result cache below.
  *
- * Two tables:
- *   run_cache - unchanged in shape from the Python version: an append-only
- *               log of every real execution, keyed by (model, params) hash.
- *   runs      - NEW. One row per in-flight or finished run, replacing
- *               jobs.py's _jobs dict. See lib/runs.ts for how it's driven.
+ * One table: `runs` -- one row per in-flight or finished run, replacing
+ * jobs.py's _jobs dict. See lib/runs.ts for how it's driven.
+ *
+ * There used to be a second table, `run_cache` (an append-only log of
+ * every real execution, keyed by a hash of (model, params), carried over
+ * unchanged from the Python version) that `submitRun`'s cache-hit check
+ * read from instead of `runs` directly. Removed: `runs` already has
+ * everything a cache hit needs (the full `result`, `duration_seconds`,
+ * queryable by exact `model`+`params`+`status = 'succeeded'` -- see
+ * getCachedRun below), so every cacheable run was being written
+ * TWICE -- once into `runs` via finishRunSucceeded (always, unconditionally),
+ * once more into run_cache (whenever the result was new) -- for no benefit
+ * besides delete-immunity (a user deleting the one `runs` row behind a
+ * cache hit would also silently invalidate the cache) and a dedicated
+ * append-only history independent of `runs`' own churn, which this
+ * project doesn't need. Dropping the second write removes a full
+ * duplicate of a run's `result` from the hot finalize path -- a real cost
+ * for a model like gcam, whose result can be double-digit megabytes.
  *
  * Caching/job-state persistence is required here (not best-effort like the
  * Python version's optional caching) because without it there is no way to
@@ -33,18 +46,12 @@ function getPool(): Pool {
   return _pool;
 }
 
+// No CREATE TABLE for run_cache anymore -- see this file's own module
+// comment. A production database that already has the old table just
+// keeps it around, unused, as a harmless leftover; nothing here drops it
+// (no code path needs to -- it simply stops being read from or written
+// to, same as any other retired table in an additive-migrations setup).
 const SCHEMA = `
-CREATE TABLE IF NOT EXISTS run_cache (
-    id BIGSERIAL PRIMARY KEY,
-    cache_key TEXT NOT NULL,
-    model TEXT NOT NULL,
-    params JSONB NOT NULL,
-    result JSONB NOT NULL,
-    duration_seconds DOUBLE PRECISION,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS run_cache_cache_key_idx ON run_cache (cache_key);
-
 CREATE TABLE IF NOT EXISTS runs (
     run_id TEXT PRIMARY KEY,
     model TEXT NOT NULL,
@@ -143,68 +150,6 @@ async function ensureDb(): Promise<void> {
   return _initPromise;
 }
 
-function cacheKeyFor(model: string, params: unknown): string {
-  const canonical = JSON.stringify(sortKeysDeep(params));
-  const crypto = require("crypto");
-  return crypto.createHash("sha256").update(`${model}:${canonical}`).digest("hex");
-}
-
-function sortKeysDeep(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sortKeysDeep);
-  if (value && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-      out[key] = sortKeysDeep((value as Record<string, unknown>)[key]);
-    }
-    return out;
-  }
-  return value;
-}
-
-export async function getCached(model: string, params: unknown): Promise<unknown | null> {
-  await ensureDb();
-  const key = cacheKeyFor(model, params);
-  const { rows } = await getPool().query(
-    "SELECT result FROM run_cache WHERE cache_key = $1 ORDER BY created_at DESC LIMIT 1",
-    [key],
-  );
-  return rows.length ? rows[0].result : null;
-}
-
-/**
- * Lightweight existence/duration check, deliberately not pulling the full
- * `result` JSON over the wire -- used to answer "would this be a cache hit,
- * and if so how long did it take last time" (see lib/runs.ts's checkRun)
- * without paying for the full payload just to check.
- */
-export async function getCachedMeta(
-  model: string,
-  params: unknown,
-): Promise<{ exists: boolean; duration_seconds: number | null }> {
-  await ensureDb();
-  const key = cacheKeyFor(model, params);
-  const { rows } = await getPool().query(
-    "SELECT duration_seconds FROM run_cache WHERE cache_key = $1 ORDER BY created_at DESC LIMIT 1",
-    [key],
-  );
-  if (!rows.length) return { exists: false, duration_seconds: null };
-  return { exists: true, duration_seconds: rows[0].duration_seconds };
-}
-
-export async function putCached(
-  model: string,
-  params: unknown,
-  result: unknown,
-  durationSeconds: number | null,
-): Promise<void> {
-  await ensureDb();
-  const key = cacheKeyFor(model, params);
-  await getPool().query(
-    "INSERT INTO run_cache (cache_key, model, params, result, duration_seconds) VALUES ($1, $2, $3, $4, $5)",
-    [key, model, JSON.stringify(params), JSON.stringify(result), durationSeconds],
-  );
-}
-
 export async function getDurationStats(): Promise<
   Array<{
     model: string;
@@ -216,6 +161,13 @@ export async function getDurationStats(): Promise<
   }>
 > {
   await ensureDb();
+  // FROM runs, not the old run_cache -- see this file's own module comment
+  // on why run_cache is gone. Reads every individual succeeded run now
+  // (run_cache deduped identical repeat results into one row, so this is
+  // actually a MORE representative distribution for an ETA estimate than
+  // before, not a less representative one -- a model run 10 times with
+  // the same answer now contributes 10 data points to min/median/max
+  // instead of 1).
   const { rows } = await getPool().query(`
     SELECT model,
            COUNT(*) AS count,
@@ -223,8 +175,8 @@ export async function getDurationStats(): Promise<
            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_seconds) AS median_s,
            AVG(duration_seconds) AS avg_s,
            MAX(duration_seconds) AS max_s
-    FROM run_cache
-    WHERE duration_seconds IS NOT NULL
+    FROM runs
+    WHERE duration_seconds IS NOT NULL AND status = 'succeeded'
     GROUP BY model
     ORDER BY model
   `);
@@ -416,26 +368,32 @@ export async function getLatestSucceededRuns(): Promise<LatestRunItem[]> {
 }
 
 /**
- * The real `runs` row behind a run_cache hit -- powers the New Run
- * form's "View cached" button (see NewRunPanel.tsx): a cache hit's own
- * inline result never gets its own `runs` row (see lib/runs.ts's
- * submitRun doc comment), so there's no run_id to open in the Runs tab's
- * drawer without looking one up this way. `params = $2::jsonb` relies on
- * the same key-order-independent JSONB equality getLatestSucceededRuns's
- * own comment already documents, so this doesn't need the client to
- * reproduce the exact key order of whichever request originally wrote
- * that row. Null if no succeeded run with this exact (model, params) is
- * in the table (either it's aged out, or run_cache's own history
- * predates per-run tracking entirely).
+ * THE cache lookup -- see this file's own module comment on why there's
+ * no separate run_cache table anymore. The most recent succeeded `runs`
+ * row for this exact (model, params), or null if there isn't one.
+ * `params = $2::jsonb` relies on the same key-order-independent JSONB
+ * equality getLatestSucceededRuns's own comment already documents, so
+ * this doesn't need the client to reproduce the exact key order of
+ * whichever request originally wrote that row.
+ *
+ * Also doubles as what powers the New Run form's "View cached" button
+ * (see NewRunPanel.tsx) via the `run_id` it returns -- a cache hit's own
+ * inline response (see lib/runs.ts's submitRun) never creates a NEW
+ * `runs` row for itself, so that button needs this same lookup to find
+ * the real row (from whichever earlier request actually ran it) to open
+ * in the Runs tab's drawer.
  */
-export async function findLatestSucceededRun(model: string, params: unknown): Promise<string | null> {
+export async function getCachedRun(
+  model: string,
+  params: unknown,
+): Promise<{ run_id: string; result: unknown; duration_seconds: number | null } | null> {
   await ensureDb();
   const { rows } = await getPool().query(
-    `SELECT run_id FROM runs WHERE model = $1 AND params = $2::jsonb AND status = 'succeeded'
+    `SELECT run_id, result, duration_seconds FROM runs WHERE model = $1 AND params = $2::jsonb AND status = 'succeeded'
      ORDER BY started_at DESC LIMIT 1`,
     [model, JSON.stringify(params)],
   );
-  return rows.length ? rows[0].run_id : null;
+  return rows.length ? rows[0] : null;
 }
 
 export async function updateRunProgress(runId: string, progress: { percent: number }): Promise<void> {

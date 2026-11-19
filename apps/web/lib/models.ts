@@ -12,9 +12,10 @@
  * (400) before doing anything, both to catch typos early and because these
  * values get shell-interpolated into the sandbox command.
  *
- * Caching note (see lib/db.ts's cache_key_for): the cache key is a hash of
- * exactly the params object as submitted (after that validation), with no
- * defaulting applied. A request that omits an optional parameter is NOT
+ * Caching note (see lib/db.ts's getCachedRun): a cache hit is looked up
+ * by exact JSONB equality against the params object as submitted (after
+ * that validation), with no defaulting applied. A request that omits an
+ * optional parameter is NOT
  * treated as equivalent to one that passes its default explicitly -- they
  * get different cache entries. This is deliberate: we haven't verified for
  * every model/parameter that "omitted" and "explicit default" produce
@@ -130,7 +131,7 @@ export interface ModelMeta {
   // run can be attributed to the real version that produced it even
   // after that pin changes and the snapshot above gets rebuilt --
   // rebuilding a snapshot never updates history for runs already stored
-  // in run_cache/runs under the old version. For a model whose
+  // in `runs` under the old version. For a model whose
   // Dockerfile clones a git repo WITHOUT pinning a commit (currently
   // oscar, gcam -- `git clone --depth 1` off the default branch, a real,
   // still-open gap noted in each Dockerfile's own comments), this says
