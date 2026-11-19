@@ -59,6 +59,15 @@ export default function NewRunPanel({
   // restriction" (zero or one model selected).
   const [multiModelScenarios, setMultiModelScenarios] = useState<string[] | null>(null);
   const [multiModelParamKeys, setMultiModelParamKeys] = useState<Set<string> | null>(null);
+  // "Advanced" section -- lets a run's own exec-timeout ceiling
+  // (lib/models.ts's exec_timeout_seconds, see lib/runs.ts's
+  // clampRunTimeSeconds for the actual bounds enforced server-side) be
+  // overridden for just this submission. Empty string means "use the
+  // model's own default" -- the field's placeholder shows that default
+  // (modelMeta.exec_timeout_seconds) rather than this needing to guess or
+  // duplicate it client-side.
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [maxRunTime, setMaxRunTime] = useState("");
 
   const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const checkSeq = useRef(0);
@@ -235,6 +244,16 @@ export default function NewRunPanel({
     statusTimer.current = setTimeout(() => setStatus(null), 4000);
   }
 
+  // {} when the Advanced field is empty/not a valid number -- omitting
+  // max_run_time_seconds entirely from the request body (rather than
+  // sending some fallback) is what makes submitRun fall back to the
+  // model's own exec_timeout_seconds default, same as before this field
+  // existed.
+  function maxRunTimeBody(): { max_run_time_seconds?: number } {
+    const n = Number(maxRunTime);
+    return maxRunTime.trim() !== "" && Number.isFinite(n) && n > 0 ? { max_run_time_seconds: n } : {};
+  }
+
   // Every (model, scenario) combination the current selection implies --
   // just [{modelName, scenario}] in the common, non-batch case. The first
   // entry is always the primary (plain-click) selection; the rest, if any,
@@ -271,11 +290,14 @@ export default function NewRunPanel({
           const params = buildParams(meta, nativeScenario, m === modelName ? paramValues : {});
           // Always force a fresh run here too -- clicking "Run" never shows
           // a cached result, for the batch combos any more than the
-          // primary one. See runModel's own comment.
+          // primary one. See runModel's own comment. The Advanced max-run-
+          // time override (if set) applies to every combo in the batch,
+          // not just the primary one -- it's one form-level setting, not
+          // per-combo.
           await fetchJson(`/v1/models/${m}/runs`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ params, refresh: true }),
+            body: JSON.stringify({ params, refresh: true, ...maxRunTimeBody() }),
           });
         } catch {
           skipped++;
@@ -321,7 +343,7 @@ export default function NewRunPanel({
       const submitted = await fetchJson(`/v1/models/${modelName}/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ params, refresh: true }),
+        body: JSON.stringify({ params, refresh: true, ...maxRunTimeBody() }),
       });
       setRunDisabled(false);
       // refresh: true above means this normally won't be a cache hit (the
@@ -354,6 +376,12 @@ export default function NewRunPanel({
   async function onModelChange(name: string) {
     setModelName(name);
     setCheckResult(null);
+    // Each model's own exec_timeout_seconds default is wildly different
+    // (hector: 60s, gcam: 3000s) -- a numeric override typed in for one
+    // model would be a nonsensical (likely far too short) value carried
+    // over to a totally different model, so clear it on every model
+    // switch rather than leave it stuck at whatever was typed before.
+    setMaxRunTime("");
     try {
       await loadSchema(name);
     } catch (err: any) {
@@ -604,6 +632,36 @@ export default function NewRunPanel({
                   ? `This model's result isn't reproducible without a "${nonDeterministicKey}" value -- this run will not be cached, and a repeat run may give a different answer.`
                   : `A "${nonDeterministicKey}" is set, so this run is reproducible and will be cached.`}
               </p>
+            )}
+          </div>
+        )}
+
+        {modelMeta && (
+          <div className="form-field-block">
+            <button
+              type="button"
+              className="text-button advanced-toggle"
+              onClick={() => setAdvancedOpen((o) => !o)}
+              aria-expanded={advancedOpen}
+            >
+              {advancedOpen ? "Hide advanced" : "Advanced"}
+            </button>
+            {advancedOpen && (
+              <label className="form-field">
+                <span className="form-field-label">Max run time (seconds)</span>
+                <input
+                  type="number"
+                  placeholder={`${modelMeta.exec_timeout_seconds}`}
+                  min={1}
+                  step="any"
+                  value={maxRunTime}
+                  onChange={(e) => setMaxRunTime(e.target.value)}
+                />
+                <p className="advanced-note">
+                  How long this run is allowed to take before it's given up on. Leave blank to use this
+                  model's own default (shown as the placeholder above).
+                </p>
+              </label>
             )}
           </div>
         )}
