@@ -652,18 +652,21 @@ export default function NewRunPanel({
               Advanced
             </button>
             {advancedOpen && (
-              <label className="form-field">
-                <span className="form-field-label">Max run time</span>
-                <input
-                  type="number"
-                  placeholder={`${modelMeta.exec_timeout_seconds}`}
-                  min={1}
-                  step="any"
-                  value={maxRunTime}
-                  onChange={(e) => setMaxRunTime(e.target.value)}
-                />
-                <span className="form-field-unit">seconds</span>
-              </label>
+              <div className="param-fields-grid">
+                <label className="param-field-row" htmlFor="advanced-max-run-time">
+                  <span className="form-field-label">Max run time</span>
+                  <input
+                    id="advanced-max-run-time"
+                    type="number"
+                    placeholder={`${modelMeta.exec_timeout_seconds}`}
+                    min={1}
+                    step="any"
+                    value={maxRunTime}
+                    onChange={(e) => setMaxRunTime(e.target.value)}
+                  />
+                  <span className="form-field-unit">seconds</span>
+                </label>
+              </div>
             )}
           </div>
         )}
