@@ -644,7 +644,10 @@ export default function NewRunPanel({
               onClick={() => setAdvancedOpen((o) => !o)}
               aria-expanded={advancedOpen}
             >
-              {advancedOpen ? "Hide advanced" : "Advanced"}
+              <span className={`disclosure-triangle${advancedOpen ? " open" : ""}`} aria-hidden="true">
+                ▶
+              </span>
+              Advanced
             </button>
             {advancedOpen && (
               <label className="form-field">

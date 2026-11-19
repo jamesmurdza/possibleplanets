@@ -1115,11 +1115,25 @@ th.runs-table-checkbox-col {
 /* New Run form's collapsible "Advanced" section (currently just the
    max-run-time override) -- the toggle button itself needs a bit of
    breathing room above/below since .text-button alone is meant for
-   inline use next to other controls, not as a standalone section header. */
+   inline use next to other controls, not as a standalone section header.
+   display: inline-flex (not block/full-width) so the button is only as
+   wide as its own label+triangle, not stretched across the form. */
 .advanced-toggle {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   margin-bottom: 0.5rem;
   padding: 0;
+}
+
+.disclosure-triangle {
+  display: inline-block;
+  font-size: 0.6rem;
+  transition: transform 0.12s ease;
+}
+
+.disclosure-triangle.open {
+  transform: rotate(90deg);
 }
 
 .chart-hint {
