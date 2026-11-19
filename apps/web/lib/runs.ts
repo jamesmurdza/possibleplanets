@@ -835,8 +835,19 @@ export async function advanceRun(runId: string): Promise<RunView | null> {
   }
   const runSeconds = elapsedSeconds(startedAt);
 
+  // Same reasoning as finalizeOutcome's own step logging -- bracket the
+  // other two potentially-slow steps on this path too (a sandbox/session
+  // teardown is its own couple of Daytona API calls; so is just getting
+  // this far, mostly the RUN_OUTPUT_LOG_PATH download above for a large
+  // result) so a killed invocation's last Netlify log line says which of
+  // "got the full output", "tore down the sandbox", or "finalizeOutcome's
+  // own steps" it never got past.
+  const tFinalize = Date.now();
+  console.log(`[advanceRun ${runId}] got stdout (${stdout.length}B), cleaning up sandbox/session`);
   await cleanupSandboxAndSession(daytona, sandbox, row.session_id);
+  console.log(`[advanceRun ${runId}] sandbox/session cleaned up (+${Date.now() - tFinalize}ms), calling finalizeOutcome`);
   await finalizeOutcome(runId, row, exitCode, stdout, runSeconds);
+  console.log(`[advanceRun ${runId}] finalizeOutcome returned (+${Date.now() - tFinalize}ms total)`);
   row = (await getRun(runId))!;
   return toView(row);
 }
@@ -925,7 +936,23 @@ async function finalizeOutcome(runId: string, row: RunRow, exitCode: number, std
 }
 
 async function finalizeOutcomeInner(runId: string, row: RunRow, exitCode: number, stdout: string, runSeconds: number) {
+  // Step-by-step timing, logged unconditionally (not just on error) --
+  // added after a real gcam run (13.7MB captured output) that appeared to
+  // just hang, with NOTHING in the Netlify function logs beyond the
+  // platform's own generic "Duration/Memory Usage" line. That's the
+  // signature of the function being killed by Netlify's own execution
+  // timeout, not a JS exception -- a hard platform-level kill never gives
+  // finalizeOutcome's own try/catch (see finalizeOutcome's doc comment) a
+  // chance to run either, so that catch alone isn't enough to debug this
+  // class of failure after the fact. These logs exist so that WHEN it
+  // happens again, whatever's the last line in the Netlify log for this
+  // runId tells you exactly which step it never got past, instead of
+  // nothing at all.
+  const t0 = Date.now();
+  const log = (step: string) => console.log(`[finalizeOutcome ${runId}] ${step} (+${Date.now() - t0}ms, stdout=${stdout.length}B)`);
+  log("start");
   const jsonLine = lastJsonLine(stdout);
+  log(`lastJsonLine done, found=${jsonLine !== null}`);
 
   if (exitCode !== 0 || jsonLine === null) {
     await finishRunFailed(
@@ -939,6 +966,7 @@ async function finalizeOutcomeInner(runId: string, row: RunRow, exitCode: number
   let parsed: any;
   try {
     parsed = JSON.parse(jsonLine);
+    log(`JSON.parse done, resultBytes=${jsonLine.length}`);
   } catch {
     // Keep the actual output around (stdout_tail) -- without it, a parse
     // failure here was previously undiagnosable after the fact, since the
@@ -988,15 +1016,24 @@ async function finalizeOutcomeInner(runId: string, row: RunRow, exitCode: number
   const model = getModelOrNull(row.model);
   if (model && isCacheable(model, row.params as Record<string, unknown>)) {
     const existing = await getCached(row.model, row.params as Record<string, unknown>);
+    log("getCached done");
     if (existing === null || !deepEqual(existing, parsed)) {
+      log("deepEqual says different (or nothing cached yet) -- writing run_cache");
       await putCached(row.model, row.params, parsed, runSeconds);
+      log("putCached done");
+    } else {
+      log("deepEqual says identical to existing cache row -- skipping putCached");
     }
+  } else {
+    log("not cacheable -- skipping run_cache entirely");
   }
   // Same 2000-char tail cap already used for a failure (finishRunFailed's
   // own stdout_tail above) -- enough to debug a confusing-but-"succeeded"
   // result (what did the model actually print/log) without storing a
   // potentially huge log in full.
+  log("writing finishRunSucceeded (the runs row's own result column)");
   await finishRunSucceeded(runId, parsed, runSeconds, false, stdout.slice(-2000));
+  log("finishRunSucceeded done -- finalize complete");
 }
 
 /**
