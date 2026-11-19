@@ -923,15 +923,19 @@ export interface UpdateDeadlineResult {
  * which is a SEPARATE backstop from our deadline_at column (see
  * autoStopMinutes' own comment) -- raising deadline_at alone would still
  * let Daytona itself stop the sandbox out from under a run we just told
- * to keep going longer. Despite what the autoStopInterval name suggests,
- * this does NOT need "minus time already elapsed" the way you'd expect
- * for a true elapsed-time ceiling: per the SDK's own doc comment on
- * setAutostopInterval, it's an IDLE-time interval (minutes since the
- * sandbox's last activity) that resets on every SDK interaction --
- * including advanceRun's own per-poll reads -- not a fixed total counted
- * from sandbox creation. Passing it the same autoStopMinutes(...) value
- * submitRun used at creation is exactly as correct the tenth time as the
- * first.
+ * to keep going longer. setAutostopInterval's own clock is anchored
+ * differently than deadline_at's, though (per its SDK doc comment, it's
+ * IDLE minutes since the sandbox's LAST ACTIVITY -- i.e. effectively
+ * "now", since calling it is itself activity -- not minutes since
+ * `started_at`), so matching deadline_at's actual absolute cutoff DOES
+ * need elapsed time subtracted here: passing the same clamped total
+ * would anchor an idle-cutoff of `now + clamped minutes`, which drifts
+ * later than `started_at + clamped seconds` by however long the run's
+ * already been going -- correct direction to fail safe in (never
+ * cuts the run off early), but not an accurate match for what the
+ * drawer says it's setting. Using the seconds actually remaining in the
+ * new budget keeps both clocks pointed at (approximately) the same
+ * real moment.
  */
 export async function updateRunDeadline(runId: string, newExecTimeoutSeconds: number): Promise<UpdateDeadlineResult> {
   const row = await getRun(runId);
@@ -951,7 +955,14 @@ export async function updateRunDeadline(runId: string, newExecTimeoutSeconds: nu
     try {
       const daytona = getDaytonaClient();
       const sandbox = await daytona.get(row.sandbox_id);
-      await sandbox.setAutostopInterval(autoStopMinutes(clamped));
+      // Seconds remaining FROM NOW in the new total budget, not the total
+      // itself -- see this function's own doc comment. Floored at 0 (a
+      // shrunk deadline that's already in the past still needs a valid
+      // non-negative interval here; advanceRun's deadlinePassed check is
+      // what actually ends the run in that case, on its next poll -- this
+      // is still just the backstop, same as before).
+      const remainingSeconds = Math.max(0, clamped - elapsedSeconds(startedAt));
+      await sandbox.setAutostopInterval(autoStopMinutes(remainingSeconds));
     } catch (err) {
       // Best-effort -- deadline_at (checked by advanceRun's own
       // deadlinePassed, independent of Daytona's autoStopInterval) is the
