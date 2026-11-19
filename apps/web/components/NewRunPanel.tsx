@@ -68,6 +68,12 @@ export default function NewRunPanel({
   // duplicate it client-side.
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [maxRunTime, setMaxRunTime] = useState("");
+  // Raw JSON textarea, only rendered when modelMeta.supports_config_overrides
+  // (currently just gcam) -- see lib/clientApi.ts's buildParams for how
+  // this gets parsed/validated and models.ts's supportsConfigOverrides doc
+  // comment for why this is a free-form field instead of a curated
+  // ParameterSpec slider.
+  const [configOverridesText, setConfigOverridesText] = useState("");
 
   const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const checkSeq = useRef(0);
@@ -121,7 +127,7 @@ export default function NewRunPanel({
     const mySeq = ++checkSeq.current;
     checkTimer.current = setTimeout(async () => {
       try {
-        const params = buildParams(modelMeta, scenario, paramValues);
+        const params = buildParams(modelMeta, scenario, paramValues, configOverridesText);
         const result = await fetchJson(`/v1/models/${modelName}/check`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -136,7 +142,7 @@ export default function NewRunPanel({
       if (checkTimer.current) clearTimeout(checkTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelName, modelMeta, scenario, paramValues]);
+  }, [modelName, modelMeta, scenario, paramValues, configOverridesText]);
 
   // When more than one model is selected (primary + shift-clicked extras),
   // narrow the shown scenarios/params to the intersection across all of
@@ -287,7 +293,7 @@ export default function NewRunPanel({
             skipped++;
             return;
           }
-          const params = buildParams(meta, nativeScenario, m === modelName ? paramValues : {});
+          const params = buildParams(meta, nativeScenario, m === modelName ? paramValues : {}, configOverridesText);
           // Always force a fresh run here too -- clicking "Run" never shows
           // a cached result, for the batch combos any more than the
           // primary one. See runModel's own comment. The Advanced max-run-
@@ -339,7 +345,7 @@ export default function NewRunPanel({
     try {
       const totalCount = combos.length;
       setStatusText(totalCount > 1 ? `Submitting ${totalCount} runs...` : `${modelName}: submitting...`);
-      const params = buildParams(modelMeta, scenario, paramValues);
+      const params = buildParams(modelMeta, scenario, paramValues, configOverridesText);
       const submitted = await fetchJson(`/v1/models/${modelName}/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -666,6 +672,27 @@ export default function NewRunPanel({
                   />
                   <span className="form-field-unit">seconds</span>
                 </label>
+              </div>
+            )}
+            {advancedOpen && modelMeta.supports_config_overrides && (
+              <div className="config-overrides-field">
+                <label className="form-field-label" htmlFor="advanced-config-overrides">
+                  Config overrides (advanced)
+                </label>
+                <textarea
+                  id="advanced-config-overrides"
+                  className="config-overrides-textarea"
+                  placeholder={'{"max-parallelism": 2, "stop-period": 5}'}
+                  rows={3}
+                  value={configOverridesText}
+                  onChange={(e) => setConfigOverridesText(e.target.value)}
+                />
+                <p className="advanced-note">
+                  Raw JSON object of {"{name: value}"} -- overrides ANY existing{" "}
+                  <code>&lt;Value name=&quot;...&quot;&gt;</code> in the model&apos;s own native config file, no
+                  validation beyond checking the name exists. A bad override fails visibly (see this run&apos;s
+                  error/output in the drawer) rather than being pre-checked here.
+                </p>
               </div>
             )}
           </div>

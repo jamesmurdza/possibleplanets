@@ -545,10 +545,24 @@ export function chartAspectRatio() {
 // valid value are included in the submitted params -- see lib/models.ts's
 // module docstring for why omitted and explicit-default are deliberately
 // never treated as equivalent for caching.
+/**
+ * configOverridesText is only ever meaningful for a model with
+ * meta.supports_config_overrides (currently just gcam) -- silently
+ * ignored otherwise, so callers don't need to gate passing it
+ * themselves (e.g. a multi-model batch submission reusing the same
+ * text across models that may not all support it). THROWS (not a
+ * silent drop) on invalid JSON or a non-flat-object shape -- unlike the
+ * numeric parameters above, which just skip a value that doesn't parse,
+ * a config override typo is exactly the kind of mistake that should
+ * block submission with a clear message instead of quietly running
+ * without the override the user thought they were setting. Callers
+ * must catch this.
+ */
 export function buildParams(
   meta: ModelMeta,
   scenario: string,
   paramValues: Record<string, string>,
+  configOverridesText?: string,
 ): Record<string, unknown> {
   const params: Record<string, unknown> =
     meta.params_shape === "scenarios" ? { scenarios: [scenario] } : { scenario };
@@ -558,6 +572,19 @@ export function buildParams(
     if (raw === undefined || raw === "") continue;
     const value = Number(raw);
     if (!Number.isNaN(value)) params[spec.key] = value;
+  }
+
+  if (meta.supports_config_overrides && configOverridesText && configOverridesText.trim() !== "") {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(configOverridesText);
+    } catch {
+      throw new Error("config overrides: not valid JSON");
+    }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new Error("config overrides: must be a flat JSON object of {name: value}");
+    }
+    params.config_overrides = parsed;
   }
 
   return params;

@@ -34,5 +34,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ model: 
     // must supply to get a cacheable, reproducible run (e.g. oscar's
     // "seed"). Omitted entirely for models without this issue.
     ...(meta.nonDeterministicUnless ? { non_deterministic_unless: meta.nonDeterministicUnless } : {}),
+    // True only for gcam -- lets the New Run form's Advanced section show
+    // a raw "config overrides" JSON field. See lib/models.ts's own
+    // supportsConfigOverrides doc comment.
+    ...(meta.supportsConfigOverrides ? { supports_config_overrides: true } : {}),
   });
 }

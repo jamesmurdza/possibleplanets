@@ -194,8 +194,20 @@ except Exception:
     pass
 '`;
 
+  // Base64-encoded, not interpolated straight into a single-quoted shell
+  // arg -- a literal single quote anywhere in params (a string parameter
+  // value, a config_overrides value/path, ...) would otherwise terminate
+  // that quoted argument early and corrupt the rest of this command.
+  // base64's own alphabet (A-Za-z0-9+/=) never contains a quote, so
+  // wrapping THAT in single quotes is always safe regardless of what's
+  // inside params. Decoded back into SCENARIO_PARAMS via command
+  // substitution before runCommand ever sees it -- run.py's own
+  // `os.environ.get("SCENARIO_PARAMS")` + `json.loads` is unaffected,
+  // it's still plain JSON text by the time it gets there.
+  const paramsB64 = Buffer.from(JSON.stringify(params)).toString("base64");
+
   return (
-    `SCENARIO_PARAMS='${JSON.stringify(params)}' ${runCommand} > ${RUN_OUTPUT_LOG_PATH} 2>&1\n` +
+    `SCENARIO_PARAMS="$(echo '${paramsB64}' | base64 -d)" ${runCommand} > ${RUN_OUTPUT_LOG_PATH} 2>&1\n` +
     `EXIT=$?\n` +
     `echo "$EXIT" > ${RUN_EXIT_CODE_PATH}\n` +
     `${reportStep}\n` +
@@ -234,6 +246,7 @@ export interface SubmitResult {
 export function validateParams(model: ModelMeta, params: Record<string, unknown>): string | null {
   const allowedKeys = new Set<string>(model.params_shape === "scenario" ? ["scenario"] : ["scenarios"]);
   for (const p of model.parameters ?? []) allowedKeys.add(p.key);
+  if (model.supportsConfigOverrides) allowedKeys.add("config_overrides");
 
   for (const key of Object.keys(params)) {
     if (!allowedKeys.has(key)) {
@@ -249,6 +262,24 @@ export function validateParams(model: ModelMeta, params: Record<string, unknown>
     }
     if (value < p.min || value > p.max) {
       return `parameter '${p.key}' must be between ${p.min} and ${p.max}`;
+    }
+  }
+
+  // config_overrides deliberately has NO per-key validation beyond "is
+  // this a plain {name: value} object" -- see sandboxes/gcam/run.py's
+  // apply_config_overrides and models.ts's supportsConfigOverrides doc
+  // comment for why: there's no fixed list of safe keys/types to check
+  // against here, and a bad override is meant to fail loudly from
+  // inside the model's own run.py instead.
+  if (model.supportsConfigOverrides && "config_overrides" in params) {
+    const overrides = params.config_overrides;
+    if (
+      typeof overrides !== "object" ||
+      overrides === null ||
+      Array.isArray(overrides) ||
+      Object.values(overrides).some((v) => typeof v === "object" && v !== null)
+    ) {
+      return `parameter 'config_overrides' must be a flat object of {name: value}`;
     }
   }
 

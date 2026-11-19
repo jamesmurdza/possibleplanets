@@ -26,12 +26,25 @@ is cheap (it's just swapping in configuration_ssp.xml plus its own
 batch_SSP_*.xml file once that config is validated the same way ref was),
 not a re-run of the expensive gcamdata step.
 
-PARAMETERS: none exposed yet. GCAM has no equivalent of hector's
-config-dict overrides reachable from this script without either (a)
-regenerating gcamdata's XML database per request (reopens the exact
-memory problem docs/gcam/architecture.md says to avoid) or (b) editing
-configuration_ref.xml's own values, which hasn't been tested against any
-value other than what's already shipped. Left empty rather than guessed.
+PARAMETERS: "config_overrides" -- an arbitrary {name: value} map applied
+to configuration_ref.xml's own <Value name="...">...</Value> tags before
+gcam.exe ever runs (see apply_config_overrides below). This is the
+general answer to "GCAM has no equivalent of hector's config-dict
+overrides": rather than guessing which values are safe to expose ahead
+of time, this lets ANY existing Value in ANY section (Files,
+ScenarioComponents, Strings, Bools, Ints, Doubles) be overridden per
+run, with zero snapshot rebuild needed for a new knob -- only a new
+`run.py`/snapshot deploy was ever needed for the OVERRIDE MECHANISM
+itself, not for each individual value someone wants to try. Deliberately
+permissive, not an allowlisted subset: this project's own dashboard
+already shows a run's full error/log on failure, so a bad override
+(wrong type, a nonexistent file path for a ScenarioComponents entry,
+etc.) is visible and diagnosable the same way any other gcam.exe failure
+already is, rather than needing to be pre-validated here. The one thing
+enforced is that the override targets a Value that actually EXISTS in
+the file (see apply_config_overrides's unmatched-key handling) -- a typo
+in the name fails loudly with a clear error instead of silently doing
+nothing, which would otherwise look identical to "ran with the default".
 
 RUNTIME: confirmed by direct testing (docs/gcam/trial-log.md) that a full
 21-period run (1975-2100) takes ~30-31 minutes on cpu:4 -- two to three
@@ -180,6 +193,46 @@ def _read_cgroup_memory():
     return {"peak": peak, "max": maximum, "oom_kills": oom_kills}
 
 
+def apply_config_overrides(xml_text, overrides):
+    """
+    Applies an arbitrary {name: value} map to configuration_ref.xml's own
+    <Value ...name="X"...>OLD</Value> tags, replacing OLD with the new
+    value as plain text -- the tag's other attributes (write-output=,
+    append-scenario-name=, ...) and its section (<Files>, <Ints>, ...)
+    are left completely alone, so gcam.exe's own Configuration class
+    still parses it with the same type it always did (getInt/getBool/
+    getString/getDouble all key off which SECTION a Value is in, not its
+    text, so a pure text swap can't accidentally change that). See this
+    module's docstring for why this is deliberately unrestricted rather
+    than an allowlisted subset of "safe" keys.
+
+    A name with more than one matching tag (a handful of real sections
+    repeat the same name more than once, e.g. "nonco2_energy" appears
+    twice in <ScenarioComponents> for the MAC-adjusted variant) gets the
+    override applied to EVERY match -- there's no way to disambiguate
+    which one a caller meant from the name alone, and leaving one
+    unmatched silently would be worse than over-applying.
+
+    Returns (patched_text, errors) -- errors is a list of override keys
+    that matched nothing at all, which the caller treats as a hard
+    failure (see main()): a key that doesn't exist in the file at all is
+    almost certainly a typo, and failing loudly here is much more useful
+    than gcam.exe silently running with its untouched default while the
+    caller believes their override took effect.
+    """
+    errors = []
+    for name, value in overrides.items():
+        pattern = re.compile(
+            r'(<Value\b[^>]*\bname\s*=\s*"' + re.escape(str(name)) + r'"[^>]*>)([^<]*)(</Value>)'
+        )
+        matches = pattern.findall(xml_text)
+        if not matches:
+            errors.append(name)
+            continue
+        xml_text = pattern.sub(lambda m: m.group(1) + str(value) + m.group(3), xml_text)
+    return xml_text, errors
+
+
 def _fmt_bytes(value):
     if value is None:
         return "unknown"
@@ -207,8 +260,46 @@ def main():
         )
         sys.exit(1)
 
+    overrides = params.get("config_overrides")
+    config_path = os.path.join(GCAM_DIR, config_file)
+    if overrides:
+        if not isinstance(overrides, dict):
+            print(
+                json.dumps(
+                    {
+                        "status": "failed",
+                        "error": "config_overrides must be an object of {name: value}",
+                    }
+                )
+            )
+            sys.exit(1)
+        with open(config_path) as f:
+            patched_xml, errors = apply_config_overrides(f.read(), overrides)
+        if errors:
+            # Fail BEFORE ever launching gcam.exe -- a typo'd override key
+            # should be visible as its own clear error, not disguised as
+            # "ran with defaults" or as some unrelated gcam.exe failure
+            # further downstream. See apply_config_overrides's docstring.
+            print(
+                json.dumps(
+                    {
+                        "status": "failed",
+                        "error": f"config_overrides: no matching <Value> found for: {', '.join(errors)}",
+                    }
+                )
+            )
+            sys.exit(1)
+        # Written to a per-run path, NOT overwriting configuration_ref.xml
+        # itself -- keeps the canonical file on disk untouched/reusable if
+        # this run has no overrides for some future scenario, and makes it
+        # trivially obvious (by filename) when a run used overrides at all
+        # if anyone ever inspects the sandbox mid-run.
+        config_path = "/tmp/configuration_run.xml"
+        with open(config_path, "w") as f:
+            f.write(patched_xml)
+
     proc = subprocess.Popen(
-        ["./gcam.exe", "-C", config_file],
+        ["./gcam.exe", "-C", config_path],
         cwd=GCAM_DIR,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -259,6 +350,12 @@ def main():
             # meant for diagnosing a failure, not as the run's real output.
             "log_tail": "".join(log_lines[-200:]),
             "cgroup_memory": mem,
+            # Echoed back whenever present so a failure caused by a bad
+            # override is unambiguous about what was actually applied --
+            # see apply_config_overrides's docstring on why this is
+            # deliberately unrestricted and relies on visible failures
+            # like this one instead of pre-validation.
+            "config_overrides": overrides or None,
         }
         print(json.dumps(result))
         sys.exit(1)
@@ -276,6 +373,7 @@ def main():
         # _read_output_csv's docstring for the column shape and why this
         # is text rather than parsed rows.
         "result": {"csv": output_csv},
+        "config_overrides": overrides or None,
     }
 
     try:
