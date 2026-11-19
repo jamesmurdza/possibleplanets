@@ -4,9 +4,10 @@ If you just want to **use** GCAM as it stands today, nothing in
 `setup-guide.md` or `trial-log.md` needs to happen again. Here's what
 already exists and how to use it directly.
 
-## 1. Daytona snapshot: `gcam-production-v1`
+## 1. Daytona snapshot: `gcam-production-v3`
 
-The primary artifact. Built from `sandboxes/gcam/Dockerfile`, with:
+The primary artifact. Originally built from `sandboxes/gcam/Dockerfile`
+(v1/v2), with:
 - `cpu: 4, memory: 8, disk: 12, gpu: 0` -- plain, cheap tier, same shape
   as every other model in this project.
 - Contains: the compiled `gcam.exe` (294MB), the full generated XML
@@ -14,10 +15,17 @@ The primary artifact. Built from `sandboxes/gcam/Dockerfile`, with:
   dirs -- everything needed to run `gcam.exe -C configuration_ref.xml`
   immediately.
 
+v3 is v2 with only `exe/configuration_ref.xml` patched in place
+(`max-parallelism` `-1` -> `1`, fixing an intermittent OOM at the final
+periods -- see `oom-fix.md`) and re-snapshotted directly from a live
+sandbox, without rebuilding `gcam.exe` or regenerating the input
+database. `gcam-production-v2` is left in place, unused, as a rollback
+option.
+
 Create a sandbox from it:
 ```js
 const sandbox = await daytona.create(
-  { snapshot: 'gcam-production-v1', autoDeleteInterval: <minutes> },
+  { snapshot: 'gcam-production-v3', autoDeleteInterval: <minutes> },
   { timeout: 120 },
 )
 ```

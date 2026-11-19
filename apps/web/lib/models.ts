@@ -625,7 +625,19 @@ export const MODELS: Record<string, ModelMeta> = {
     // own comment), it just sat as "running" forever past its deadline.
     // Rebuilt from the exact same Dockerfile as gcam-production-v2 and
     // confirmed python3/gcam.exe both work before switching this over.
-    daytona_snapshot: "gcam-production-v2",
+    //
+    // v3, not v2 -- v2 intermittently got gcam.exe OOM-killed at the
+    // final periods (see docs/gcam/oom-fix.md and known-gaps.md): its
+    // configuration_ref.xml's max-parallelism=-1 (all 4 cores) made
+    // GCAM's solver keep a full per-thread scratch copy of its state,
+    // multiplying memory ~4x and hitting the 8GB cgroup ceiling right
+    // at the finish line. v3 is v2's own live sandbox with only
+    // configuration_ref.xml patched (max-parallelism -> 1) and
+    // re-snapshotted -- no gcamdata/gcam.exe rebuild needed (confirmed
+    // identical gcam.exe size/hash, same input database). Verified
+    // live on this exact snapshot (2026-11-19): full run completes,
+    // anon memory stays under ~7.3GB throughout, 0 oom_kills.
+    daytona_snapshot: "gcam-production-v3",
     // Dockerfile clones JGCRI/gcam-core@main unpinned, so the Dockerfile
     // text alone doesn't tell you which release that resolved to -- verified
     // directly instead by spinning up the real snapshot and running
