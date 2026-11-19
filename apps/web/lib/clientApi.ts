@@ -33,7 +33,7 @@ export async function fetchJson(path: string, options?: RequestInit) {
 // line, so comment lines are skipped rather than naively treated as the
 // header. No quoted-field/escaping support -- Hector's own CSV writer
 // doesn't produce those, so a plain split is enough.
-function parseHectorCsv(csv: string | null | undefined): Record<string, string>[] {
+export function parseHectorCsv(csv: string | null | undefined): Record<string, string>[] {
   if (!csv) return [];
   const lines = csv.split("\n").filter((line) => line.trim() && !line.startsWith("#"));
   if (lines.length < 1) return [];
@@ -115,18 +115,18 @@ export const CHART_ADAPTERS: Record<string, (result: any) => { labels: any[]; va
     // docstring -- it deliberately does NOT parse this on the Python
     // side, so the parsing happens here instead, in one place): one row
     // per (variable, year), not nested by variable like hector's own
-    // library adapter above. "global_tas" is Hector's own variable
-    // name, in that CSV, for global mean atmospheric temperature anomaly
-    // -- the same quantity hector's adapter reads as
+    // library adapter above. Header row (confirmed from Hector v3.2.0's
+    // own src/csv_outputstream_visitor.cpp, not guessed):
+    // year,run_name,spinup,component,variable,value,units -- so
+    // "global_tas" is the `variable` column (its `component` column is
+    // "temperature"), the same quantity hector's adapter reads as
     // native.data["temperature.global_tas"] from its library's nested
-    // dict, just flattened differently by Hector's CSV writer (no
-    // separate "component" column, so "variable" alone already carries
-    // that name). Confirmed via Hector's own docs, not guessed:
-    // https://github.com/JGCRI/hector/wiki/OutputFiles and
-    // https://jgcri.github.io/hector/articles/outputstream.html.
+    // dict, just flattened differently by Hector's CSV writer. Rows with
+    // spinup != "0" are spinup-phase output, not part of the real
+    // trajectory.
     const rows = parseHectorCsv(result.result?.csv);
     const temps = rows
-      .filter((r) => r.variable === "global_tas")
+      .filter((r) => r.variable === "global_tas" && (r.spinup ?? "0") === "0")
       .map((r) => ({ year: Number(r.year), value: Number(r.value) }))
       .sort((a, b) => a.year - b.year);
     return {
@@ -135,6 +135,185 @@ export const CHART_ADAPTERS: Record<string, (result: any) => { labels: any[]; va
       label: `GCAM (Hector) temperature anomaly (${result.scenario})`,
     };
   },
+};
+
+// --- Full data explorer series adapters ---------------------------------
+// CHART_ADAPTERS above picks ONE hardcoded series per model for the small
+// charts on Overview/Compare/the home page -- deliberately narrow, kept as
+// is (still used by those three). The run drawer's data explorer needs the
+// opposite: every distinct series a model's native result actually
+// contains, so a person can pick whichever ones they want to overlay. One
+// adapter per model, returning a flat list -- grouping by `unit` (where
+// derivable) is left to the caller (RunsPanel), since what to DO with a
+// shared unit (same y-axis, same color family, etc) is a rendering
+// decision, not a parsing one.
+export interface DataSeries {
+  key: string;
+  label: string;
+  unit?: string;
+  x: number[];
+  y: number[];
+  // Only present for genuinely ensemble-derived series (fair's per-config
+  // spread, oscar's std dev) -- same length as x/y, lower/upper bound per
+  // point, rendered as a filled band rather than asserting a single "true"
+  // value where the model itself only ever produced a distribution.
+  band?: { lower: number[]; upper: number[] };
+}
+
+/** Hector's own pyhector columns are already named like
+ * "temperature.global_tas" / "simpleNbox.CO2_concentration" -- the part
+ * before the dot is pyhector's own "component" grouping, which already
+ * reads as a reasonable unit/category label without this needing its own
+ * lookup table (hector doesn't report units anywhere in its own output, so
+ * there's nothing more precise to extract). */
+function hectorSeries(result: any): DataSeries[] {
+  const native = result.result;
+  const index: number[] = native.index;
+  return (native.columns as string[]).map((column) => ({
+    key: column,
+    label: column,
+    unit: column.split(".")[0],
+    x: index,
+    y: native.data[column],
+  }));
+}
+
+/** FAIR's native result only has one variable (temperature), but per
+ * config, not collapsed to one number -- CHART_ADAPTERS.fair averages
+ * across configs and throws the spread away. This keeps the mean AND
+ * exposes the spread as a min/max band per timestep (not stdev -- FAIR's
+ * configs are a Monte-Carlo-like ensemble over fitted climate response
+ * parameters, not a Gaussian the way oscar's MC sampling is, so an
+ * observed min/max envelope is the honest "full observed range" rather
+ * than implying a distribution shape this ensemble doesn't actually have). */
+function fairSeries(result: any): DataSeries[] {
+  const native = result.result;
+  const timebounds: number[] = native.timebounds;
+  const series: DataSeries[] = [];
+  for (const scenario of Object.keys(native.temperature ?? {})) {
+    const perTimestepConfigs: number[][] = native.temperature[scenario];
+    const mean = perTimestepConfigs.map((configsAtT) => configsAtT.reduce((a, b) => a + b, 0) / configsAtT.length);
+    const lower = perTimestepConfigs.map((configsAtT) => Math.min(...configsAtT));
+    const upper = perTimestepConfigs.map((configsAtT) => Math.max(...configsAtT));
+    series.push({
+      key: `temperature.${scenario}`,
+      label: `temperature (${scenario})`,
+      unit: "degC",
+      x: timebounds,
+      y: mean,
+      band: { lower, upper },
+    });
+  }
+  return series;
+}
+
+/** OSCAR's native result already carries both the per-year mean AND std
+ * dev across its Monte Carlo configs (see sandboxes/oscar/run.py) --
+ * CHART_ADAPTERS.oscar only charted the mean. Exposed here as a mean line
+ * plus a +/-1 std dev band, same "don't collapse an ensemble to a single
+ * number if the model already reports its spread" reasoning as fairSeries
+ * above. */
+function oscarSeries(result: any): DataSeries[] {
+  const native = result.result;
+  const years: number[] = native.year;
+  const mean: number[] = native.mean_D_Tg;
+  const std: number[] = native.std_D_Tg;
+  const lower = mean.map((m, i) => (m == null || std[i] == null ? null : m - std[i])) as number[];
+  const upper = mean.map((m, i) => (m == null || std[i] == null ? null : m + std[i])) as number[];
+  return [
+    {
+      key: "mean_D_Tg",
+      label: "temperature anomaly (mean)",
+      unit: "degC",
+      x: years,
+      y: mean,
+      band: { lower, upper },
+    },
+  ];
+}
+
+/** DICE's native Results struct carries several arrays beyond T_atmos
+ * (see sandboxes/dice/run.jl), all indexed the same way as `years` --
+ * social cost of carbon, total forcing, and the model's own utility
+ * objective. Units are DICE's own (not normalized against the other
+ * models -- same cross-model decision PLATFORM.md already made for the
+ * underlying values themselves). */
+function diceSeries(result: any): DataSeries[] {
+  const native = result.result;
+  const years: number[] = native.years;
+  const fields: [string, string, string][] = [
+    ["T_atmos", "atmospheric temperature anomaly", "degC"],
+    ["scc", "social cost of carbon", "USD/tCO2"],
+    ["forcing", "radiative forcing", "W/m^2"],
+    ["utility", "utility (DICE objective)", ""],
+  ];
+  return fields
+    .filter(([k]) => Array.isArray(native[k]))
+    .map(([k, label, unit]) => ({ key: k, label, unit: unit || undefined, x: years, y: native[k] }));
+}
+
+/** magicc/twolayer's native result.ts (as returned by this gateway's own
+ * run.py) only ever has the one series (T_atmos) -- see sandboxes/magicc
+ * and sandboxes/twolayer run.py's `result` construction, neither computes
+ * or returns anything else. Kept as separate named functions (not aliased
+ * to one shared implementation) so each can grow independently if a future
+ * version of either script starts exposing more of its native output. */
+function magiccSeries(result: any): DataSeries[] {
+  const native = result.result;
+  return [{ key: "T_atmos", label: "surface temperature anomaly", unit: "degC", x: native.years, y: native.T_atmos }];
+}
+
+function twolayerSeries(result: any): DataSeries[] {
+  const native = result.result;
+  return [{ key: "T_atmos", label: "surface temperature anomaly (upper layer)", unit: "degC", x: native.years, y: native.T_atmos }];
+}
+
+/** gcam's native result is Hector's own long-format outputstream.csv text
+ * (parsed once, here, by the shared parseHectorCsv -- see that function's
+ * comment for why GCAM's run.py deliberately leaves this unparsed). Unlike
+ * hector's own library adapter above (one row per year, one column per
+ * variable), this CSV is one row per (variable, year) pair -- so unlike
+ * hectorSeries, this needs an explicit group-by before it has per-variable
+ * x/y arrays to return. Header row confirmed from Hector v3.2.0's own
+ * src/csv_outputstream_visitor.cpp:
+ * year,run_name,spinup,component,variable,value,units -- keys/labels use
+ * "component.variable" (e.g. "temperature.global_tas") so they match
+ * hectorSeries's own column naming and can't collide if two components
+ * ever report the same bare variable name. Units come straight from the
+ * `units` column (unlike hectorSeries, which has no units to read and
+ * falls back to the component name). Spinup-phase rows (spinup != "0")
+ * are excluded -- not part of the real trajectory. */
+function gcamSeries(result: any): DataSeries[] {
+  const rows = parseHectorCsv(result.result?.csv);
+  const byVariable = new Map<string, { year: number; value: number; unit?: string }[]>();
+  for (const row of rows) {
+    const variable = row.variable;
+    if (!variable) continue;
+    if ((row.spinup ?? "0") !== "0") continue;
+    const key = row.component ? `${row.component}.${variable}` : variable;
+    if (!byVariable.has(key)) byVariable.set(key, []);
+    byVariable.get(key)!.push({ year: Number(row.year), value: Number(row.value), unit: row.units });
+  }
+  return Array.from(byVariable.entries()).map(([key, points]) => {
+    points.sort((a, b) => a.year - b.year);
+    return {
+      key,
+      label: key,
+      unit: points[0]?.unit || undefined,
+      x: points.map((p) => p.year),
+      y: points.map((p) => p.value),
+    };
+  });
+}
+
+export const SERIES_ADAPTERS: Record<string, (result: any) => DataSeries[]> = {
+  hector: hectorSeries,
+  fair: fairSeries,
+  oscar: oscarSeries,
+  dice: diceSeries,
+  magicc: magiccSeries,
+  twolayer: twolayerSeries,
+  gcam: gcamSeries,
 };
 
 // --- Cross-model scenario naming -----------------------------------------

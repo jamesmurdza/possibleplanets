@@ -108,7 +108,8 @@ def _read_output_csv(path):
     """
     gcam-hector-outputstream.csv is Hector's own standard long-format
     output (GCAM runs Hector internally as its climate component) --
-    columns scenario,run_name,spinup,year,variable,value,units, preceded
+    columns year,run_name,spinup,component,variable,value,units (read
+    from Hector v3.2.0's own src/csv_outputstream_visitor.cpp), preceded
     by a "# Output from hector version ..." comment line. Returned as
     the raw file text, completely untouched -- same "native result, no
     cross-model normalization" decision PLATFORM.md already made for
