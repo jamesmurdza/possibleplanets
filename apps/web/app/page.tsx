@@ -11,11 +11,37 @@ import { fetchJson, canonicalScenario } from "../lib/clientApi";
 import { useChartSeries } from "../lib/useRunsData";
 import TemperatureChart, { type HoverFilter } from "../components/TemperatureChart";
 import { PublicHeader, PublicFooter } from "../components/PublicChrome";
-import { modelAcronym } from "../lib/modelFullNames";
+import { modelAcronym, modelFullName } from "../lib/modelFullNames";
 import { scenarioFullName } from "../lib/scenarioFullNames";
 import { sortByResourceUsage } from "../lib/modelOrder";
+import { modelColor } from "../lib/clientApi";
 import ModelIcon from "../components/ModelIcon";
 import type { ModelListItem } from "../lib/clientTypes";
+
+// Plain "branching paths" glyph -- stands in for "a scenario" in general
+// (not any specific one), for the single combined "SSPs" legend item
+// below (see SSP_ICON_COLOR's own comment for why it's neutral, not
+// per-scenario).
+function ScenarioIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M3 13V8a3 3 0 0 1 3-3h4M8 2 11 5l-3 3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// The SSPs legend item is deliberately neutral (not colored like each
+// model's own line) -- it stands for the whole SSP framework across every
+// model that uses it, not one specific line's color the way a model's
+// legend entry does.
+const SSP_ICON_COLOR = "var(--pp-grey)";
 
 // Matches .public-card-grid's own grid-template-columns (4 columns) and
 // its @media (max-width: 800px) override (2 columns) in globals.css --
@@ -113,23 +139,60 @@ export default function HomePage() {
           ) : (
             <TemperatureChart series={series} windowMin={2000} windowMax={2100} hovered={hovered} />
           )}
+
+          <div className="public-chart-legend">
+            <div className="public-chart-legend-group">
+              {modelsByResourceUsage.map((m) => (
+                <button
+                  key={m.model}
+                  type="button"
+                  className="public-legend-item"
+                  style={{ color: modelColor(m.model) }}
+                  onMouseEnter={() => setHovered({ type: "model", value: m.model })}
+                  onMouseLeave={() => setHovered(null)}
+                >
+                  <span className="public-legend-icon">
+                    <ModelIcon model={m.model} />
+                  </span>
+                  {modelAcronym(m.model)}
+                </button>
+              ))}
+            </div>
+            <div className="public-chart-legend-group">
+              <button
+                type="button"
+                className="public-legend-item"
+                style={{ color: SSP_ICON_COLOR }}
+                onMouseEnter={() => setHovered({ type: "ssp" })}
+                onMouseLeave={() => setHovered(null)}
+              >
+                <span className="public-legend-icon">
+                  <ScenarioIcon />
+                </span>
+                SSPs
+              </button>
+            </div>
+          </div>
         </section>
 
         <section className="public-cards-section">
           <h2>Models</h2>
-          <div className="public-model-row">
+          <div className="public-card-grid">
             {modelsByResourceUsage.map((m) => (
               <Link
                 key={m.model}
                 href={`/models/${m.model}`}
-                className="public-model-card"
+                className="public-card public-model-card"
                 onMouseEnter={() => setHovered({ type: "model", value: m.model })}
                 onMouseLeave={() => setHovered(null)}
               >
-                <span className="public-model-card-icon">
-                  <ModelIcon model={m.model} />
-                </span>
-                <span className="public-model-card-acronym">{modelAcronym(m.model)}</span>
+                <div className="public-model-card-header">
+                  <span className="public-model-card-icon">
+                    <ModelIcon model={m.model} />
+                  </span>
+                  <span className="public-card-title public-model-card-acronym">{modelAcronym(m.model)}</span>
+                </div>
+                <p className="public-card-description">{modelFullName(m.model)}</p>
               </Link>
             ))}
           </div>
