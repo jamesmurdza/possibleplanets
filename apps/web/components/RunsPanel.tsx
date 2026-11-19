@@ -475,8 +475,8 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
     <div>
       <div className="panel-header">
         <h2 className="panel-title">Runs</h2>
-        <button type="button" className="primary-button" onClick={onNewRun}>
-          New Run
+        <button type="button" className="new-run-button" onClick={onNewRun}>
+          <span aria-hidden="true">+</span> New Run
         </button>
       </div>
 

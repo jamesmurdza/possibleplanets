@@ -1092,6 +1092,17 @@ th.runs-table-checkbox-col {
   border-color: var(--color-accent-hover);
 }
 
+/* The Runs panel's "New Run" button -- plain neutral `button` styling
+   (not .primary-button's blue fill), just with a "+" ahead of the label
+   and a little extra horizontal padding/gap to match. */
+.new-run-button {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 1.1rem;
+  font-weight: 500;
+}
+
 /* Note shown under the parameter fields when a model has a
    non-deterministic-unless-seeded param (see run-form above). */
 
