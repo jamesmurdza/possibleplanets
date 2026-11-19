@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Chart from "chart.js/auto";
 import Dropdown from "./Dropdown";
 import Drawer from "./Drawer";
+import Modal from "./Modal";
 import { fetchJson, CHART_ADAPTERS, summarizeParams, chartAspectRatio, nativeScenarioOf, canonicalScenario } from "../lib/clientApi";
 import type { RunJob, RunListItem } from "../lib/clientTypes";
 
@@ -54,6 +55,10 @@ export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps
   // (which run's drawer is open), see the header comment above.
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  // Confirmation step for the delete icon -- never deletes directly on
+  // click, since this is a bulk/irreversible action (see deleteSelected's
+  // own DELETE calls, there's no undo).
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -150,6 +155,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps
 
   async function deleteSelected() {
     if (checkedIds.size === 0 || deleting) return;
+    setShowDeleteConfirm(false);
     setDeleting(true);
     try {
       await Promise.all([...checkedIds].map((id) => fetchJson(`/v1/runs/${id}`, { method: "DELETE" })));
@@ -235,36 +241,62 @@ export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps
     <div>
       <div className="panel-header">
         <h2 className="panel-title">Runs</h2>
-        <div className="run-controls">
-          {checkedIds.size > 0 && (
-            <button className="text-button danger" onClick={deleteSelected} disabled={deleting}>
-              Delete {checkedIds.size} selected
-            </button>
-          )}
-          <button className="text-button" onClick={refreshList}>
-            Refresh
-          </button>
-        </div>
       </div>
 
       {loadErr && <p className="panel-error">{loadErr}</p>}
 
-      <div className="run-controls" style={{ marginBottom: "0.75rem" }}>
-        <Dropdown options={modelOptions} value={filterModel} onChange={onFilterModelChange} ariaLabel="Filter by model" />
-        <Dropdown options={scenarioOptions} value={filterScenario} onChange={setFilterScenario} ariaLabel="Filter by scenario" />
-        <Dropdown options={STATUS_OPTIONS} value={filterStatus} onChange={setFilterStatus} ariaLabel="Filter by status" />
-        {(filterModel !== ALL || filterScenario !== ALL || filterStatus !== ALL) && (
+      <div className="table-toolbar">
+        <div className="run-controls">
+          <Dropdown options={modelOptions} value={filterModel} onChange={onFilterModelChange} ariaLabel="Filter by model" />
+          <Dropdown options={scenarioOptions} value={filterScenario} onChange={setFilterScenario} ariaLabel="Filter by scenario" />
+          <Dropdown options={STATUS_OPTIONS} value={filterStatus} onChange={setFilterStatus} ariaLabel="Filter by status" />
+          {(filterModel !== ALL || filterScenario !== ALL || filterStatus !== ALL) && (
+            <button
+              className="text-button"
+              onClick={() => {
+                setFilterModel(ALL);
+                setFilterScenario(ALL);
+                setFilterStatus(ALL);
+              }}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+
+        <div className="table-toolbar-actions">
           <button
-            className="text-button"
-            onClick={() => {
-              setFilterModel(ALL);
-              setFilterScenario(ALL);
-              setFilterStatus(ALL);
-            }}
+            type="button"
+            className={`icon-button danger${checkedIds.size > 0 ? " active" : ""}`}
+            title={checkedIds.size > 0 ? `Delete ${checkedIds.size} selected` : "Select rows to delete"}
+            aria-label="Delete selected runs"
+            disabled={checkedIds.size === 0 || deleting}
+            onClick={() => setShowDeleteConfirm(true)}
           >
-            Clear filters
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path
+                d="M3 4.5h10M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5M4.5 4.5l.5 9a1 1 0 0 0 1 .95h4a1 1 0 0 0 1-.95l.5-9"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </button>
-        )}
+          <button type="button" className="icon-button secondary" title="Refresh" aria-label="Refresh" onClick={refreshList}>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path
+                d="M13.5 8a5.5 5.5 0 10-1.64 3.93M13.5 8V4.5M13.5 8H10"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <section className="panel">
@@ -369,6 +401,23 @@ export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps
             </div>
           )}
         </Drawer>
+      )}
+
+      {showDeleteConfirm && (
+        <Modal title="Delete runs?" onClose={() => setShowDeleteConfirm(false)}>
+          <p>
+            Delete {checkedIds.size} selected run{checkedIds.size === 1 ? "" : "s"}? This also tears down any still-live
+            sandbox behind them and can&apos;t be undone.
+          </p>
+          <div className="form-actions" style={{ justifyContent: "flex-end" }}>
+            <button type="button" className="text-button" onClick={() => setShowDeleteConfirm(false)}>
+              Cancel
+            </button>
+            <button type="button" className="text-button danger" onClick={deleteSelected} disabled={deleting}>
+              {deleting ? "Deleting..." : "Delete"}
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   );
