@@ -136,7 +136,21 @@
 		<Value name="restart-period">-1</Value>
 		<Value name="restart-year">-1</Value>
 		<Value name="xmldb-buffer-size">100</Value>
-		<Value name="max-parallelism">-1</Value>
+		<!-- Was -1 (all cores). gcam.exe's solver keeps a full
+		per-thread scratch copy of its state (Value::sCentralValue is
+		thread-local), so on this sandbox's 4 cores that multiplied
+		memory about 4x and reliably hit the 8GiB cgroup ceiling by
+		period ~20 of 21, intermittently getting SIGKILL'd by the
+		kernel OOM killer right at the finish line (see
+		docs/gcam/known-gaps.md). Measured live in the real
+		gcam-production-v2 snapshot: max-parallelism=-1 peaked at
+		anon=7.7GB by 80% progress and OOM-killed non-deterministically
+		near period 20, while max-parallelism=1 (serial solving)
+		completed with anon never exceeding about 7.3GB and 0 oom_kills
+		(verified via /sys/fs/cgroup/memory.events), at the cost of a
+		slower run (about 50min vs the earlier 20min baseline), still
+		well inside exec_timeout_seconds (5000s). -->
+		<Value name="max-parallelism">1</Value>
 	</Ints>
 	<Doubles>
 	</Doubles>

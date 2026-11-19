@@ -91,20 +91,40 @@ full run):
 The previously-open questions ("ran to completion inferred, not
 observed", "memory.current/memory.peak never checked during the
 gcam.exe phase") are now answered: it completes **sometimes**, memory is
-the constraint, and 8GB is the wrong tier for a reliable run. Real fix:
-rebuild the snapshot from a sandbox created with a larger memory class
-(the expensive `gcamdata` step is baked into the current image and does
-NOT need re-running -- see `artifacts.md` for the layer-preserving
-rebuild path). Note Daytona rejects per-request resource overrides for
-snapshot-based sandboxes ("Cannot specify Sandbox resources when using a
-snapshot", confirmed 2026-11-19), so this cannot be fixed from the
-gateway's `create()` call -- it is snapshot-creation-time only.
+the constraint, and 8GB is the wrong tier for a reliable run. Daytona
+rejects per-request resource overrides for snapshot-based sandboxes
+("Cannot specify Sandbox resources when using a snapshot", confirmed
+2026-11-19), so the memory ceiling itself cannot be raised from the
+gateway's `create()` call -- it is snapshot-creation-time only, and
+Daytona's org-wide cap on this account is 8GB regardless (confirmed
+2026-11-19), so a bigger memory class isn't actually available at all
+right now.
 
-Until then, `run.py` folds the cgroup evidence (`memory.peak` /
-`memory.max` / `oom_kill` count) into its failure report on any
-`gcam.exe` non-zero exit, so an OOM kill is labeled as one in the
-dashboard instead of presenting as a bare "exit_code=N" with an output
-tail that otherwise looks fine.
+**Fix applied instead: `configuration_ref.xml`'s `max-parallelism` -1 ->
+1.** GCAM 9's solver keeps a full per-thread scratch copy of its solver
+state (`Value::sCentralValue` is `tbb::enumerable_thread_specific`), so
+`-1` (all 4 cores) was multiplying memory by ~4x for parallel-solve
+scratch space on top of the base model state. Verified live
+(2026-11-19, same `gcam-production-v2` snapshot, same memory sampling
+method as above): with `max-parallelism=1`, anon peaked at ~7.3GB
+(never hit the ceiling) vs. the `-1` baseline's 7.7GB-at-80%-then-ceiling
+trajectory, `oom_kill` stayed at 0 for the full run, and it completed
+(`exit 0`, "All model periods solved correctly.", byte-identical
+13,766,812-byte result to a known-good run). The real cost: serial
+solving is slower -- this run took ~50min wall-clock vs. the earlier
+~20-24min parallel-solve completions -- but that's still well inside
+`exec_timeout_seconds` (5000s / ~83min). If gcam's run times become a
+UX problem, revisit with an intermediate parallelism value (e.g. 2) as
+a middle ground between speed and memory headroom -- not tested here.
+
+`run.py` also folds the cgroup evidence (`memory.peak` / `memory.max` /
+`oom_kill` count) into its failure report on any `gcam.exe` non-zero
+exit, so an OOM kill -- should one still happen -- is labeled as one in
+the dashboard instead of presenting as a bare "exit_code=N" with an
+output tail that otherwise looks fine. This only takes effect on a
+`gcam-production-v3`+ snapshot rebuild (both this and the
+`max-parallelism` fix live in files baked into the snapshot image, not
+reachable by the gateway at runtime).
 
 ## Local compilation is blocked on this agent's own machine
 
