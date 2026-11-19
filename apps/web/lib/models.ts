@@ -184,6 +184,17 @@ export interface ModelMeta {
   // visible in the drawer the same way any other run failure is, which
   // is the actual safety net here instead of pre-validation.
   supportsConfigOverrides?: boolean;
+  // Applied server-side (lib/runs.ts) to EVERY request for this model --
+  // dashboard or raw API caller alike -- that doesn't already specify
+  // these exact config_overrides keys itself. This is an app-level
+  // default, not anything baked into the Daytona snapshot: it exists so
+  // changing a default value never needs a new snapshot build, just a
+  // code change here. Only takes effect for a model with
+  // supportsConfigOverrides; merged in UNDER whatever the caller already
+  // set (a caller's own config_overrides keys always win), so this never
+  // overrides an explicit choice, including an explicit choice to use
+  // the snapshot's own baked-in value via some other mechanism.
+  defaultConfigOverrides?: Record<string, unknown>;
 }
 
 export const MODELS: Record<string, ModelMeta> = {
@@ -751,6 +762,23 @@ export const MODELS: Record<string, ModelMeta> = {
     // try from here on is just a request parameter, no further snapshot
     // rebuild needed.
     supportsConfigOverrides: true,
+    // App-level default, NOT a snapshot change -- the snapshot's own
+    // baked-in configuration_ref.xml still ships max-parallelism=1
+    // (serial, maximally safe). This is lib/runs.ts applying
+    // {"max-parallelism": 2} to every gcam request that doesn't already
+    // set that key itself, regardless of caller.
+    //
+    // Measured live (2026-11-19, config_overrides against the real
+    // gcam-production-v5 snapshot, same memory-sampling method used
+    // throughout docs/gcam/oom-fix.md): 2 cores reached period 20 (the
+    // exact point every 4-core/-1 run OOM-killed) with anon=7.25GB,
+    // cgroup peak ~7.9GiB of 8GiB, 0 oom_kills, in ~32min -- clearly
+    // better balanced than the shipped-first default of 1 core
+    // (never risks the ceiling but takes ~50min). 1 (max safety) and 4
+    // (max speed, real OOM risk) both remain reachable by explicitly
+    // setting config_overrides: {"max-parallelism": N} -- an explicit
+    // value always overrides this default, never the other way around.
+    defaultConfigOverrides: { "max-parallelism": 2 },
   },
 };
 

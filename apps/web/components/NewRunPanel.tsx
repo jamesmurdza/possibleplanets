@@ -683,7 +683,7 @@ export default function NewRunPanel({
                     <input
                       id="advanced-cores"
                       type="number"
-                      placeholder="1"
+                      placeholder="2"
                       min={1}
                       max={4}
                       step={1}
@@ -698,8 +698,9 @@ export default function NewRunPanel({
             {advancedOpen && modelMeta.supports_config_overrides && (
               <p className="advanced-note">
                 More cores run faster but use more memory -- measured on this sandbox&apos;s 8GB ceiling: 1 core
-                (the snapshot&apos;s own default, left blank) ~50min and never hits the ceiling, 2 cores ~32min and
-                peaks around 7.9GB, 4 cores ~20-24min but can intermittently hit the ceiling and fail.
+                ~50min and never hits the ceiling, 2 cores (the app&apos;s own default, left blank) ~32min and peaks
+                around 7.9GB, 4 cores ~20-24min but can intermittently hit the ceiling and fail. This default
+                lives in the app, not the image -- the Daytona snapshot itself still ships 1 core.
               </p>
             )}
             {advancedOpen && modelMeta.supports_config_overrides && (

@@ -127,10 +127,17 @@ Serial solving (`max-parallelism=1`) is roughly 2-2.5x slower than the
 4-core baseline when the baseline doesn't OOM. ~50 minutes is still
 comfortably inside `exec_timeout_seconds` (5000s / ~83 min, per
 `apps/web/lib/models.ts`), so this doesn't risk hitting the app's own
-deadline. If gcam's run time becomes a UX problem later, an
-intermediate value (e.g. `max-parallelism: 2`) is worth testing as a
-middle ground between speed and memory headroom -- not tested as part
-of this fix.
+deadline.
+
+**Update:** `2` cores was later measured live too (once
+`config_overrides` existed -- see `config-overrides.md`), and found to
+be a better-balanced middle ground: it reached period 20 (the exact
+point every `-1` run OOM-killed) with anon=7.25GB / cgroup peak ~7.9GiB
+of 8GiB, `0` oom_kills, in ~32min -- clearly faster than serial without
+ever approaching the ceiling the way `-1` does. This is now the app's
+own DEFAULT (not the snapshot's) -- see `config-overrides.md`'s
+"Defaulting a value at the app layer" section for why that distinction
+matters and how it's implemented.
 
 ## Deploying the fix
 

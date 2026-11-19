@@ -287,6 +287,31 @@ export function validateParams(model: ModelMeta, params: Record<string, unknown>
 }
 
 /**
+ * Merges model.defaultConfigOverrides (see models.ts) UNDER whatever
+ * the caller's own params.config_overrides already sets -- an explicit
+ * key always wins, this only fills in a key the caller never mentioned
+ * at all. Applied unconditionally, dashboard or raw API caller alike,
+ * at the very top of both checkRun and submitRun -- BEFORE
+ * validateParams, caching, and anything else downstream, so "no
+ * override set" and "explicitly set to the same default value" are
+ * genuinely the same effective request (same cache key, same
+ * validation), not two different-looking params objects that happen to
+ * produce the same run. This is how gcam's own "default 2 cores"
+ * decision is implemented -- NOT by changing anything in the Daytona
+ * snapshot (configuration_ref.xml still ships max-parallelism=1): the
+ * snapshot is a fixed artifact, this is just the app's own request
+ * construction, changeable with a code edit and no snapshot rebuild.
+ */
+function withDefaultParams(model: ModelMeta, params: Record<string, unknown>): Record<string, unknown> {
+  if (!model.supportsConfigOverrides || !model.defaultConfigOverrides) return params;
+  const callerOverrides = (params.config_overrides as Record<string, unknown> | undefined) ?? {};
+  return {
+    ...params,
+    config_overrides: { ...model.defaultConfigOverrides, ...callerOverrides },
+  };
+}
+
+/**
  * False when the model declares `nonDeterministicUnless` (see models.ts)
  * and the request doesn't supply that key. A non-cacheable run's result is
  * never treated as a cache hit for a later identical request (submitRun/
@@ -349,6 +374,8 @@ export async function checkRun(modelName: string, params: Record<string, unknown
     };
   }
 
+  params = withDefaultParams(model, params);
+
   const validationError = validateParams(model, params);
   if (validationError) {
     return { error: validationError, cacheable: false, cached: false, cached_duration_seconds: null, cached_run_id: null };
@@ -394,6 +421,8 @@ export async function submitRun(
     typeof maxRunTimeSeconds === "number" && Number.isFinite(maxRunTimeSeconds)
       ? clampRunTimeSeconds(maxRunTimeSeconds)
       : model.exec_timeout_seconds;
+
+  params = withDefaultParams(model, params);
 
   const validationError = validateParams(model, params);
   if (validationError) {

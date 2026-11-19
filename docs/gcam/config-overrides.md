@@ -127,3 +127,48 @@ before being embedded (base64's own alphabet never contains a quote, so
 wrapping THAT in single quotes is always safe regardless of what's
 inside), then decoded back via shell command substitution immediately
 before `runCommand` sees it as `SCENARIO_PARAMS`.
+
+## Defaulting a value at the app layer, not the image
+
+`config_overrides` also made it possible to change a default WITHOUT
+touching the Daytona snapshot at all -- and that distinction matters in
+practice, not just in theory. The first attempt at "make 2 cores the
+default" baked `max-parallelism=2` straight into
+`configuration_ref.xml` and shipped it as a new snapshot
+(`gcam-production-v6`) -- technically correct, but the wrong layer: the
+actual ask was for the APP to default to 2 cores, not for the shipped
+image's own default to change. That attempt was reverted (see this
+repo's commit history -- "Revert... Make 2 cores the default").
+
+The real implementation lives entirely in `apps/web/lib/runs.ts`:
+
+- `models.ts`'s `ModelMeta` gained `defaultConfigOverrides`, set for
+  gcam to `{"max-parallelism": 2}`.
+- A small helper, `withDefaultParams(model, params)`, merges
+  `model.defaultConfigOverrides` UNDER whatever the caller's own
+  `params.config_overrides` already sets -- an explicit key always
+  wins, this only fills in a key the caller never mentioned. Applied
+  at the very top of both `checkRun` and `submitRun`, before
+  validation and before anything touches the cache, so "no override
+  set" and "explicitly set to the same default" are genuinely the same
+  effective request -- same cache key, same validation -- for every
+  caller, dashboard or raw API alike.
+- `configuration_ref.xml`'s own baked-in default is untouched (still
+  `max-parallelism=1`, same as `gcam-production-v5`) -- it only matters
+  for requests that somehow bypass this app layer entirely (there
+  currently are none).
+
+Verified live (2026-11-19) against the real `gcam-production-v5`
+snapshot (no new snapshot involved at all): a caller params object with
+NO `max-parallelism` key at all (just an unrelated `stop-period`
+override, to keep the test run fast) produced, after
+`withDefaultParams`, `{"config_overrides": {"max-parallelism": 2,
+"stop-period": 1}}` -- confirmed the per-run patched
+`/tmp/configuration_run.xml` read `max-parallelism=2` while the
+snapshot's own canonical `configuration_ref.xml` still read `1`
+unchanged, and the run completed with exit 0.
+
+Changing this default again in the future -- a different core count, a
+different default value for some other config key -- is purely a
+`models.ts` edit, deployed the same way as any other web app change,
+with no Daytona snapshot involved.
