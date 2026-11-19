@@ -108,20 +108,31 @@ def _read_output_csv(path):
     """
     gcam-hector-outputstream.csv is Hector's own standard long-format
     output (GCAM runs Hector internally as its climate component) --
-    columns scenario,run_name,spinup,year,variable,value,units. Returned
-    as a plain list of row dicts, untouched, same "native result, no
+    columns scenario,run_name,spinup,year,variable,value,units, preceded
+    by a "# Output from hector version ..." comment line. Returned as
+    the raw file text, completely untouched -- same "native result, no
     cross-model normalization" decision PLATFORM.md already made for
-    every other model here. If the file doesn't exist (e.g. gcam.exe
-    failed before Hector ever ran), returns None rather than raising --
-    the caller decides how to report that against the process's own exit
-    code.
+    every other model here, taken literally: this script has no business
+    reinterpreting Hector's own file format (e.g. guessing which lines
+    are comments) when every consumer of "result" already has to parse
+    *some* model-specific shape anyway. Whoever wants structured rows
+    (currently: CHART_ADAPTERS.gcam in apps/web/lib/clientApi.ts) parses
+    this text themselves. This also avoids the bug the old row-dict
+    version of this function had: csv.DictReader doesn't know about
+    Hector's leading comment line, so it silently used that comment as
+    the header row and put every real field under csv.DictReader's
+    `restkey`, leaving every row's "variable" effectively missing. Raw
+    text has no such interpretation step to get wrong, and as plain text
+    it's also more compact than a JSON array of per-row dicts (which
+    repeats every column name on every row). Returns None if the file
+    doesn't exist (e.g. gcam.exe failed before Hector ever ran) rather
+    than raising -- the caller decides how to report that against the
+    process's own exit code.
     """
     if not os.path.exists(path):
         return None
-    import csv
-
     with open(path, newline="") as f:
-        return list(csv.DictReader(f))
+        return f.read()
 
 
 def main():
@@ -176,16 +187,17 @@ def main():
 
     _write_progress(100)
 
-    output_rows = _read_output_csv(OUTPUT_CSV)
+    output_csv = _read_output_csv(OUTPUT_CSV)
     result = {
         "status": "succeeded",
         "model": "gcam",
         "scenario": scenario_name,
-        # Hector's own native long-format output, as GCAM's internal
-        # climate component wrote it -- untouched, per the minimal
-        # output-shape decision in PLATFORM.md. See _read_output_csv's
-        # docstring for the column shape.
-        "result": {"rows": output_rows},
+        # Hector's own native long-format CSV, as GCAM's internal climate
+        # component wrote it -- the raw file text, untouched, per the
+        # minimal output-shape decision in PLATFORM.md. See
+        # _read_output_csv's docstring for the column shape and why this
+        # is text rather than parsed rows.
+        "result": {"csv": output_csv},
     }
 
     try:
