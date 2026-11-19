@@ -429,7 +429,13 @@ export default function NewRunPanel({
     return seconds < 60 ? `${seconds.toFixed(1)}s` : `${(seconds / 60).toFixed(1)}m`;
   }
 
-  function etaBadge(): { text: string; kind: "estimate" | "warn" } | null {
+  // Just the number(s) -- "2.8s" or a multi-model "2.1s–31.0m" range --
+  // for embedding straight into the Run button's own label (see the
+  // button below: "Start 2 runs (2.8s)"), not a full sentence. Null
+  // whenever there's nothing meaningful to show yet (no run history for
+  // any selected model) -- the button then just shows its plain
+  // "Run"/"Start N runs" label with nothing in parens.
+  function etaShort(): string | null {
     const selectedModels = [modelName, ...extraModels];
     // Multiple models selected (shift-click batch) -- each has its own
     // real run time (a gcam run is ~1000x a hector run), so one single
@@ -443,29 +449,22 @@ export default function NewRunPanel({
       const medians = selectedModels
         .map((m) => statsByModel[m]?.median_seconds)
         .filter((v): v is number => typeof v === "number");
-      if (medians.length === 0) {
-        return { text: "No run history yet", kind: "estimate" };
-      }
+      if (medians.length === 0) return null;
       const min = Math.min(...medians);
       const max = Math.max(...medians);
-      const text =
-        min === max
-          ? `~${formatEtaSeconds(min)} estimated`
-          : `~${formatEtaSeconds(min)}–${formatEtaSeconds(max)} estimated`;
-      return { text, kind: "estimate" };
+      return min === max ? formatEtaSeconds(min) : `${formatEtaSeconds(min)}–${formatEtaSeconds(max)}`;
     }
 
-    if (!checkResult) return null;
-    if (!checkResult.cacheable) {
-      return { text: "Won't be cached (see Advanced)", kind: "warn" };
-    }
+    if (!checkResult || !checkResult.cacheable) return null;
     const stats = statsByModel[modelName];
-    if (stats) {
-      return { text: `~${formatEtaSeconds(stats.median_seconds)} estimated`, kind: "estimate" };
-    }
-    return { text: "No run history yet", kind: "estimate" };
+    return stats ? formatEtaSeconds(stats.median_seconds) : null;
   }
-  const eta = etaBadge();
+  const eta = etaShort();
+  // Separate from the button label above -- this is specifically the
+  // "this run won't be cacheable" warning (see Advanced/nonDeterministicKey),
+  // not a timing estimate, so it stays its own small badge rather than
+  // being embeddable into the button text the way a duration is.
+  const uncacheableWarning = checkResult && !checkResult.cacheable ? "Won't be cached (see Advanced)" : null;
 
   const scenarios = multiModelScenarios ?? modelMeta?.scenarios ?? [];
   const parameters = (modelMeta?.parameters ?? []).filter((p) => multiModelParamKeys === null || multiModelParamKeys.has(p.key));
@@ -596,9 +595,13 @@ export default function NewRunPanel({
 
         <div className="form-actions">
           <button type="submit" className="primary-button" disabled={runDisabled}>
-            {extraModels.size + extraScenarios.size > 0 ? `Run ${(1 + extraModels.size) * (1 + extraScenarios.size)}` : "Run"}
+            {(() => {
+              const count = (1 + extraModels.size) * (1 + extraScenarios.size);
+              const label = count > 1 ? `Start ${count} runs` : "Run";
+              return eta ? `${label} (${eta})` : label;
+            })()}
           </button>
-          {eta && <span className={`eta-badge eta-badge-${eta.kind}`}>{eta.text}</span>}
+          {uncacheableWarning && <span className="eta-badge eta-badge-warn">{uncacheableWarning}</span>}
           {checkResult?.cached && (
             <button type="button" className="text-button" onClick={viewCachedRun}>
               View cached
