@@ -130,22 +130,26 @@ export default function HomePage() {
   const [hovered, setHovered] = useState<HoverFilter>(null);
   // Click-to-stick version of the legend's hover highlight -- set by
   // clicking a model OR an SSP legend entry, cleared by clicking that same
-  // entry again, clicking a different entry (model or SSP -- only one
-  // thing can be pinned at a time), or (never) by plain mouse-leave, unlike
-  // `hovered` above. While set, it's what's actually passed to the chart
-  // (see `effectiveHovered` below) instead of the transient hover, and
-  // mouse hover on the legend is ignored entirely so it can't interrupt
-  // the pin -- see onLegendEnter/Leave.
+  // entry again or clicking a different entry (model or SSP -- only one
+  // thing can be pinned at a time). Unlike before, mouse hover on the
+  // legend is NOT suppressed while something's pinned -- hovering a
+  // different entry still previews its highlight/dim on the chart (see
+  // `effectiveHovered` below, which prefers the live hover over the pin).
+  // What stays locked to the pin regardless of hover is the TOOLTIP --
+  // see `effectiveTooltipFilter` and TemperatureChart's own tooltipFilter
+  // prop -- so mousing around to preview other lines never makes the
+  // tooltip show anything but the pinned item's own runs.
   const [pinned, setPinned] = useState<HoverFilter>(null);
-  const effectiveHovered: HoverFilter = pinned ?? hovered;
+  const effectiveHovered: HoverFilter = hovered ?? pinned;
+  const effectiveTooltipFilter: HoverFilter = pinned ?? hovered;
   const { series, loading } = useChartSeries();
   const columnsPerRow = useColumnsPerRow();
 
   function onLegendEnter(filter: HoverFilter) {
-    if (!pinned) setHovered(filter);
+    setHovered(filter);
   }
   function onLegendLeave() {
-    if (!pinned) setHovered(null);
+    setHovered(null);
   }
   function onLegendClick(filter: { type: "model" | "scenario"; value: string }) {
     setPinned((prev) =>
@@ -195,7 +199,13 @@ export default function HomePage() {
           {loading ? (
             <div className="skeleton skeleton-chart" aria-hidden="true" />
           ) : (
-            <TemperatureChart series={series} windowMin={2000} windowMax={2100} hovered={effectiveHovered} />
+            <TemperatureChart
+              series={series}
+              windowMin={2000}
+              windowMax={2100}
+              hovered={effectiveHovered}
+              tooltipFilter={effectiveTooltipFilter}
+            />
           )}
 
           <div className="public-chart-legend">

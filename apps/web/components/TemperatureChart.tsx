@@ -60,6 +60,7 @@ export default function TemperatureChart({
   windowMax,
   aspectRatio,
   hovered,
+  tooltipFilter,
   colorBy = "model",
   legend = false,
 }: {
@@ -77,6 +78,15 @@ export default function TemperatureChart({
    * matching lines get full color/width and everything else fades,
    * instead of every line always sitting at the same half-opacity. */
   hovered?: HoverFilter;
+  /** What the tooltip is restricted to -- defaults to `hovered` itself
+   * when omitted (so every existing caller keeps "tooltip follows
+   * whatever's highlighted" behavior unchanged). The home page passes
+   * this separately from `hovered` so that mouse-hovering a different
+   * legend item can still preview that item's highlight/dim (via
+   * `hovered`) while a click-pinned item keeps the tooltip locked to
+   * just itself regardless of what's being hovered -- see app/page.tsx's
+   * own pinned/hovered split. */
+  tooltipFilter?: HoverFilter;
   /** "model" (default, for the home page's mixed-model chart) colors/
    * labels each line by its model. "scenario" (for a model's own article
    * page, where `series` is already filtered to one model) colors/labels
@@ -90,6 +100,7 @@ export default function TemperatureChart({
    * distinct, meaningful entries worth labeling. */
   legend?: boolean;
 }) {
+  const effectiveTooltipFilter = tooltipFilter !== undefined ? tooltipFilter : hovered;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
 
@@ -185,13 +196,14 @@ export default function TemperatureChart({
     return { datasets: [...perRun, average] };
   }, [series, hovered, colorBy]);
 
-  // Read inside the tooltip filter below instead of closing over `hovered`
-  // directly -- the chart-creation effect (right below) deliberately only
-  // runs once (see its own comment), so a filter callback defined inside
-  // it would otherwise always see whatever `hovered` was at mount time.
-  // Kept current by the hover-update effect further down, the same place
-  // that already pushes new dataset colors into the live chart instance.
-  const hoveredRef = useRef<HoverFilter>(hovered ?? null);
+  // Read inside the tooltip filter below instead of closing over
+  // `effectiveTooltipFilter` directly -- the chart-creation effect (right
+  // below) deliberately only runs once (see its own comment), so a filter
+  // callback defined inside it would otherwise always see whatever that
+  // value was at mount time. Kept current by the hover-update effect
+  // further down, the same place that already pushes new dataset colors
+  // into the live chart instance.
+  const tooltipFilterRef = useRef<HoverFilter>(effectiveTooltipFilter ?? null);
 
   // Creates the chart once per (windowMin/windowMax/aspectRatio/canvas
   // presence) -- deliberately NOT re-run on every `hovered` change. A
@@ -235,15 +247,16 @@ export default function TemperatureChart({
           tooltip: {
             mode: "nearest",
             intersect: false,
-            // While a HoverFilter is active (plain mouse hover, or a
-            // click-pinned legend item sticking it -- see the home
-            // page's own pinned/hovered split), only show tooltip
-            // entries for runs that actually match it, same "model"/
-            // "scenario"/"ssp" semantics as the dim/highlight logic
-            // above (matchesHover) -- not every nearby line regardless
-            // of what's highlighted. The average line is always shown.
+            // While a tooltipFilter is active, only show tooltip entries
+            // for runs that actually match it, same "model"/"scenario"/
+            // "ssp" semantics as the dim/highlight logic above
+            // (matchesHover) -- not every nearby line regardless of
+            // what's highlighted. The average line is always shown. See
+            // this component's own tooltipFilter prop doc comment for
+            // why this is a separate value from `hovered` (the one that
+            // drives dim/highlight) rather than the same one.
             filter: (item) => {
-              const h = hoveredRef.current;
+              const h = tooltipFilterRef.current;
               if (!h) return true;
               const ds = item.dataset as any;
               if (ds.__isAverage) return true;
@@ -275,11 +288,11 @@ export default function TemperatureChart({
   // Hover (and any other dataset-only change) updates the existing
   // instance in place instead of recreating it -- no resize flash.
   useEffect(() => {
-    hoveredRef.current = hovered ?? null;
+    tooltipFilterRef.current = effectiveTooltipFilter ?? null;
     if (!chartData || !chartRef.current) return;
     chartRef.current.data.datasets = chartData.datasets as any;
     chartRef.current.update();
-  }, [chartData, hovered]);
+  }, [chartData, effectiveTooltipFilter]);
 
   if (!chartData) return <p className="public-chart-empty">No runs to plot yet.</p>;
 

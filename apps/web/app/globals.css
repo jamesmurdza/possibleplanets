@@ -658,6 +658,28 @@ th.runs-table-checkbox-col {
   cursor: default;
 }
 
+/* Placeholder rows shown while the Runs table's first fetch is still in
+   flight (RunsPanel.tsx's SkeletonRows) -- same skeleton-pulse animation
+   as the public site's .skeleton-bar, but against the dashboard's own
+   --color-* theme instead of --pp-grey-light (a custom property that
+   only exists under .public-page, which this table is never inside). */
+.runs-table tbody tr.runs-table-skeleton-row {
+  cursor: default;
+}
+
+.runs-table tbody tr.runs-table-skeleton-row:hover {
+  background: none;
+}
+
+.runs-table-skeleton-bar {
+  display: block;
+  height: 0.8rem;
+  width: 70%;
+  border-radius: 3px;
+  background: var(--color-border);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
 .status-pill {
   display: inline-block;
   font-size: 0.7rem;
@@ -1604,6 +1626,7 @@ th.runs-table-checkbox-col {
 
 .site-nav {
   display: flex;
+  align-items: center;
   gap: 20px;
 }
 
@@ -1635,6 +1658,12 @@ th.runs-table-checkbox-col {
   gap: 0.3rem;
   font-family: inherit;
   font-size: 0.9375rem;
+  /* A <button>'s UA-default line-height ("normal") isn't necessarily the
+     same as the surrounding text's -- inheriting it explicitly keeps
+     this lined up with the plain .page-link anchor right next to it
+     (see .site-nav's own align-items: center) instead of sitting a
+     couple pixels off from it. */
+  line-height: inherit;
   color: var(--pp-text);
   background: none;
   border: none;

@@ -20,7 +20,11 @@ export function proxy(request: NextRequest) {
   if (cookie?.value === DASHBOARD_AUTH_VALUE) {
     return NextResponse.next();
   }
-  const loginUrl = new URL("/login", request.url);
+  // "/login" (not this page) is what this used to redirect to, before
+  // the standalone login page was merged into /account -- see
+  // app/account/page.tsx's own module comment. Left pointing at the old
+  // path, this 404'd for every unauthenticated /dashboard visit.
+  const loginUrl = new URL("/account", request.url);
   loginUrl.searchParams.set("next", request.nextUrl.pathname);
   return NextResponse.redirect(loginUrl);
 }
