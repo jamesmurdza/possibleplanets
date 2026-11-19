@@ -657,10 +657,6 @@ export default function NewRunPanel({
                   value={maxRunTime}
                   onChange={(e) => setMaxRunTime(e.target.value)}
                 />
-                <p className="advanced-note">
-                  How long this run is allowed to take before it's given up on. Leave blank to use this
-                  model's own default (shown as the placeholder above).
-                </p>
               </label>
             )}
           </div>
