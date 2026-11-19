@@ -67,6 +67,33 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`status-pill status-pill-${status}`}>{status}</span>;
 }
 
+// Placeholder rows shown in place of the "Loading runs..." text row while
+// the first GET /v1/runs is still in flight -- matches the real table's
+// column count/shape (8: checkbox, Model, Version, Scenario, Params,
+// Status, Duration, Started) so nothing reflows once real rows swap in.
+// Uses the dashboard's own --color-* theme (via .runs-table-skeleton-bar,
+// not the public site's .skeleton-bar -- that one's background resolves
+// against --pp-grey-light, a custom property only defined under
+// .public-page, which this dashboard table is never inside).
+const SKELETON_ROW_COUNT = 6;
+
+function SkeletonRows() {
+  return (
+    <>
+      {Array.from({ length: SKELETON_ROW_COUNT }).map((_, i) => (
+        <tr key={i} className="runs-table-skeleton-row" aria-hidden="true">
+          <td className="runs-table-checkbox-col" />
+          {Array.from({ length: 7 }).map((_, j) => (
+            <td key={j}>
+              <span className="runs-table-skeleton-bar" />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
+
 // A clickable <th> for the Runs table -- shows an up/down arrow only on
 // whichever column is the current sort key (see RunsPanel's toggleSort),
 // nothing on the rest. Clicking the already-active column flips direction
@@ -606,14 +633,11 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
               </tr>
             </thead>
             <tbody>
-              {sortedRuns.length === 0 && (
+              {loading && <SkeletonRows />}
+              {!loading && sortedRuns.length === 0 && (
                 <tr>
                   <td colSpan={8} className="runs-table-empty">
-                    {loading
-                      ? "Loading runs..."
-                      : runs.length === 0
-                        ? 'No runs yet -- start one from "New Run".'
-                        : "No runs match these filters."}
+                    {runs.length === 0 ? 'No runs yet -- start one from "New Run".' : "No runs match these filters."}
                   </td>
                 </tr>
               )}
