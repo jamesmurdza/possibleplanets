@@ -403,6 +403,12 @@ export async function submitRun(
           cached: true,
           progress: { percent: 100 },
           duration_seconds: 0,
+          // Nothing actually ran just now -- this is an existing
+          // run_cache answer, not a fresh process invocation, so there's
+          // no new stdout to show. The real run that originally produced
+          // this result has its own row (and its own stdout_tail) still
+          // sitting in `runs`, findable via findLatestSucceededRun.
+          stdout_tail: null,
         },
       };
     }
@@ -486,9 +492,18 @@ export interface RunView {
   cached: boolean;
   progress: { percent: number } | null;
   duration_seconds: number | null;
+  // The model process's raw captured stdout+stderr, tail-capped -- see
+  // this app's db.ts stdout_tail column comment. Present for both
+  // succeeded and failed runs (falls back to error.stdout_tail for an
+  // older failed row written before this column existed), null if
+  // there's genuinely nothing captured (e.g. a run that never got far
+  // enough to produce any). Meant for debugging a confusing result, not
+  // part of the model's own (parsed, structured) `result`.
+  stdout_tail: string | null;
 }
 
 function toView(row: RunRow): RunView {
+  const error = row.error as { code: string; message: string; stdout_tail?: string } | null;
   return {
     run_id: row.run_id,
     model: row.model,
@@ -504,6 +519,7 @@ function toView(row: RunRow): RunView {
     cached: row.cached,
     progress: row.progress,
     duration_seconds: row.duration_seconds,
+    stdout_tail: row.stdout_tail ?? error?.stdout_tail ?? null,
   };
 }
 
@@ -723,7 +739,11 @@ async function finalizeOutcome(runId: string, row: RunRow, exitCode: number, std
       await putCached(row.model, row.params, parsed, runSeconds);
     }
   }
-  await finishRunSucceeded(runId, parsed, runSeconds, false);
+  // Same 2000-char tail cap already used for a failure (finishRunFailed's
+  // own stdout_tail above) -- enough to debug a confusing-but-"succeeded"
+  // result (what did the model actually print/log) without storing a
+  // potentially huge log in full.
+  await finishRunSucceeded(runId, parsed, runSeconds, false, stdout.slice(-2000));
 }
 
 /**

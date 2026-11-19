@@ -71,6 +71,12 @@ export interface RunJob {
   cached: boolean;
   progress: { percent: number } | null;
   duration_seconds: number | null;
+  // The model process's raw captured stdout+stderr, tail-capped -- see
+  // lib/db.ts's stdout_tail column comment. Present for both succeeded
+  // and failed runs; null if nothing was captured, or for a run that
+  // predates this column. Meant for debugging a confusing result (the
+  // run drawer's own "Raw output" section), not part of `result` itself.
+  stdout_tail: string | null;
 }
 
 export interface RunListItem {

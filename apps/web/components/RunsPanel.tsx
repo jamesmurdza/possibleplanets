@@ -157,6 +157,10 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
   const [detailErr, setDetailErr] = useState<string | null>(null);
   const [runAgainBusy, setRunAgainBusy] = useState(false);
   const [runAgainErr, setRunAgainErr] = useState<string | null>(null);
+  // Collapsed by default -- raw stdout/stderr is a debugging aid (see
+  // selectedJob.stdout_tail's own comment), not something to show
+  // unasked-for every time a run's drawer opens.
+  const [rawOutputOpen, setRawOutputOpen] = useState(false);
   const [filterModel, setFilterModel] = useState(ALL);
   const [filterScenario, setFilterScenario] = useState(ALL);
   const [filterStatus, setFilterStatus] = useState(ALL);
@@ -456,6 +460,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
     setDetailErr(null);
     setDrawerModelMeta(null);
     setRunAgainErr(null);
+    setRawOutputOpen(false);
     if (selectedRunId) pollDetail(selectedRunId);
     return () => {
       if (detailPollTimer.current) clearTimeout(detailPollTimer.current);
@@ -788,6 +793,28 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                   ? `Failed: ${selectedJob.error?.message || "unknown error"}`
                   : `${selectedJob.status}...`
                 : "Loading..."}
+            </div>
+          )}
+          {selectedJob?.stdout_tail && (
+            <div className="drawer-raw-output">
+              <button
+                type="button"
+                className="text-button advanced-toggle"
+                onClick={() => setRawOutputOpen((o) => !o)}
+                aria-expanded={rawOutputOpen}
+              >
+                <span className={`disclosure-triangle${rawOutputOpen ? " open" : ""}`} aria-hidden="true">
+                  ▶
+                </span>
+                Raw output
+              </button>
+              {rawOutputOpen && (
+                // Exactly what the model process printed to stdout/stderr
+                // (tail-capped -- see RunJob's own stdout_tail comment),
+                // for debugging a run whose result doesn't make sense --
+                // not reformatted/parsed in any way.
+                <pre className="drawer-raw-output-pre">{selectedJob.stdout_tail}</pre>
+              )}
             </div>
           )}
         </Drawer>
