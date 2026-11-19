@@ -77,6 +77,10 @@ export interface RunJob {
   // predates this column. Meant for debugging a confusing result (the
   // run drawer's own "Raw output" section), not part of `result` itself.
   stdout_tail: string | null;
+  // Best-effort stdout+stderr captured WHILE the run is still "running" --
+  // see lib/db.ts's live_stdout_tail column comment. Only meaningful while
+  // status is "running"; use stdout_tail above once the run finishes.
+  live_stdout_tail: string | null;
   // Sandbox details -- see lib/runs.ts's RunView doc comments for each.
   // All null for a cache-hit inline result (nothing ran) or a run that
   // predates this tracking.
