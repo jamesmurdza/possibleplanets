@@ -91,8 +91,37 @@ function truncateToRows<T>(items: T[], columnsPerRow: number): { visible: T[]; t
 // empty result.
 const NON_SSP_MODELS = new Set(["dice", "magicc", "gcam"]);
 
+// Fixed skeleton counts while GET /v1/models hasn't resolved yet -- not
+// meant to exactly predict the real counts (7 models, up to 8 shared
+// SSPs), just enough placeholder cards to fill out the same 4-column
+// grid shape (.public-card-grid) the real content will land in, so the
+// page doesn't visibly reflow once it loads.
+const MODEL_SKELETON_COUNT = 7;
+const SCENARIO_SKELETON_COUNT = 8;
+
+function SkeletonCards({ count, withIcon }: { count: number; withIcon?: boolean }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="public-card skeleton" aria-hidden="true">
+          {withIcon && (
+            <div className="public-model-card-header">
+              <span className="skeleton-bar skeleton-icon" />
+              <span className="skeleton-bar" style={{ width: "3.5rem" }} />
+            </div>
+          )}
+          {!withIcon && <span className="skeleton-bar" style={{ width: "40%", marginBottom: "0.45rem" }} />}
+          <span className="skeleton-bar" style={{ width: "85%" }} />
+          <span className="skeleton-bar" style={{ width: "60%", marginTop: "0.3rem" }} />
+        </div>
+      ))}
+    </>
+  );
+}
+
 export default function HomePage() {
   const [models, setModels] = useState<ModelListItem[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
   const [hovered, setHovered] = useState<HoverFilter>(null);
   const { series, loading } = useChartSeries();
   const columnsPerRow = useColumnsPerRow();
@@ -100,7 +129,8 @@ export default function HomePage() {
   useEffect(() => {
     fetchJson("/v1/models")
       .then((data) => setModels(data.models ?? []))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setModelsLoading(false));
   }, []);
 
   // The SSPs every SSP-framework model actually offers -- an intersection,
@@ -135,88 +165,108 @@ export default function HomePage() {
 
         <section className="public-chart-section">
           {loading ? (
-            <p className="public-chart-empty">Loading runs...</p>
+            <div className="skeleton skeleton-chart" aria-hidden="true" />
           ) : (
             <TemperatureChart series={series} windowMin={2000} windowMax={2100} hovered={hovered} />
           )}
 
           <div className="public-chart-legend">
-            <div className="public-chart-legend-group">
-              {modelsByResourceUsage.map((m) => (
-                <button
-                  key={m.model}
-                  type="button"
-                  className="public-legend-item"
-                  style={{ color: modelColor(m.model) }}
-                  onMouseEnter={() => setHovered({ type: "model", value: m.model })}
-                  onMouseLeave={() => setHovered(null)}
-                >
-                  <span className="public-legend-icon">
-                    <ModelIcon model={m.model} />
-                  </span>
-                  {modelAcronym(m.model)}
-                </button>
-              ))}
-            </div>
-            <div className="public-chart-legend-group">
-              <button
-                type="button"
-                className="public-legend-item"
-                style={{ color: SSP_ICON_COLOR }}
-                onMouseEnter={() => setHovered({ type: "ssp" })}
-                onMouseLeave={() => setHovered(null)}
-              >
-                <span className="public-legend-icon">
-                  <ScenarioIcon />
-                </span>
-                SSPs
-              </button>
-            </div>
+            {modelsLoading ? (
+              <div className="public-chart-legend-group">
+                {Array.from({ length: MODEL_SKELETON_COUNT }).map((_, i) => (
+                  <span key={i} className="skeleton-bar skeleton-legend-item" aria-hidden="true" />
+                ))}
+              </div>
+            ) : (
+              <>
+                <div className="public-chart-legend-group">
+                  {modelsByResourceUsage.map((m) => (
+                    <button
+                      key={m.model}
+                      type="button"
+                      className="public-legend-item"
+                      style={{ color: modelColor(m.model) }}
+                      onMouseEnter={() => setHovered({ type: "model", value: m.model })}
+                      onMouseLeave={() => setHovered(null)}
+                    >
+                      <span className="public-legend-icon">
+                        <ModelIcon model={m.model} />
+                      </span>
+                      {modelAcronym(m.model)}
+                    </button>
+                  ))}
+                </div>
+                <div className="public-chart-legend-group">
+                  <button
+                    type="button"
+                    className="public-legend-item"
+                    style={{ color: SSP_ICON_COLOR }}
+                    onMouseEnter={() => setHovered({ type: "ssp" })}
+                    onMouseLeave={() => setHovered(null)}
+                  >
+                    <span className="public-legend-icon">
+                      <ScenarioIcon />
+                    </span>
+                    SSPs
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </section>
 
         <section className="public-cards-section">
           <h2>Models</h2>
           <div className="public-card-grid">
-            {modelsByResourceUsage.map((m) => (
-              <Link
-                key={m.model}
-                href={`/models/${m.model}`}
-                className="public-card public-model-card"
-                onMouseEnter={() => setHovered({ type: "model", value: m.model })}
-                onMouseLeave={() => setHovered(null)}
-              >
-                <div className="public-model-card-header">
-                  <span className="public-model-card-icon">
-                    <ModelIcon model={m.model} />
-                  </span>
-                  <span className="public-card-title public-model-card-acronym">{modelAcronym(m.model)}</span>
-                </div>
-                <p className="public-card-description">{modelFullName(m.model)}</p>
-              </Link>
-            ))}
+            {modelsLoading ? (
+              <SkeletonCards count={MODEL_SKELETON_COUNT} withIcon />
+            ) : (
+              modelsByResourceUsage.map((m) => (
+                <Link
+                  key={m.model}
+                  href={`/models/${m.model}`}
+                  className="public-card public-model-card"
+                  onMouseEnter={() => setHovered({ type: "model", value: m.model })}
+                  onMouseLeave={() => setHovered(null)}
+                >
+                  <div className="public-model-card-header">
+                    <span className="public-model-card-icon">
+                      <ModelIcon model={m.model} />
+                    </span>
+                    <span className="public-card-title public-model-card-acronym">{modelAcronym(m.model)}</span>
+                  </div>
+                  <p className="public-card-description">{modelFullName(m.model)}</p>
+                </Link>
+              ))
+            )}
           </div>
         </section>
 
         <section className="public-cards-section">
           <h2>Emissions scenarios</h2>
           <div className="public-card-grid">
-            {visibleScenarios.visible.map((s) => (
-              <Link
-                key={s}
-                href={`/scenarios/${encodeURIComponent(s)}`}
-                className="public-card"
-                onMouseEnter={() => setHovered({ type: "scenario", value: s })}
-                onMouseLeave={() => setHovered(null)}
-              >
-                <div className="public-card-title">{s}</div>
-                <p className="public-card-description">{scenarioFullName(s)}</p>
-              </Link>
-            ))}
-            {visibleScenarios.truncated && (
-              <div className="public-card public-card-more">
-                <div className="public-card-title">...</div>
-              </div>
+            {modelsLoading ? (
+              <SkeletonCards count={SCENARIO_SKELETON_COUNT} />
+            ) : (
+              <>
+                {visibleScenarios.visible.map((s) => (
+                  <Link
+                    key={s}
+                    href={`/scenarios/${encodeURIComponent(s)}`}
+                    className="public-card"
+                    onMouseEnter={() => setHovered({ type: "scenario", value: s })}
+                    onMouseLeave={() => setHovered(null)}
+                  >
+                    <div className="public-card-title">{s}</div>
+                    <p className="public-card-description">{scenarioFullName(s)}</p>
+                  </Link>
+                ))}
+                {visibleScenarios.truncated && (
+                  <div className="public-card public-card-more">
+                    <div className="public-card-title">...</div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </section>

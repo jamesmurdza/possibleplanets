@@ -1500,6 +1500,64 @@ a.icon-button {
   font-size: 0.9375rem;
 }
 
+/* --- Loading skeletons (home page) ---
+   Plain pulsing gray blocks shaped like the real content they stand in
+   for, in the exact same grid/flex containers the real content lands
+   in once it loads -- so nothing reflows when GET /v1/models (or the
+   chart's own useChartSeries) resolves, it just swaps in place. */
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.skeleton {
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-bar {
+  display: block;
+  height: 0.8rem;
+  border-radius: 3px;
+  background: var(--pp-grey-light);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+/* Same aspect ratios TemperatureChart itself uses (1.8 desktop / 1.1
+   narrow, see its own isNarrow logic) -- so the chart's real height
+   doesn't visibly jump once it swaps in. */
+.skeleton-chart {
+  width: 100%;
+  aspect-ratio: 1.8;
+  border-radius: 4px;
+  background: var(--pp-grey-light);
+}
+
+@media (max-width: 640px) {
+  .skeleton-chart {
+    aspect-ratio: 1.1;
+  }
+}
+
+/* Standing in for the legend's icon+acronym buttons -- a plain bar
+   rather than trying to fake an icon+text shape for something this
+   small. */
+.skeleton-legend-item {
+  width: 3.5rem;
+}
+
+/* Standing in for .public-model-card-icon inside a skeleton card's own
+   icon+acronym header row. */
+.skeleton-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+}
+
 .public-cards-section {
   margin-bottom: 3rem;
 }
