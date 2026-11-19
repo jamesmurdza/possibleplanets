@@ -337,8 +337,8 @@ export default function NewRunPanel({
     }
 
     try {
-      const batchNote = extraCombos.length ? ` (+${extraCombos.length} more -- see Runs tab)` : "";
-      setStatusText(`${modelName}: submitting...${batchNote}`);
+      const totalCount = combos.length;
+      setStatusText(totalCount > 1 ? `Submitting ${totalCount} runs...` : `${modelName}: submitting...`);
       const params = buildParams(modelMeta, scenario, paramValues);
       const submitted = await fetchJson(`/v1/models/${modelName}/runs`, {
         method: "POST",
