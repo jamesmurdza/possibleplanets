@@ -815,6 +815,39 @@ th.runs-table-checkbox-col {
   color: var(--color-text-muted);
 }
 
+/* New Run form only -- every individual field (each parameter input,
+   the Advanced section's max-run-time field) gets its label beside the
+   input instead of stacked above it. Scoped to .run-form, not a change
+   to .form-field generally: Overview's filter row and Compare's own
+   fields still want the stacked layout (narrower columns, and -- for
+   Overview's filter row -- a dropdown rather than a plain input, which
+   reads oddly side-by-side with a short label). The Model/Emissions
+   scenario sections above aren't affected either -- those labels sit
+   above a whole grid of cards, not a single input, so "beside" doesn't
+   apply the same way. */
+.run-form .form-field {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 13rem;
+  max-width: none;
+}
+
+.run-form .form-field-label {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.run-form .form-field input {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.run-form .param-fields-grid {
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+}
+
 /* --- Model picker cards --- */
 
 .model-card-grid {
