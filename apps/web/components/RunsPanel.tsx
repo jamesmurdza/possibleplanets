@@ -7,7 +7,9 @@ import Drawer from "./Drawer";
 import Modal from "./Modal";
 import {
   fetchJson,
-  CHART_ADAPTERS,
+  SERIES_ADAPTERS,
+  type DataSeries,
+  colorWithAlpha,
   summarizeParams,
   summarizeScenario,
   summarizeExtraParams,
@@ -24,6 +26,46 @@ const STATUS_OPTIONS = [
   { value: "succeeded", label: "Succeeded" },
   { value: "failed", label: "Failed" },
 ];
+
+// Palette for the data explorer's overlaid series -- cycled by a series'
+// index in availableSeries (stable across check/uncheck, unlike indexing
+// into the checked subset). Colors are assigned purely by position, so
+// the same series keeps its color when its neighbors are toggled.
+const SERIES_COLORS = [
+  "#2f6feb",
+  "#e0415a",
+  "#1fa37a",
+  "#e0862f",
+  "#9b51e0",
+  "#1b8f9e",
+  "#c2185b",
+  "#6b8f3c",
+  "#8d6e63",
+  "#5c6bc0",
+];
+
+// Which single series to pre-check when a run's drawer first opens -- the
+// same line CHART_ADAPTERS charts for the small panels (temperature for
+// every model here), so opening the drawer still shows what it always
+// has; the explorer is additive, not a behavior change for someone who
+// never touches the checkboxes. Matched by key against SERIES_ADAPTERS'
+// output (e.g. hector/gcam's "temperature.global_tas"), falling back to
+// the first temperature.* series (fair keys its series per scenario --
+// "temperature.ssp245" etc -- so there's no one fixed key to prefer),
+// then to the first series of any kind.
+function defaultSeriesKey(model: string, series: DataSeries[]): string {
+  const preferred: Record<string, string> = {
+    hector: "temperature.global_tas",
+    gcam: "temperature.global_tas",
+    oscar: "mean_D_Tg",
+    dice: "T_atmos",
+    magicc: "T_atmos",
+    twolayer: "T_atmos",
+  };
+  const pref = preferred[model];
+  const match = pref ? series.find((s) => s.key === pref) : undefined;
+  return match?.key ?? series.find((s) => s.key.startsWith("temperature."))?.key ?? series[0].key;
+}
 
 // Canonical (not model-native) -- so filtering by "SSP1-2.6" matches both
 // hector's "ssp126" and oscar's "SSP1-2.6" runs. See canonicalScenario's
@@ -214,6 +256,20 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
   // show "(default)" for ones the run's own params didn't include).
   const [drawerModelMeta, setDrawerModelMeta] = useState<ModelMeta | null>(null);
   const schemaCache = useRef<Record<string, ModelMeta>>({});
+
+  // Data explorer state (Details tab's chart area) -- which of the
+  // currently open run's native series are checked to overlay, and
+  // whether that selection is shown as a chart or a raw table. Reset
+  // (see the selectedRunId effect below) whenever a different run is
+  // opened, not when the series list itself changes shape (e.g. across
+  // 500ms polls while a run is still in progress) -- that reset is keyed
+  // off selectedRunId specifically so a user's checkbox picks aren't
+  // wiped out by every progress poll.
+  const [checkedSeriesKeys, setCheckedSeriesKeys] = useState<Set<string>>(new Set());
+  const [explorerView, setExplorerView] = useState<"chart" | "table">("chart");
+  // Data table's sort -- key is a series key, or "x" for the year column.
+  // null = insertion order (x ascending), which is the default.
+  const [tableSort, setTableSort] = useState<{ key: string; dir: "asc" | "desc" } | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -545,6 +601,9 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
     setDrawerTab("details");
     setMaxRunTimeInput("");
     setDeadlineErr(null);
+    setCheckedSeriesKeys(new Set());
+    setExplorerView("chart");
+    setTableSort(null);
     activeDetailId.current = selectedRunId;
     if (selectedRunId) pollDetail(selectedRunId);
     return () => {
@@ -553,13 +612,6 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRunId]);
-
-  useEffect(() => {
-    if (selectedJob?.status === "succeeded") {
-      renderChart(selectedJob);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedJob]);
 
   // Fetches (and caches) the open drawer's model schema -- see
   // drawerModelMeta's own comment. Keyed on the model name, not the whole
@@ -588,14 +640,250 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedJob?.model]);
 
-  function renderChart(job: RunJob) {
-    const adapter = CHART_ADAPTERS[job.model];
-    if (!adapter || !canvasRef.current) return;
-    const { labels, values, label } = adapter(job.result);
+  // Every series the open run's model natively produced -- recomputed
+  // whenever selectedJob changes (not just once per run), since
+  // succeeded-job polls still carry the same `result`, so this is cheap
+  // and always in sync with whatever's actually being charted.
+  const availableSeries: DataSeries[] = useMemo(() => {
+    if (!selectedJob || selectedJob.status !== "succeeded") return [];
+    const adapter = SERIES_ADAPTERS[selectedJob.model];
+    if (!adapter) return [];
+    try {
+      return adapter(selectedJob.result);
+    } catch {
+      return [];
+    }
+  }, [selectedJob]);
+
+  // Default-check whichever single series CHART_ADAPTERS used to chart
+  // for this model (see defaultSeriesKey), so opening a run's drawer
+  // still shows the same line it always has -- the explorer is additive,
+  // not a behavior change for someone who never touches the checkboxes.
+  // Only runs once per run (guarded by checkedSeriesKeys being empty),
+  // not on every poll -- see the selectedRunId effect above for where
+  // checkedSeriesKeys actually gets reset to empty for a new run.
+  useEffect(() => {
+    if (availableSeries.length === 0 || checkedSeriesKeys.size > 0 || !selectedJob) return;
+    setCheckedSeriesKeys(new Set([defaultSeriesKey(selectedJob.model, availableSeries)]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableSeries]);
+
+  function toggleSeries(key: string) {
+    setCheckedSeriesKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  const checkedSeries = availableSeries.filter((s) => checkedSeriesKeys.has(s.key));
+
+  // Groups the CHECKED series by unit so same-unit series share one axis
+  // (e.g. every "degC" series on the left) while a genuinely different
+  // unit (e.g. dice's "USD/tCO2" scc alongside its own "degC" T_atmos)
+  // gets its own axis instead of being squashed onto the same scale where
+  // one line would visually flatline against the other's range. Units
+  // are assigned axis ids in first-seen order and alternate left/right so
+  // a third+ unit doesn't pile up unreadably on one side.
+  const unitAxisIds = useMemo(() => {
+    const ids = new Map<string, string>();
+    for (const s of checkedSeries) {
+      const unit = s.unit ?? "";
+      if (!ids.has(unit)) ids.set(unit, ids.size === 0 ? "y" : `y${ids.size}`);
+    }
+    return ids;
+  }, [checkedSeries]);
+
+  // (Re)draws the overlay chart whenever the selection, checked series,
+  // or view changes. Gated on the Details tab AND chart view being
+  // active: the canvas stays mounted (see the hidden-container comment
+  // below) but Chart.js would size it 0x0 while display:none, so drawing
+  // into it then would silently produce a blank chart once you switch
+  // back. Redraw on returning to the chart view instead.
+  useEffect(() => {
+    if (selectedJob?.status === "succeeded" && drawerTab === "details" && explorerView === "chart") {
+      renderChart();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedJob, availableSeries, checkedSeriesKeys, drawerTab, explorerView]);
+
+  // Stable per-series color, keyed off the series' position in
+  // availableSeries (not its position among the CHECKED ones) so a
+  // series keeps its color when neighboring checkboxes are toggled.
+  function seriesColor(s: DataSeries): string {
+    return SERIES_COLORS[availableSeries.indexOf(s) % SERIES_COLORS.length];
+  }
+
+  // ALL series grouped by unit -- for the picker's grouped checkbox
+  // list (distinct from unitAxisIds, which groups only the CHECKED ones
+  // for chart axes).
+  const seriesGroups = useMemo(() => {
+    const groups = new Map<string, DataSeries[]>();
+    for (const s of availableSeries) {
+      const unit = s.unit ?? "";
+      if (!groups.has(unit)) groups.set(unit, []);
+      groups.get(unit)!.push(s);
+    }
+    return Array.from(groups.entries());
+  }, [availableSeries]);
+
+  // The data table's rows: the union of every checked series' x values
+  // (a year row per distinct x), each series contributing its y at that
+  // x or null where it has no point there (e.g. hector's annual points
+  // overlaid with a sparser series). Sorted per tableSort when the user
+  // has clicked a column header; nulls sort last in either direction.
+  const tableRows = useMemo(() => {
+    const xSet = new Set<number>();
+    for (const s of checkedSeries) for (const x of s.x) xSet.add(x);
+    const rows = Array.from(xSet)
+      .sort((a, b) => a - b)
+      .map((x) => ({
+        x,
+        values: checkedSeries.map((s) => {
+          const i = s.x.indexOf(x);
+          return i === -1 ? null : s.y[i];
+        }),
+      }));
+    if (tableSort) {
+      const keyIdx = checkedSeries.findIndex((s) => s.key === tableSort.key);
+      const dir = tableSort.dir === "asc" ? 1 : -1;
+      rows.sort((a, b) => {
+        const va = tableSort.key === "x" ? a.x : keyIdx >= 0 ? a.values[keyIdx] : null;
+        const vb = tableSort.key === "x" ? b.x : keyIdx >= 0 ? b.values[keyIdx] : null;
+        if (va == null && vb == null) return 0;
+        if (va == null) return 1;
+        if (vb == null) return -1;
+        return (va - vb) * dir;
+      });
+    }
+    return rows;
+  }, [checkedSeries, tableSort]);
+
+  function toggleTableSort(key: string) {
+    setTableSort((prev) => (prev && prev.key === key ? (prev.dir === "asc" ? { key, dir: "desc" } : null) : { key, dir: "asc" }));
+  }
+
+  function downloadText(filename: string, text: string, mime: string) {
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // CSV of exactly what the data table shows (checked series, current
+  // sort) -- one year column plus one column per series, unit folded
+  // into the header. Raw JSON export below deliberately exports the
+  // NATIVE result instead (see its comment) -- this one is the
+  // convenient "what I'm looking at" download.
+  function exportSeriesCsv() {
+    if (!selectedJob) return;
+    const q = (v: string) => (/[",\n]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v);
+    const lines = [["year", ...checkedSeries.map((s) => (s.unit ? `${s.label} (${s.unit})` : s.label))].map(q).join(",")];
+    for (const row of tableRows) {
+      lines.push([String(row.x), ...row.values.map((v) => (v == null ? "" : String(v)))].map(q).join(","));
+    }
+    downloadText(`${selectedJob.model}-${selectedJob.run_id.slice(0, 8)}-series.csv`, lines.join("\n"), "text/csv");
+  }
+
+  // The run's native result verbatim (result.result -- exactly what the
+  // model itself produced, untouched by any of the adapters above).
+  // This is the "give me EVERYTHING" download: e.g. fair's full
+  // per-config ensemble arrays (the spread only summarized into a band
+  // in the chart), or gcam's whole raw Hector CSV text. Compact
+  // serialization on purpose -- gcam's native result is multi-megabyte
+  // string-in-JSON, and pretty-indenting that only bloats the download.
+  function exportRawJson() {
+    if (!selectedJob) return;
+    downloadText(
+      `${selectedJob.model}-${selectedJob.run_id.slice(0, 8)}-raw.json`,
+      JSON.stringify(selectedJob.result?.result ?? selectedJob.result ?? null),
+      "application/json",
+    );
+  }
+
+  function renderChart() {
+    if (!canvasRef.current) return;
     if (chartRef.current) chartRef.current.destroy();
+    if (checkedSeries.length === 0) return;
+
+    const datasets: any[] = [];
+    checkedSeries.forEach((s) => {
+      const color = seriesColor(s);
+      const axisId = unitAxisIds.get(s.unit ?? "")!;
+      datasets.push({
+        label: s.unit ? `${s.label} (${s.unit})` : s.label,
+        data: s.x.map((x, j) => ({ x, y: s.y[j] })),
+        borderColor: color,
+        backgroundColor: color,
+        borderWidth: 1.5,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        yAxisID: axisId,
+        spanGaps: true,
+      });
+      // Band rendered as two extra "helper" lines immediately above/below
+      // the main line, using Chart.js's own fill-between-adjacent-dataset
+      // convention (fill: '-1' means "fill down to the dataset drawn
+      // immediately before this one" -- order in the datasets array is
+      // what that refers to, not an id) -- simplest way to get a shaded
+      // envelope in Chart.js 4 without a second chart type/plugin. The
+      // lower bound is added first (no fill of its own), then the upper
+      // bound fills back down to it; both are hidden from the legend and
+      // drawn with zero border width so only the fill area shows, not two
+      // extra visible lines on top of the mean.
+      if (s.band) {
+        datasets.push({
+          label: `${s.label} lower`,
+          data: s.x.map((x, j) => ({ x, y: s.band!.lower[j] })),
+          borderWidth: 0,
+          pointRadius: 0,
+          yAxisID: axisId,
+          fill: false,
+          spanGaps: true,
+          hidden: false,
+          order: 1,
+        });
+        datasets[datasets.length - 1].backgroundColor = colorWithAlpha(color, 0.15);
+        datasets.push({
+          label: `${s.label} band`,
+          data: s.x.map((x, j) => ({ x, y: s.band!.upper[j] })),
+          borderWidth: 0,
+          pointRadius: 0,
+          backgroundColor: colorWithAlpha(color, 0.15),
+          yAxisID: axisId,
+          fill: "-1",
+          spanGaps: true,
+          order: 1,
+        });
+      }
+    });
+
+    const scales: Record<string, any> = {
+      x: { type: "linear", title: { display: true, text: "year" } },
+    };
+    let side: "left" | "right" = "left";
+    for (const [unit, axisId] of unitAxisIds.entries()) {
+      scales[axisId] = {
+        type: "linear",
+        position: side,
+        title: { display: true, text: unit || "value" },
+        // Only the first (default "y") axis draws its own gridlines --
+        // every additional axis on the opposite side would otherwise
+        // overlay a second grid on top of the first, which reads as
+        // visual noise rather than a useful reference once there's more
+        // than one unit checked.
+        grid: { drawOnChartArea: axisId === "y" },
+      };
+      side = side === "left" ? "right" : "left";
+    }
+
     chartRef.current = new Chart(canvasRef.current, {
       type: "line",
-      data: { labels, datasets: [{ label, data: values, borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4 }] },
+      data: { datasets },
       options: {
         animation: false,
         // Deliberately NOT chartAspectRatio() -- that's tuned for the
@@ -605,12 +893,20 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
         // reads fine at this panel's width.
         aspectRatio: 1.3,
         interaction: { mode: "nearest", intersect: false },
-        scales: {
-          x: { title: { display: true, text: "year" } },
-          y: { title: { display: true, text: "temperature anomaly" } },
-        },
+        scales,
         plugins: {
           tooltip: { mode: "nearest", intersect: false },
+          legend: {
+            labels: {
+              // Hides the band's own two helper datasets from the legend
+              // (they're not independently meaningful lines, just the
+              // fill boundary for the line charted right before them) --
+              // Chart.js has no per-dataset "hidden in legend" flag, so
+              // this filters by the label suffix those two datasets were
+              // given above.
+              filter: (item: any) => !item.text?.endsWith(" lower") && !item.text?.endsWith(" band"),
+            },
+          },
         },
       },
     });
@@ -951,10 +1247,111 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
               {selectedJob.status === "failed" && (
                 <p className="panel-error">{selectedJob.error?.message || "unknown error"}</p>
               )}
-              {selectedJob.status === "succeeded" ? (
-                <canvas ref={canvasRef} height={380}></canvas>
+              {selectedJob.status === "succeeded" && availableSeries.length > 0 ? (
+                <div className="explorer">
+                  <div className="explorer-toolbar">
+                    <div className="explorer-view-toggle">
+                      <button
+                        type="button"
+                        className={`explorer-btn${explorerView === "chart" ? " active" : ""}`}
+                        onClick={() => setExplorerView("chart")}
+                      >
+                        Chart
+                      </button>
+                      <button
+                        type="button"
+                        className={`explorer-btn${explorerView === "table" ? " active" : ""}`}
+                        onClick={() => setExplorerView("table")}
+                      >
+                        Table
+                      </button>
+                    </div>
+                    <div className="explorer-view-toggle">
+                      <button type="button" className="explorer-btn" onClick={exportSeriesCsv} disabled={checkedSeries.length === 0}>
+                        Export CSV
+                      </button>
+                      <button type="button" className="explorer-btn" onClick={exportRawJson}>
+                        Export JSON
+                      </button>
+                    </div>
+                  </div>
+                  {/* Series picker -- grouped by unit (or hector's
+                      component, its closest equivalent) so same-scale
+                      quantities sit together. Scrollable: gcam's Hector
+                      output has dozens of variables. */}
+                  <div className="explorer-series">
+                    {seriesGroups.map(([unit, list]) => (
+                      <div className="explorer-series-group" key={unit || "value"}>
+                        <div className="explorer-series-group-label">{unit || "value"}</div>
+                        {list.map((s) => (
+                          <label className="explorer-series-item" key={s.key}>
+                            <input
+                              type="checkbox"
+                              checked={checkedSeriesKeys.has(s.key)}
+                              onChange={() => toggleSeries(s.key)}
+                            />
+                            <span className="explorer-series-swatch" style={{ background: seriesColor(s) }} />
+                            <span className="explorer-series-label" title={s.label}>
+                              {s.label}
+                            </span>
+                            {s.band && <span className="explorer-series-band-tag">band</span>}
+                          </label>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Canvas kept mounted (hidden) while the table view is
+                      active, same reasoning as this whole block's own
+                      hidden-on-other-tabs comment: unmounting it would
+                      lose the chart, and Chart.js can't size itself
+                      inside a display:none box to redraw there either. */}
+                  <div
+                    className="explorer-chart-area"
+                    style={{ display: explorerView === "chart" ? undefined : "none" }}
+                  >
+                    <canvas ref={canvasRef} height={380}></canvas>
+                  </div>
+                  {explorerView === "table" && (
+                    <div className="explorer-table-wrap">
+                      <table className="explorer-table">
+                        <thead>
+                          <tr>
+                            <th onClick={() => toggleTableSort("x")}>
+                              year{tableSort?.key === "x" ? (tableSort.dir === "asc" ? " \u25b2" : " \u25bc") : ""}
+                            </th>
+                            {checkedSeries.map((s) => (
+                              <th key={s.key} onClick={() => toggleTableSort(s.key)}>
+                                <span className="explorer-series-swatch" style={{ background: seriesColor(s) }} />
+                                <span title={s.unit ? `${s.label} (${s.unit})` : s.label}>
+                                  {s.label}
+                                  {tableSort?.key === s.key ? (tableSort.dir === "asc" ? " \u25b2" : " \u25bc") : ""}
+                                </span>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tableRows.map((row) => (
+                            <tr key={row.x}>
+                              <td className="mono">{row.x}</td>
+                              {row.values.map((v, i) => (
+                                <td className="mono" key={checkedSeries[i].key}>
+                                  {v == null ? "" : String(v)}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               ) : (
-                <div className="chart-placeholder">{selectedJob.status === "failed" ? "Failed" : `${selectedJob.status}...`}</div>
+                <div className="chart-area">
+                  <div className="chart-placeholder">
+                    {selectedJob.status === "failed" ? "Failed" : `${selectedJob.status}...`}
+                  </div>
+                </div>
               )}
             </div>
           )}
