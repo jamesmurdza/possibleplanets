@@ -136,6 +136,61 @@ def _read_output_csv(path):
         return f.read()
 
 
+def _read_cgroup_memory():
+    """
+    Best-effort snapshot of this sandbox's own cgroup memory numbers --
+    peak usage, the limit, and the kernel OOM-killer's own count -- read
+    AFTER gcam.exe exits, so a failure can say whether it was OOM-killed
+    instead of leaving "exited with code N" as the whole story. This is
+    exactly the observation docs/gcam/known-gaps.md flags as never having
+    been made during the gcam.exe phase ("memory.current/memory.peak
+    actually checked ... has never been done on either sandbox so far").
+    cgroup v2 paths first (that's what these sandboxes use -- see
+    trial-log.md's /sys/fs/cgroup/memory.swap.max observation), with v1
+    fallbacks just in case. Returns None when nothing is readable at all
+    (e.g. a non-Linux dev machine running this script), so callers just
+    lose the diagnostics rather than failing.
+    """
+
+    def read(path):
+        try:
+            with open(path) as f:
+                return f.read().strip()
+        except OSError:
+            return None
+
+    peak = read("/sys/fs/cgroup/memory.peak") or read(
+        "/sys/fs/cgroup/memory.max_usage_in_bytes"
+    )
+    maximum = read("/sys/fs/cgroup/memory.max") or read(
+        "/sys/fs/cgroup/memory.limit_in_bytes"
+    )
+    if peak is None and maximum is None:
+        return None
+
+    oom_kills = None
+    events = read("/sys/fs/cgroup/memory.events")
+    if events:
+        for line in events.splitlines():
+            if line.startswith("oom_kill "):
+                try:
+                    oom_kills = int(line.split()[1])
+                except (IndexError, ValueError):
+                    pass
+    return {"peak": peak, "max": maximum, "oom_kills": oom_kills}
+
+
+def _fmt_bytes(value):
+    if value is None:
+        return "unknown"
+    if value == "max":  # cgroup v2 spells "unlimited" as "max"
+        return "unlimited"
+    try:
+        return f"{int(value) / (1024 ** 3):.1f}GiB"
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def main():
     params = load_params()
     scenario_name = params.get("scenario", DEFAULT_PARAMS["scenario"])
@@ -174,14 +229,36 @@ def main():
     returncode = proc.wait()
 
     if returncode != 0:
+        # Attach the cgroup memory evidence while the sandbox is still
+        # alive (this runs before any cleanup can tear it down) -- an OOM
+        # kill leaves no error message in gcam's own output (the kernel
+        # SIGKILLs it mid-write, exactly at the final period in observed
+        # runs), so without these numbers a silent "exited with code
+        # 137" is indistinguishable from a solver failure. The enriched
+        # `error` string is what apps/web/lib/runs.ts surfaces as the
+        # run's error message in the dashboard (see finalizeOutcomeInner
+        # -- it prefers the model's own failure report over its generic
+        # "exit_code=N").
+        mem = _read_cgroup_memory()
+        error = f"gcam.exe exited with code {returncode}"
+        if mem is not None:
+            error += (
+                f" -- cgroup memory peak {_fmt_bytes(mem['peak'])}"
+                f" of {_fmt_bytes(mem['max'])}"
+            )
+            if mem.get("oom_kills") is not None:
+                error += f", oom_kills {mem['oom_kills']}"
+                if mem["oom_kills"] > 0:
+                    error += " (killed by the kernel OOM killer -- this sandbox needs more memory)"
         result = {
             "status": "failed",
             "model": "gcam",
             "scenario": scenario_name,
-            "error": f"gcam.exe exited with code {returncode}",
+            "error": error,
             # Tail only -- gcam.exe's full log can be large, and this is
             # meant for diagnosing a failure, not as the run's real output.
             "log_tail": "".join(log_lines[-200:]),
+            "cgroup_memory": mem,
         }
         print(json.dumps(result))
         sys.exit(1)
