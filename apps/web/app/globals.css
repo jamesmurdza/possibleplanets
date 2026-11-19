@@ -174,11 +174,16 @@ body {
    read as acting on the table's current contents/selection. */
 .table-toolbar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
+  /* Filters + action icons both stay on this one row -- see
+     .runs-filter-row -- rather than wrapping onto a second line. On a
+     viewport too narrow for everything, the row scrolls horizontally
+     instead of wrapping (still one row, just pan to see the rest). */
+  overflow-x: auto;
 }
 
 .table-toolbar-actions {
@@ -186,6 +191,24 @@ body {
   align-items: center;
   gap: 0.375rem;
   flex-shrink: 0;
+}
+
+/* All of the Runs table's filter dropdowns in a single row, never
+   wrapping onto a second line -- each dropdown shrinks (down to
+   min-width) before the row itself wraps. */
+.runs-filter-row {
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+
+.runs-filter-row .dropdown {
+  flex: 1 1 6rem;
+  min-width: 4.5rem;
+}
+
+.runs-filter-row .text-button {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 button {

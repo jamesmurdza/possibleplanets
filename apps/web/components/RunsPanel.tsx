@@ -253,7 +253,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
       {loadErr && <p className="panel-error">{loadErr}</p>}
 
       <div className="table-toolbar">
-        <div className="run-controls">
+        <div className="run-controls runs-filter-row">
           <Dropdown options={modelOptions} value={filterModel} onChange={onFilterModelChange} ariaLabel="Filter by model" />
           <Dropdown options={scenarioOptions} value={filterScenario} onChange={setFilterScenario} ariaLabel="Filter by scenario" />
           <Dropdown options={STATUS_OPTIONS} value={filterStatus} onChange={setFilterStatus} ariaLabel="Filter by status" />
