@@ -931,9 +931,39 @@ async function finalizeOutcomeInner(runId: string, row: RunRow, exitCode: number
   log(`lastJsonLine done, found=${jsonLine !== null}`);
 
   if (exitCode !== 0 || jsonLine === null) {
+    // A non-zero exit does NOT mean there's nothing useful to report --
+    // run.py's own failure branch prints a parseable
+    // {"status": "failed", "error": ..., "log_tail": ...} and only THEN
+    // exits 1 (gcam's run.py does exactly this when gcam.exe itself
+    // dies). Parsing that here instead of unconditionally reporting the
+    // bare "exit_code=N" is what puts the model's own diagnosis (gcam's
+    // real exit code, its cgroup OOM-kill evidence, ...) in front of the
+    // user. Confirmed by a real gcam run that died at its final period:
+    // gcam.exe's own exit code was sitting in the failure JSON's "error"
+    // field, unreachable except as JSON-escaped text buried in the raw
+    // output tail, so all the dashboard ever said was "exit_code=1".
+    // The readable log_tail (the model's own captured log) is also a
+    // much better stdout_tail than the raw output's tail here, which
+    // would be mostly the JSON envelope's escaped text.
+    let message = exitCode !== 0 ? `exit_code=${exitCode}` : "no result JSON in model output";
+    let tail = stdout.slice(-2000);
+    if (jsonLine !== null) {
+      try {
+        const failure = JSON.parse(jsonLine);
+        if (failure && typeof failure.error === "string" && failure.error) {
+          message = failure.error;
+          if (typeof failure.log_tail === "string" && failure.log_tail) {
+            tail = failure.log_tail.slice(-2000);
+          }
+        }
+      } catch {
+        // Keep the generic message + raw tail -- same fallback as before
+        // this parse step existed.
+      }
+    }
     await finishRunFailed(
       runId,
-      { code: "model_run_failed", message: `exit_code=${exitCode}`, stdout_tail: stdout.slice(-2000) },
+      { code: "model_run_failed", message, stdout_tail: tail },
       runSeconds,
     );
     return;

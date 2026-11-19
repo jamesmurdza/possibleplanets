@@ -65,20 +65,46 @@ way. They're presumed to work (same underlying XML database, same
 `gcam.exe` binary, per `architecture.md`'s scenario-independence finding)
 but this hasn't been directly verified for each one.
 
-## Production-snapshot run: only partially directly observed
+## Production-snapshot run: 8GB is marginal -- intermittent OOM at the final periods
 
-When the `gcam-production-v1` snapshot was verified (plain `cpu:4,
-memory:8`, no GPU), the verification sandbox was only directly observed
-progressing through Period 6 (2025) -- matching the already-fully-completed
-GPU-sandbox run's iteration counts exactly -- before the sandbox was
-deleted during cleanup (it also only had a 20-minute TTL). The claim that
-it "ran to completion" is inferred from that match, not from directly
-observing this specific sandbox's own exit code. A clean, fully-observed
-run on the plain 8GB tier (with `memory.current`/`memory.peak` actually
-checked during the `gcam.exe` phase specifically, which has never been
-done on either sandbox so far) would close this gap -- see
-`setup-guide.md` step 3/`artifacts.md` for how to do that if it matters
-for a future decision.
+Directly observed (2026-11-19, `gcam-production-v2`, plain `cpu:4,
+memory:8`, sampling `/sys/fs/cgroup/memory.*` every few minutes during a
+full run):
+
+- `gcam.exe`'s own anon memory grows steadily across periods: 5.4GB at
+  47% (period ~10), 7.7GB at 80% (period ~17), with the cgroup's
+  `memory.peak` landing exactly on the 8GiB ceiling (`8589942784` =
+  limit + 8KB) at the final periods.
+- One run completed (`exit 0`, "All model periods solved correctly.",
+  ~24 min) -- surviving only because the kernel reclaimed ~1.5GB of file
+  cache at the peak (`oom_kill 0`, `memory.events.max` reclaim hits
+  ~10k). This and the earlier 09:44 UTC production run are the only two
+  completions ever observed.
+- Two production runs died instead at "Period 20: 2095" (the final
+  period's start line, nothing after it -- no solve line, no success
+  marker) with `gcam.exe` exiting non-zero and `run.py` reporting
+  failure. Identical iteration counts through period 19 across all runs
+  (deterministic model), so the difference is environmental: when the
+  kernel can't free enough page cache at the final peak, it SIGKILLs
+  `gcam.exe` mid-solve, which also loses gcam's unflushed stdout tail.
+
+The previously-open questions ("ran to completion inferred, not
+observed", "memory.current/memory.peak never checked during the
+gcam.exe phase") are now answered: it completes **sometimes**, memory is
+the constraint, and 8GB is the wrong tier for a reliable run. Real fix:
+rebuild the snapshot from a sandbox created with a larger memory class
+(the expensive `gcamdata` step is baked into the current image and does
+NOT need re-running -- see `artifacts.md` for the layer-preserving
+rebuild path). Note Daytona rejects per-request resource overrides for
+snapshot-based sandboxes ("Cannot specify Sandbox resources when using a
+snapshot", confirmed 2026-11-19), so this cannot be fixed from the
+gateway's `create()` call -- it is snapshot-creation-time only.
+
+Until then, `run.py` folds the cgroup evidence (`memory.peak` /
+`memory.max` / `oom_kill` count) into its failure report on any
+`gcam.exe` non-zero exit, so an OOM kill is labeled as one in the
+dashboard instead of presenting as a bare "exit_code=N" with an output
+tail that otherwise looks fine.
 
 ## Local compilation is blocked on this agent's own machine
 

@@ -659,14 +659,24 @@ export const MODELS: Record<string, ModelMeta> = {
     // see sandboxes/gcam/run.py), which run.py tees into /tmp/progress.json
     // the same way sandboxes/oscar/run.py does for its own per-year prints.
     supports_progress: true,
-    // Same resource profile as the gcam-production-v2 Daytona snapshot
-    // this image is built from (see docs/gcam/artifacts.md) -- confirmed
-    // sufficient by direct testing: gcam.exe itself only needs this
-    // account's normal 4 CPU/8GB tier. The expensive step (generating the
-    // input database) is a one-time, baked-in-at-build-time cost, not
-    // something this per-request sandbox ever repeats -- see
-    // docs/gcam/architecture.md. disk:12 because the image bakes in the
-    // full 5.2GB generated XML database plus the 294MB binary.
+    // Resource profile of the gcam-production-v2 Daytona snapshot this
+    // runs in (see docs/gcam/artifacts.md) -- informational only: Daytona
+    // rejects resource overrides for snapshot-based sandboxes
+    // ("Cannot specify Sandbox resources when using a snapshot", confirmed
+    // 2026-11-19), so this is fixed at snapshot-creation time, not at
+    // create() time. IMPORTANT: 8GB is NOT comfortably sufficient --
+    // direct measurement during a full run (2026-11-19, same snapshot)
+    // shows gcam.exe's own anon memory growing 5.4GB @47% -> 7.7GB @80%
+    // and the cgroup peak landing exactly on the 8GiB ceiling at the
+    // final periods. Runs survive only if the kernel can reclaim enough
+    // page cache at that peak (observed: one run completed with peak =
+    // ceiling + 8KB, oom_kill 0); when it can't, gcam.exe is OOM-killed
+    // mid-final-period with no message of its own -- seen twice in
+    // production ("Period 20: 2095" as the last output line, no
+    // "All model periods solved correctly."). See docs/gcam/known-gaps.md
+    // -- a snapshot rebuilt with more memory is the real fix. disk:12
+    // because the image bakes in the full 5.2GB generated XML database
+    // plus the 294MB binary.
     resources: { cpu: 4, memory: 8, disk: 12 },
     // No tunable parameters exposed yet -- see sandboxes/gcam/run.py's
     // module docstring for why (changing anything beyond the shipped
