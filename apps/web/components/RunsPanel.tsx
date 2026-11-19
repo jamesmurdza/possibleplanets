@@ -376,6 +376,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
                   />
                 </th>
                 <th>Model</th>
+                <th>Version</th>
                 <th>Params</th>
                 <th>Status</th>
                 <th>Duration</th>
@@ -385,7 +386,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
             <tbody>
               {filteredRuns.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="runs-table-empty">
+                  <td colSpan={7} className="runs-table-empty">
                     {runs.length === 0 ? 'No runs yet -- start one from "New Run".' : "No runs match these filters."}
                   </td>
                 </tr>
@@ -405,6 +406,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
                     />
                   </td>
                   <td>{r.model}</td>
+                  <td className="mono">{r.model_version_number ?? "--"}</td>
                   <td className="mono">{summarizeParams(r.params)}</td>
                   <td>
                     <StatusBadge status={r.status} />
@@ -437,7 +439,11 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
                 <span>{selectedJob.model}</span>
               </div>
               <div className="drawer-meta-row">
-                <span className="drawer-meta-label">Version</span>
+                <span className="drawer-meta-label">Model version</span>
+                <span className="mono">{selectedJob.model_version_number ?? "unknown (run predates version tracking)"}</span>
+              </div>
+              <div className="drawer-meta-row">
+                <span className="drawer-meta-label">Build</span>
                 <span className="mono">{selectedJob.model_version ?? "unknown (run predates version tracking)"}</span>
               </div>
               <div className="drawer-meta-row">

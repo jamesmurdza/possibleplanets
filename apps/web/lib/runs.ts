@@ -371,6 +371,7 @@ export async function submitRun(
           run_id: runId,
           model: modelName,
           model_version: model.model_version,
+          model_version_number: model.model_version_number,
           params,
           status: "succeeded",
           result: cached,
@@ -427,6 +428,7 @@ export async function submitRun(
     run_id: runId,
     model: modelName,
     model_version: model.model_version,
+    model_version_number: model.model_version_number,
     params,
     status: "running",
     sandbox_id: sandbox.id,
@@ -445,6 +447,10 @@ export interface RunView {
   // See lib/models.ts's own model_version doc comment and RunRow's --
   // null only for a row written before this column existed.
   model_version: string | null;
+  // See lib/models.ts's own model_version_number doc comment -- the
+  // official model version (e.g. "3.2", "2016"), distinct from the exact
+  // package/commit pin above.
+  model_version_number: string | null;
   // Exactly the params object this run was submitted with -- no defaults
   // filled in (see models.ts's module docstring). Surfaced so a caller can
   // see/record precisely what reproduces this result, e.g. for the
@@ -463,6 +469,7 @@ function toView(row: RunRow): RunView {
     run_id: row.run_id,
     model: row.model,
     model_version: row.model_version,
+    model_version_number: row.model_version_number,
     params: row.params,
     // "finalizing" is an internal-only state (see claimRunForFinalize) --
     // surfaced to API consumers as "running" so it isn't a fifth status

@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS runs (
     run_id TEXT PRIMARY KEY,
     model TEXT NOT NULL,
     model_version TEXT,
+    model_version_number TEXT,
     params JSONB NOT NULL,
     status TEXT NOT NULL,
     result JSONB,
@@ -115,6 +116,7 @@ const MIGRATION = `
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS supports_progress BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMPTZ;
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS model_version TEXT;
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS model_version_number TEXT;
 `;
 
 // ensureDb() is called at the top of every exported function below rather
@@ -240,6 +242,11 @@ export interface RunRow {
   // later changes and a new snapshot is built. Null only for a row
   // written before this column existed.
   model_version: string | null;
+  // The official model version (e.g. "3.2", "2016", "9.1") -- see
+  // lib/models.ts's own model_version_number doc comment for how this
+  // differs from model_version above. Null only for a row written
+  // before this column existed.
+  model_version_number: string | null;
   params: unknown;
   status: "queued" | "running" | "finalizing" | "succeeded" | "failed";
   result: unknown | null;
@@ -259,6 +266,7 @@ export async function insertRun(row: {
   run_id: string;
   model: string;
   model_version: string;
+  model_version_number: string;
   params: unknown;
   status: string;
   sandbox_id: string | null;
@@ -269,12 +277,13 @@ export async function insertRun(row: {
 }): Promise<void> {
   await ensureDb();
   await getPool().query(
-    `INSERT INTO runs (run_id, model, model_version, params, status, sandbox_id, session_id, cmd_id, supports_progress, deadline_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    `INSERT INTO runs (run_id, model, model_version, model_version_number, params, status, sandbox_id, session_id, cmd_id, supports_progress, deadline_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [
       row.run_id,
       row.model,
       row.model_version,
+      row.model_version_number,
       JSON.stringify(row.params),
       row.status,
       row.sandbox_id,
@@ -305,6 +314,7 @@ export interface RunListItem {
   run_id: string;
   model: string;
   model_version: string | null;
+  model_version_number: string | null;
   params: unknown;
   status: string;
   cached: boolean;
@@ -329,9 +339,9 @@ export async function listRuns(limit?: number): Promise<RunListItem[]> {
   await ensureDb();
   const { rows } = await getPool().query(
     limit
-      ? `SELECT run_id, model, model_version, params, status, cached, progress, duration_seconds, started_at, updated_at
+      ? `SELECT run_id, model, model_version, model_version_number, params, status, cached, progress, duration_seconds, started_at, updated_at
          FROM runs ORDER BY started_at DESC LIMIT $1`
-      : `SELECT run_id, model, model_version, params, status, cached, progress, duration_seconds, started_at, updated_at
+      : `SELECT run_id, model, model_version, model_version_number, params, status, cached, progress, duration_seconds, started_at, updated_at
          FROM runs ORDER BY started_at DESC`,
     limit ? [limit] : [],
   );
