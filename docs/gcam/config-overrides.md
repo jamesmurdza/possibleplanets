@@ -81,11 +81,13 @@ override doesn't just change the file text but genuinely changes
 Like every gcam fix so far, this needed one snapshot rebuild to ship
 the `apply_config_overrides` mechanism itself in `run.py` -- no
 `gcamdata`/`gcam.exe` rebuild (same patch-a-live-sandbox-and-resnapshot
-process as v3/v4). Deployed as `gcam-production-v5`
-(`apps/web/lib/models.ts`'s `daytona_snapshot`). From here on, trying a
-different config value is just a request parameter -- no further
-snapshot changes needed for that specific case, only if the mechanism
-itself ever needs to change.
+process as v3/v4). Deployed as `gcam-production-v5` at the time
+(`apps/web/lib/models.ts`'s `daytona_snapshot` is now `v6` -- see
+`oom-fix.md`'s own update, which used THIS mechanism to measure `2`
+cores live before baking it in as the new default). From here on,
+trying a different config value is just a request parameter -- no
+further snapshot changes needed for that specific case, only if the
+override mechanism itself ever needs to change.
 
 ## Dashboard surface
 

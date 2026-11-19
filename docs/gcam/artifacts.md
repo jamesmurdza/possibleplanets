@@ -4,7 +4,7 @@ If you just want to **use** GCAM as it stands today, nothing in
 `setup-guide.md` or `trial-log.md` needs to happen again. Here's what
 already exists and how to use it directly.
 
-## 1. Daytona snapshot: `gcam-production-v5`
+## 1. Daytona snapshot: `gcam-production-v6`
 
 The primary artifact. Originally built from `sandboxes/gcam/Dockerfile`
 (v1/v2), with:
@@ -21,13 +21,16 @@ periods, plus a later fix to `run.py`'s CSV output parsing -- see
 `oom-fix.md`, plus the general `config_overrides` mechanism in v5 --
 see `config-overrides.md`) and re-snapshotted directly from live
 sandboxes each time, without rebuilding `gcam.exe` or regenerating the
-input database. `gcam-production-v2`, `v3`, and `v4` are all left in
-place, unused, as rollback options.
+input database. v6 itself is just v5 with `configuration_ref.xml`'s
+baked-in `max-parallelism` default raised from 1 to 2 (measured as the
+best speed/memory balance -- see `oom-fix.md`'s own update).
+`gcam-production-v2` through `v5` are all left in place, unused, as
+rollback options.
 
 Create a sandbox from it:
 ```js
 const sandbox = await daytona.create(
-  { snapshot: 'gcam-production-v5', autoDeleteInterval: <minutes> },
+  { snapshot: 'gcam-production-v6', autoDeleteInterval: <minutes> },
   { timeout: 120 },
 )
 ```
