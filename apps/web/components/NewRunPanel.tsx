@@ -622,7 +622,7 @@ export default function NewRunPanel({
               View cached
             </button>
           )}
-          <span className="form-hint">Shift-click a model or scenario to run it alongside the current selection.</span>
+          <span className="form-hint">Shift click to select multiple models/scenarios.</span>
         </div>
       </form>
 
