@@ -635,7 +635,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                   <td className="mono">{r.model_version_number ?? "--"}</td>
                   <td className="mono">{summarizeScenario(r.params) || "--"}</td>
                   <td className="mono runs-table-params" title={summarizeExtraParams(r.params)}>
-                    {summarizeExtraParams(r.params) || "(default)"}
+                    {summarizeExtraParams(r.params)}
                   </td>
                   <td>
                     <StatusBadge status={r.status} />
