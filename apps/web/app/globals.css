@@ -1240,13 +1240,32 @@ th.runs-table-checkbox-col {
   display: none;
 }
 
-/* Run drawer's collapsible "Raw output" section -- same disclosure
-   triangle as New Run's Advanced toggle (see .advanced-toggle/
-   .disclosure-triangle in this file). */
-.drawer-raw-output {
-  margin-top: 1.1rem;
+/* Run drawer's tab strip (Details / Output) -- sits right under the
+   drawer's own title bar, above whichever tab's content is active. */
+.drawer-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
 }
 
+.drawer-tab {
+  padding: 0.5rem 0.9rem;
+  font-size: 0.8rem;
+  color: var(--color-text-faint);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.drawer-tab.active {
+  color: var(--color-text);
+  border-bottom-color: var(--color-accent);
+}
+
+/* Run drawer's "Output" tab -- the raw stdout/stderr the model process
+   printed (see RunJob's own stdout_tail/live_stdout_tail comments). */
 .drawer-raw-output-pre {
   margin: 0.4rem 0 0;
   padding: 0.7rem 0.8rem;
