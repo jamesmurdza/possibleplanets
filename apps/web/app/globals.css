@@ -929,12 +929,13 @@ th.runs-table-checkbox-col {
 /* The unit shown after the input (e.g. "°C per CO2 doubling", "seconds")
    -- see ParameterSpec's own `unit` doc comment in lib/models.ts. Doesn't
    grow/shrink, so a long unit string doesn't squeeze the input back down
-   the way folding it into the label used to. */
+   the way folding it into the label used to. Font/size/color
+   deliberately NOT overridden here -- inherits .form-field's own
+   (0.8125rem, --color-text-muted) so the unit reads as plain continuing
+   text, not a visually distinct annotation. */
 .form-field-unit {
   flex: 0 0 auto;
   white-space: nowrap;
-  color: var(--color-text-faint);
-  font-size: 0.75rem;
 }
 
 /* --- Model picker cards --- */
