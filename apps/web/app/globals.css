@@ -1951,6 +1951,15 @@ th.runs-table-checkbox-col {
   opacity: 0.75;
 }
 
+/* Click-to-stick state (see app/page.tsx's pinnedModel) -- a persistent
+   underline so it's visually obvious this legend entry is actively
+   filtering the chart/tooltips, not just the usual transient hover. */
+.public-legend-item.pinned {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
 .public-legend-icon {
   display: inline-flex;
   width: 14px;

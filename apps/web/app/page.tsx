@@ -128,8 +128,28 @@ export default function HomePage() {
   const [models, setModels] = useState<ModelListItem[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [hovered, setHovered] = useState<HoverFilter>(null);
+  // Click-to-stick version of the model legend's hover highlight -- set by
+  // clicking a model legend entry, cleared by clicking that same entry
+  // again or clicking a different one (never by plain mouse-leave, unlike
+  // `hovered` above). While set, it's what's actually passed to the chart
+  // (see `effectiveHovered` below) instead of the transient hover, and
+  // mouse hover on the legend is ignored entirely so it can't interrupt
+  // the pin -- see onModelLegendEnter/Leave.
+  const [pinnedModel, setPinnedModel] = useState<string | null>(null);
+  const effectiveHovered: HoverFilter = pinnedModel ? { type: "model", value: pinnedModel } : hovered;
   const { series, loading } = useChartSeries();
   const columnsPerRow = useColumnsPerRow();
+
+  function onModelLegendEnter(model: string) {
+    if (!pinnedModel) setHovered({ type: "model", value: model });
+  }
+  function onModelLegendLeave() {
+    if (!pinnedModel) setHovered(null);
+  }
+  function onModelLegendClick(model: string) {
+    setPinnedModel((prev) => (prev === model ? null : model));
+    setHovered(null);
+  }
 
   useEffect(() => {
     fetchJson("/v1/models")
@@ -172,7 +192,7 @@ export default function HomePage() {
           {loading ? (
             <div className="skeleton skeleton-chart" aria-hidden="true" />
           ) : (
-            <TemperatureChart series={series} windowMin={2000} windowMax={2100} hovered={hovered} />
+            <TemperatureChart series={series} windowMin={2000} windowMax={2100} hovered={effectiveHovered} />
           )}
 
           <div className="public-chart-legend">
@@ -184,10 +204,12 @@ export default function HomePage() {
                   <button
                     key={m.model}
                     type="button"
-                    className="public-legend-item"
+                    className={`public-legend-item${pinnedModel === m.model ? " pinned" : ""}`}
                     style={{ color: modelColor(m.model) }}
-                    onMouseEnter={() => setHovered({ type: "model", value: m.model })}
-                    onMouseLeave={() => setHovered(null)}
+                    aria-pressed={pinnedModel === m.model}
+                    onMouseEnter={() => onModelLegendEnter(m.model)}
+                    onMouseLeave={() => onModelLegendLeave()}
+                    onClick={() => onModelLegendClick(m.model)}
                   >
                     <span className="public-legend-icon">
                       <ModelIcon model={m.model} />
