@@ -482,6 +482,10 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
           {selectedJob && (
             <div className="drawer-meta">
               <div className="drawer-meta-row">
+                <span className="drawer-meta-label">Run ID</span>
+                <span className="mono">{selectedJob.run_id}</span>
+              </div>
+              <div className="drawer-meta-row">
                 <span className="drawer-meta-label">Model</span>
                 <span>{selectedJob.model}</span>
               </div>
