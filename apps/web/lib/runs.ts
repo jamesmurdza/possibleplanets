@@ -48,6 +48,7 @@ import {
   insertRun,
   getRun,
   updateRunProgress,
+  updateRunDeadline as dbUpdateRunDeadline,
   claimRunForFinalize,
   finishRunSucceeded,
   finishRunFailed,
@@ -408,6 +409,8 @@ export async function submitRun(
           // (the result is immediate either way), and matches this
           // branch's own duration_seconds: 0.
           started_at: new Date().toISOString(),
+          // Nothing ran, so there's no deadline to speak of either.
+          deadline_at: null,
           // Nothing actually ran just now -- this is an existing
           // run_cache answer, not a fresh process invocation, so there's
           // no new stdout to show. The real run that originally produced
@@ -509,6 +512,15 @@ export interface RunView {
   // it too without reaching into the already-fetched list row for it like
   // the Duration fallback below still does.
   started_at: string;
+  // The absolute cutoff advanceRun's own deadlinePassed check uses to
+  // decide a still-running run has overstayed its welcome -- settable
+  // after the fact via PATCH /v1/runs/{run_id} (the drawer's Advanced
+  // tab), not just at submit time. Null for a cache-hit inline result
+  // (nothing ran, so there's no deadline) or once a run reaches a
+  // terminal state (updateRunDeadline refuses to change it past that
+  // point -- see its own doc comment -- but the column itself is never
+  // cleared, so this stays at whatever it was for a finished run).
+  deadline_at: string | null;
   // The model process's raw captured stdout+stderr, tail-capped -- see
   // this app's db.ts stdout_tail column comment. Present for both
   // succeeded and failed runs (falls back to error.stdout_tail for an
@@ -570,6 +582,7 @@ function toView(row: RunRow): RunView {
     progress: row.progress,
     duration_seconds: row.duration_seconds,
     started_at: row.started_at,
+    deadline_at: row.deadline_at,
     stdout_tail: row.stdout_tail ?? error?.stdout_tail ?? null,
     // Never persisted -- see RunView's own live_stdout_tail comment.
     // advanceRun fills this in after calling toView, for a still-running
@@ -889,6 +902,69 @@ export async function deleteRunAndCleanup(runId: string): Promise<void> {
   }
 
   await deleteRunRow(runId);
+}
+
+export interface UpdateDeadlineResult {
+  view: RunView | null;
+  error: string | null;
+}
+
+/**
+ * Lets the drawer's Advanced tab raise (or lower) a still-in-flight run's
+ * deadline -- i.e. model.exec_timeout_seconds/the New Run form's own
+ * max_run_time_seconds override, just settable after the fact instead of
+ * only at submit time. `newExecTimeoutSeconds` is total seconds from the
+ * run's own `started_at`, exactly like submitRun's initial deadline_at
+ * computation (`started_at + execTimeoutSeconds`) -- NOT "N more seconds
+ * from now" -- so entering the same number twice is idempotent instead of
+ * creeping the deadline forward on every edit.
+ *
+ * Also has to extend the sandbox's own Daytona-side autoStopInterval,
+ * which is a SEPARATE backstop from our deadline_at column (see
+ * autoStopMinutes' own comment) -- raising deadline_at alone would still
+ * let Daytona itself stop the sandbox out from under a run we just told
+ * to keep going longer. Despite what the autoStopInterval name suggests,
+ * this does NOT need "minus time already elapsed" the way you'd expect
+ * for a true elapsed-time ceiling: per the SDK's own doc comment on
+ * setAutostopInterval, it's an IDLE-time interval (minutes since the
+ * sandbox's last activity) that resets on every SDK interaction --
+ * including advanceRun's own per-poll reads -- not a fixed total counted
+ * from sandbox creation. Passing it the same autoStopMinutes(...) value
+ * submitRun used at creation is exactly as correct the tenth time as the
+ * first.
+ */
+export async function updateRunDeadline(runId: string, newExecTimeoutSeconds: number): Promise<UpdateDeadlineResult> {
+  const row = await getRun(runId);
+  if (!row) return { view: null, error: null };
+
+  if (row.status !== "queued" && row.status !== "running") {
+    return { view: toView(row), error: "run has already finished -- its deadline can no longer be changed" };
+  }
+
+  const clamped = clampRunTimeSeconds(newExecTimeoutSeconds);
+  const startedAt = new Date(Date.parse(row.started_at));
+  const newDeadlineAt = new Date(startedAt.getTime() + clamped * 1000);
+
+  await dbUpdateRunDeadline(runId, newDeadlineAt);
+
+  if (row.sandbox_id) {
+    try {
+      const daytona = getDaytonaClient();
+      const sandbox = await daytona.get(row.sandbox_id);
+      await sandbox.setAutostopInterval(autoStopMinutes(clamped));
+    } catch (err) {
+      // Best-effort -- deadline_at (checked by advanceRun's own
+      // deadlinePassed, independent of Daytona's autoStopInterval) is the
+      // row's real source of truth either way; this is belt-and-suspenders
+      // against Daytona's own idle-stop firing first. Logged, not
+      // surfaced as a request failure, since the deadline_at update above
+      // already succeeded.
+      console.error(`[updateRunDeadline ${runId}] setAutostopInterval failed`, err);
+    }
+  }
+
+  const updated = (await getRun(runId))!;
+  return { view: toView(updated), error: null };
 }
 
 async function cleanupSandboxAndSession(daytona: ReturnType<typeof getDaytonaClient>, sandbox: any, sessionId: string) {

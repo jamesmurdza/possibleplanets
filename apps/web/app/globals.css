@@ -506,6 +506,11 @@ a.icon-button {
   font-size: 0.8125rem;
   color: var(--color-error);
   margin: 0 0 0.75rem;
+  /* A run's error.message can be an arbitrary raw string (e.g. a Daytona
+     gateway error's whole HTML body, with no natural spaces for the
+     browser to wrap on) -- without this, that overflows the drawer's
+     fixed width instead of wrapping. */
+  overflow-wrap: break-word;
 }
 
 /* Floating, auto-dismissing status toast (NewRunPanel) -- replaces the

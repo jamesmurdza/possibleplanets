@@ -74,6 +74,9 @@ export interface RunJob {
   // Same column the Runs table's "Started" column/sort order reads --
   // see lib/runs.ts's RunView doc comment on this same field.
   started_at: string;
+  // The deadline the drawer's own Advanced tab can PATCH -- see
+  // lib/runs.ts's RunView doc comment on this same field.
+  deadline_at: string | null;
   // The model process's raw captured stdout+stderr, tail-capped -- see
   // lib/db.ts's stdout_tail column comment. Present for both succeeded
   // and failed runs; null if nothing was captured, or for a run that
