@@ -30,6 +30,18 @@ function formatWhen(iso: string): string {
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+// Every duration in this panel (a finished run's duration_seconds, and a
+// still-running one's live elapsed time below) renders through this one
+// function, always as "Xm Ys" -- including under a minute (e.g. "0m 7s"),
+// not a special-cased bare "7s" -- so every row in the Duration column
+// reads in the same shape regardless of how long that particular run
+// took.
+function formatDuration(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ${seconds % 60}s`;
+}
+
 // Live "how long has this been running" for a still-in-progress run --
 // just now() - started_at, recomputed on every render. No interval timer
 // of its own needed: both the table (refreshList, every 1s -- see
@@ -40,10 +52,7 @@ function formatWhen(iso: string): string {
 // out of sync with a second, independent setInterval.
 function formatElapsed(startedAtIso: string): string {
   const elapsedSeconds = Math.max(0, (Date.now() - new Date(startedAtIso).getTime()) / 1000);
-  if (elapsedSeconds < 60) return `${Math.floor(elapsedSeconds)}s`;
-  const minutes = Math.floor(elapsedSeconds / 60);
-  const seconds = Math.floor(elapsedSeconds % 60);
-  return `${minutes}m ${seconds}s`;
+  return formatDuration(elapsedSeconds);
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -508,7 +517,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
                     {r.status === "running" || r.status === "queued"
                       ? formatElapsed(r.started_at)
                       : typeof r.duration_seconds === "number"
-                        ? `${r.duration_seconds.toFixed(1)}s`
+                        ? formatDuration(r.duration_seconds)
                         : "--"}
                   </td>
                   <td>{formatWhen(r.started_at)}</td>
@@ -579,7 +588,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun, refres
               {typeof selectedJob.duration_seconds === "number" ? (
                 <div className="drawer-meta-row">
                   <span className="drawer-meta-label">Duration</span>
-                  <span>{selectedJob.duration_seconds.toFixed(1)}s</span>
+                  <span>{formatDuration(selectedJob.duration_seconds)}</span>
                 </div>
               ) : (
                 (selectedJob.status === "running" || selectedJob.status === "queued") &&
