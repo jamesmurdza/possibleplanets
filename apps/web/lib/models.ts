@@ -325,14 +325,28 @@ export const MODELS: Record<string, ModelMeta> = {
     website: "https://github.com/tgasser/OSCAR",
     dockerfile: path.join(SANDBOXES_DIR, "oscar", "Dockerfile"),
     // See hector's daytona_snapshot comment for why every model uses one.
-    daytona_snapshot: "oscar-production-v1",
-    // Dockerfile clones jamesmurdza/OSCAR@main unpinned, so the exact
-    // commit actually baked into oscar-production-v1 can't be read off the
-    // Dockerfile text -- verified directly instead by spinning up the real
-    // snapshot and running `git rev-parse HEAD` in /app/oscar (confirmed
-    // 2026-11-18): 2200dfd30a86a2560edfc301493298680cbf85a9, committed
-    // 2025-03-22. Re-verify (and re-run the retroactive runs.model_version
-    // backfill) if this snapshot is ever rebuilt.
+    //
+    // v2, not v1 -- confirmed by testing (2026-11-19): production oscar
+    // runs started failing intermittently with `FileExistsError: [Errno
+    // 17] File exists: 'results/SSP_drivers/'`, a genuine TOCTOU race in
+    // OSCAR's own upstream run_scripts/get_SSP_drivers.py (reproduced
+    // directly: the exact same code/inputs failed on some attempts and
+    // succeeded on others). Fixed at the Dockerfile level (patches the
+    // installed file to use `os.makedirs(..., exist_ok=True)`, same
+    // technique sandboxes/twolayer/Dockerfile already uses for a different
+    // installed-package bug) and confirmed by running 4 fresh sandboxes
+    // back-to-back with zero failures before switching this over. Also
+    // pins the git clone to the exact commit below now, instead of
+    // floating to `main`, to avoid pulling in unrelated upstream drift
+    // while fixing this one bug.
+    daytona_snapshot: "oscar-production-v2",
+    // Pinned explicitly in the Dockerfile now (see daytona_snapshot's own
+    // comment above) to the exact commit already verified working end to
+    // end by spinning up the real snapshot and running `git rev-parse
+    // HEAD` in /app/oscar (confirmed 2026-11-18):
+    // 2200dfd30a86a2560edfc301493298680cbf85a9, committed 2025-03-22.
+    // Re-verify (and re-run the retroactive runs.model_version backfill)
+    // if this snapshot is ever rebuilt from a different commit.
     model_version: "jamesmurdza/OSCAR@2200dfd30a86a2560edfc301493298680cbf85a9",
     scenarios: [
       "SSP1-1.9",
