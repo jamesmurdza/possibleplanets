@@ -643,9 +643,9 @@ export const MODELS: Record<string, ModelMeta> = {
     // 21-period run (1975-2100) takes ~30-31 minutes at cpu:4 -- two to
     // three orders of magnitude longer than every other model here, since
     // this is a real multi-region economic equilibrium solve, not a
-    // closed-form/ODE integration. 3000s gives a healthy buffer above the
+    // closed-form/ODE integration. 5000s gives a healthy buffer above the
     // observed ~1860s.
-    exec_timeout_seconds: 3000,
+    exec_timeout_seconds: 5000,
     // gcam.exe logs a "Period N: YYYY" line at the start of each of its 21
     // periods (observed directly during this project's validation runs --
     // see sandboxes/gcam/run.py), which run.py tees into /tmp/progress.json
