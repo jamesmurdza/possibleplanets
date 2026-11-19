@@ -536,7 +536,21 @@ export const MODELS: Record<string, ModelMeta> = {
     // 5.2GB generated database that's deliberately gitignored (too large
     // for git -- see sandboxes/gcam/runtime/README.md) and only ever
     // exists on the one machine that originally generated it.
-    daytona_snapshot: "gcam-production-v1",
+    //
+    // v2, not v1 -- confirmed by direct testing (2026-11-18): the
+    // long-deployed gcam-production-v1 snapshot was missing python3
+    // entirely (despite the Dockerfile's final stage installing it --
+    // v1 must predate that line, or an earlier rebuild dropped it), so
+    // every real gcam run's `python3 -u /app/run.py` failed instantly
+    // with "command not found" inside the sandbox. Worse, the webhook
+    // completion call is ALSO a `python3 -c ...` one-liner (see
+    // buildWrappedCommand), so that failed too -- the run never
+    // self-reported, and with nothing polling it (GET /v1/runs/{id} is
+    // the only thing that ever checks a run against Daytona -- see its
+    // own comment), it just sat as "running" forever past its deadline.
+    // Rebuilt from the exact same Dockerfile as gcam-production-v2 and
+    // confirmed python3/gcam.exe both work before switching this over.
+    daytona_snapshot: "gcam-production-v2",
     // Dockerfile clones JGCRI/gcam-core@main unpinned, so the Dockerfile
     // text alone doesn't tell you which release that resolved to -- verified
     // directly instead by spinning up the real snapshot and running
@@ -567,7 +581,7 @@ export const MODELS: Record<string, ModelMeta> = {
     // see sandboxes/gcam/run.py), which run.py tees into /tmp/progress.json
     // the same way sandboxes/oscar/run.py does for its own per-year prints.
     supports_progress: true,
-    // Same resource profile as the gcam-production-v1 Daytona snapshot
+    // Same resource profile as the gcam-production-v2 Daytona snapshot
     // this image is built from (see docs/gcam/artifacts.md) -- confirmed
     // sufficient by direct testing: gcam.exe itself only needs this
     // account's normal 4 CPU/8GB tier. The expensive step (generating the
