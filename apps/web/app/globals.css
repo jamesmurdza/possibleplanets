@@ -508,21 +508,32 @@ a.icon-button {
   margin: 0 0 0.75rem;
 }
 
-.panel-footer {
-  display: flex;
-  align-items: baseline;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  padding: 0.4rem 0.1rem;
-}
-
-.status-text {
+/* Floating, auto-dismissing status toast (NewRunPanel) -- replaces the
+   old always-visible footer line ("Select a model and scenario, then
+   click Run.") with a Google-Docs-"Saving..."-style pill that only
+   appears while there's something transient to report, centered near
+   the top of the viewport rather than pinned to the bottom of the page
+   content. */
+.floating-status {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1500;
+  max-width: calc(100vw - 2rem);
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  background: var(--color-text);
+  color: #fff;
   font-size: 0.8125rem;
-  color: var(--color-text-muted);
+  box-shadow: var(--shadow-md);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.status-text.error {
-  color: var(--color-error);
+.floating-status.error {
+  background: var(--color-error);
 }
 
 /* Exact params a just-finished run used. Monospace so a raw JSON object

@@ -29,7 +29,10 @@ export default function NewRunPanel({
   const [modelName, setModelName] = useState("");
   const [modelMeta, setModelMeta] = useState<ModelMeta | null>(null);
   const [scenario, setScenario] = useState("");
-  const [status, setStatus] = useState("Loading models...");
+  // Transient only -- no persistent "Select a model and scenario, then
+  // click Run." idle message any more (see setStatusText's own comment).
+  // null means nothing's showing right now.
+  const [status, setStatus] = useState<string | null>(null);
   const [statusIsError, setStatusIsError] = useState(false);
   const [runDisabled, setRunDisabled] = useState(false);
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
@@ -72,11 +75,13 @@ export default function NewRunPanel({
   // needs one), not up front, since most visits never touch multi-select at
   // all.
   const schemaCache = useRef<Record<string, ModelMeta>>({});
+  // Auto-dismisses the floating status toast a few seconds after it's
+  // set -- see setStatusText's own comment.
+  const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadModels().catch((err) => {
-      setStatus(`Failed to load models: ${err.message}`);
-      setStatusIsError(true);
+      setStatusText(`Failed to load models: ${err.message}`, true);
     });
     fetchJson("/v1/stats")
       .then((data) => {
@@ -88,6 +93,9 @@ export default function NewRunPanel({
         // Non-critical -- the estimate just stays absent (never a
         // fabricated number) if this fails.
       });
+    return () => {
+      if (statusTimer.current) clearTimeout(statusTimer.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -200,7 +208,6 @@ export default function NewRunPanel({
       setModelName(first);
       await loadSchema(first);
     }
-    setStatus("Select a model and scenario, then click Run.");
   }
 
   async function loadSchema(name: string) {
@@ -215,9 +222,17 @@ export default function NewRunPanel({
     setParamValues({});
   }
 
+  // Floating, auto-dismissing status toast (Google-Docs-"Saving..."
+  // style) -- replaces the old always-visible footer line. Every call
+  // resets the dismiss timer, so a fast sequence of calls (e.g.
+  // "submitting..." immediately followed by a failure) just keeps
+  // extending how long the latest one shows rather than stacking/
+  // overlapping messages.
   function setStatusText(text: string, isError = false) {
     setStatus(text);
     setStatusIsError(isError);
+    if (statusTimer.current) clearTimeout(statusTimer.current);
+    statusTimer.current = setTimeout(() => setStatus(null), 4000);
   }
 
   // Every (model, scenario) combination the current selection implies --
@@ -611,9 +626,11 @@ export default function NewRunPanel({
         </div>
       </form>
 
-      <div className="panel-footer">
-        <span className={`status-text${statusIsError ? " error" : ""}`}>{status}</span>
-      </div>
+      {status && (
+        <div className={`floating-status${statusIsError ? " error" : ""}`} role="status">
+          {status}
+        </div>
+      )}
 
       {infoModal && (
         <Modal title={infoModal.title} onClose={() => setInfoModal(null)}>
