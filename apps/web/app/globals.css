@@ -1923,7 +1923,6 @@ a.icon-button {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  border-top: 1px solid var(--color-border);
 }
 
 .sidebar-footer-link {
@@ -1931,7 +1930,11 @@ a.icon-button {
   border: none;
   padding: 0;
   font-size: 0.8125rem;
-  color: var(--color-text-muted);
+  /* Was var(--color-text-muted) (#6b7280, tuned for the light main-area
+     surface) on the sidebar's own dark background -- low-contrast and
+     looked off. --color-sidebar-text matches the nav items' own
+     unselected color instead. */
+  color: var(--color-sidebar-text);
   text-decoration: none;
   cursor: pointer;
   text-align: left;
