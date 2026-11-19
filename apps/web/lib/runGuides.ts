@@ -443,7 +443,7 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
         code:
           "docker pull possibleplanets/gcam\n" +
           "docker run --rm possibleplanets/gcam\n" +
-          '# -> {"status": "succeeded", "scenario": "Reference", "result": {"rows": [...]}}\n\n' +
+          '# -> {"status": "succeeded", "scenario": "Reference", "result": {"csv": "...\\n..."}}\n\n' +
           '# SCENARIO_PARAMS works the same way as every other model here, but "Reference" is\n' +
           '# the only scenario currently supported (see docs/gcam/known-gaps.md), so this is\n' +
           '# equivalent to the bare command above, not a different result:\n' +
@@ -461,15 +461,15 @@ const RUN_GUIDES: Record<string, RunGuideSection[]> = {
         "gcam",
         '{"scenario": "Reference"}',
         '{\n' +
-          '    "rows": [\n' +
-          '      {"scenario": "Reference", "run_name": "none", "spinup": "0", "year": "1850", "variable": "Tgav", "value": "0.0", "units": "degC"},\n' +
-          '      ...\n' +
-          '      {"scenario": "Reference", "run_name": "none", "spinup": "0", "year": "2100", "variable": "Tgav", "value": "...", "units": "degC"}\n' +
-          '    ]  // ILLUSTRATIVE shape -- see docs/api-examples/README.md\n' +
+          '    "csv": "# Output from hector version ...\\n' +
+          'scenario,run_name,spinup,year,variable,value,units\\n' +
+          'Reference,none,0,1850,Tgav,0.0,degC\\n' +
+          '...\\n' +
+          'Reference,none,0,2100,Tgav,...,degC\\n"  // ILLUSTRATIVE shape -- see docs/api-examples/README.md\n' +
           '  }',
-        "GCAM runs its own internal Hector instance for climate -- rows follow Hector's standard long-format " +
-          "output (scenario/run_name/spinup/year/variable/value/units), not independently re-executed -- see " +
-          "docs/api-examples/README.md",
+        "GCAM runs its own internal Hector instance for climate -- result.csv is Hector's own standard " +
+          "long-format output file (scenario/run_name/spinup/year/variable/value/units), returned as raw text " +
+          "rather than parsed rows, not independently re-executed -- see docs/api-examples/README.md",
         1860,
       ),
       apiCostStep("gcam", 4, 8, 1860, 7),

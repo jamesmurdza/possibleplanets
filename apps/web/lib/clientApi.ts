@@ -25,6 +25,29 @@ export async function fetchJson(path: string, options?: RequestInit) {
   return res.json();
 }
 
+// Parses Hector's own outputstream.csv text (gcam's result.csv -- see
+// sandboxes/gcam/run.py's _read_output_csv docstring for why that's raw
+// text rather than pre-parsed rows: this is the one place that does the
+// parsing, so a format quirk only needs fixing here). Hector prefixes
+// the real header row with a "# Output from hector version ..." comment
+// line, so comment lines are skipped rather than naively treated as the
+// header. No quoted-field/escaping support -- Hector's own CSV writer
+// doesn't produce those, so a plain split is enough.
+function parseHectorCsv(csv: string | null | undefined): Record<string, string>[] {
+  if (!csv) return [];
+  const lines = csv.split("\n").filter((line) => line.trim() && !line.startsWith("#"));
+  if (lines.length < 1) return [];
+  const header = lines[0].split(",").map((h) => h.trim());
+  return lines.slice(1).map((line) => {
+    const cells = line.split(",");
+    const row: Record<string, string> = {};
+    header.forEach((key, i) => {
+      row[key] = (cells[i] ?? "").trim();
+    });
+    return row;
+  });
+}
+
 // --- Per-model chart adapters -----------------------------------------
 // Each adapter takes a run's native `result` object (from GET /v1/runs/..)
 // and returns { labels, values, label } for a single line -- same "pick
@@ -87,10 +110,12 @@ export const CHART_ADAPTERS: Record<string, (result: any) => { labels: any[]; va
     };
   },
   gcam(result) {
-    // GCAM's result.rows is Hector's own long-format outputstream.csv,
-    // untouched (see sandboxes/gcam/run.py's _read_output_csv docstring):
-    // one row per (variable, year), not nested by variable like hector's
-    // own library adapter above. "global_tas" is Hector's own variable
+    // GCAM's result.csv is Hector's own long-format outputstream.csv,
+    // untouched raw text (see sandboxes/gcam/run.py's _read_output_csv
+    // docstring -- it deliberately does NOT parse this on the Python
+    // side, so the parsing happens here instead, in one place): one row
+    // per (variable, year), not nested by variable like hector's own
+    // library adapter above. "global_tas" is Hector's own variable
     // name, in that CSV, for global mean atmospheric temperature anomaly
     // -- the same quantity hector's adapter reads as
     // native.data["temperature.global_tas"] from its library's nested
@@ -99,7 +124,7 @@ export const CHART_ADAPTERS: Record<string, (result: any) => { labels: any[]; va
     // that name). Confirmed via Hector's own docs, not guessed:
     // https://github.com/JGCRI/hector/wiki/OutputFiles and
     // https://jgcri.github.io/hector/articles/outputstream.html.
-    const rows: any[] = result.result?.rows ?? [];
+    const rows = parseHectorCsv(result.result?.csv);
     const temps = rows
       .filter((r) => r.variable === "global_tas")
       .map((r) => ({ year: Number(r.year), value: Number(r.value) }))
