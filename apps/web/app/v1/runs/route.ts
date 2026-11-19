@@ -9,8 +9,10 @@ export async function OPTIONS() {
  * Lists recent runs (any status -- queued/running/succeeded/failed),
  * newest first. Powers the dashboard's "Runs" and "Compare" tabs, but is
  * just as usable by any other API consumer wanting an activity feed. A
- * single run's full detail (result/error) is GET /v1/runs/{run_id}, not
- * returned here -- see lib/db.ts's listRuns.
+ * failed run's `error` here is trimmed to {code, message} (no
+ * stdout_tail); a run's full detail (result, and error WITH stdout_tail)
+ * is still GET /v1/runs/{run_id}, not returned here -- see lib/db.ts's
+ * listRuns.
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);

@@ -5,8 +5,8 @@ import Chart from "chart.js/auto";
 import Dropdown from "./Dropdown";
 import Drawer from "./Drawer";
 import Modal from "./Modal";
-import { fetchJson, CHART_ADAPTERS, summarizeParams, chartAspectRatio, nativeScenarioOf, canonicalScenario } from "../lib/clientApi";
-import type { RunJob, RunListItem } from "../lib/clientTypes";
+import { fetchJson, CHART_ADAPTERS, summarizeParams, nativeScenarioOf, canonicalScenario } from "../lib/clientApi";
+import type { RunJob, RunListItem, ModelMeta } from "../lib/clientTypes";
 
 const ALL = "__all__";
 const STATUS_OPTIONS = [
@@ -30,6 +30,22 @@ function formatWhen(iso: string): string {
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+// Live "how long has this been running" for a still-in-progress run --
+// just now() - started_at, recomputed on every render. No interval timer
+// of its own needed: both the table (refreshList, every 1s -- see
+// listPollTimer) and the drawer (pollDetail, every 500ms while a run is
+// still in progress -- see detailPollTimer) already re-render this
+// component on that same cadence while anything is running/queued, so
+// this naturally ticks up in step with those polls rather than drifting
+// out of sync with a second, independent setInterval.
+function formatElapsed(startedAtIso: string): string {
+  const elapsedSeconds = Math.max(0, (Date.now() - new Date(startedAtIso).getTime()) / 1000);
+  if (elapsedSeconds < 60) return `${Math.floor(elapsedSeconds)}s`;
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = Math.floor(elapsedSeconds % 60);
+  return `${minutes}m ${seconds}s`;
+}
+
 function StatusBadge({ status }: { status: string }) {
   return <span className={`status-pill status-pill-${status}`}>{status}</span>;
 }
@@ -41,9 +57,13 @@ export interface RunsPanelProps {
   // time), not just a row click inside this table.
   selectedRunId: string | null;
   onSelectRun: (runId: string | null) => void;
+  // Switches the dashboard's own tab to "New Run" -- backs the button at
+  // the top right of this panel (Runs is the default landing tab now, so
+  // starting a run needs to be reachable from here, not just the sidebar).
+  onNewRun: () => void;
 }
 
-export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps) {
+export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: RunsPanelProps) {
   const [runs, setRuns] = useState<RunListItem[]>([]);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [selectedJob, setSelectedJob] = useState<RunJob | null>(null);
@@ -59,27 +79,73 @@ export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps
   // click, since this is a bulk/irreversible action (see deleteSelected's
   // own DELETE calls, there's no undo).
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // The open drawer's model schema -- fetched lazily (only once a run of
+  // that model is actually opened) so the field-by-field Params display
+  // below knows each parameter's label and which keys exist at all (to
+  // show "(default)" for ones the run's own params didn't include).
+  const [drawerModelMeta, setDrawerModelMeta] = useState<ModelMeta | null>(null);
+  const schemaCache = useRef<Record<string, ModelMeta>>({});
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
   const listPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const detailPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advancePollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Mirrors `runs` for advanceInProgressRuns below -- that function is
+  // scheduled via setTimeout (not re-created every render), so it'd
+  // otherwise close over whatever `runs` was on the render that scheduled
+  // it, not the latest list.
+  const runsRef = useRef<RunListItem[]>([]);
 
   async function refreshList() {
     try {
       const data = await fetchJson("/v1/runs");
       setRuns(data.runs ?? []);
+      runsRef.current = data.runs ?? [];
       setLoadErr(null);
     } catch (err: any) {
       setLoadErr(err.message);
     }
   }
 
+  // GET /v1/runs (refreshList above) is a plain DB read -- see its own
+  // route comment -- it never itself checks a sandbox against Daytona, so
+  // a run's row only ever advances past "queued"/"running" via (a) that
+  // run's own webhook POST on completion, or (b) someone polling
+  // GET /v1/runs/{run_id} (advanceRun's fallback path), which this table
+  // previously only did for whichever single run's drawer happened to be
+  // open. A run nobody ever opened the drawer for could sit showing
+  // "running" forever even after it actually finished. Fixes that by
+  // polling every still-in-progress run's own detail endpoint in the
+  // background -- on load and on an interval -- whether or not its drawer
+  // is open, so this table's own status/duration stays honest for every
+  // row, not just the selected one.
+  async function advanceInProgressRuns() {
+    const inProgress = runsRef.current.filter((r) => r.status === "queued" || r.status === "running");
+    if (inProgress.length === 0) return;
+    await Promise.all(inProgress.map((r) => fetchJson(`/v1/runs/${r.run_id}`).catch(() => null)));
+    // advanceRun (behind that GET) may have just changed one or more
+    // statuses in the DB -- pull the fresh list right away rather than
+    // waiting for refreshList's own separate poll to eventually catch up.
+    await refreshList();
+  }
+
   useEffect(() => {
-    refreshList();
+    refreshList().then(advanceInProgressRuns);
+    // A plain setInterval, started once and never re-armed -- NOT keyed
+    // on `runs` the way listPollTimer below is. advanceInProgressRuns
+    // itself reads runsRef (always current) and no-ops immediately if
+    // nothing's in progress, so there's no need to start/stop this based
+    // on activity; keying it on `runs` instead (so it only runs "while
+    // active") would backfire: refreshList's own 1s poll changes `runs`
+    // every second whenever anything's active, which would clear and
+    // reschedule a runs-keyed 5s timer before it ever reached 5 seconds --
+    // it would never actually fire.
+    advancePollTimer.current = setInterval(advanceInProgressRuns, 5000);
     return () => {
       if (listPollTimer.current) clearTimeout(listPollTimer.current);
       if (detailPollTimer.current) clearTimeout(detailPollTimer.current);
+      if (advancePollTimer.current) clearInterval(advancePollTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -198,6 +264,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps
     if (detailPollTimer.current) clearTimeout(detailPollTimer.current);
     setSelectedJob(null);
     setDetailErr(null);
+    setDrawerModelMeta(null);
     if (selectedRunId) pollDetail(selectedRunId);
     return () => {
       if (detailPollTimer.current) clearTimeout(detailPollTimer.current);
@@ -212,6 +279,33 @@ export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedJob]);
 
+  // Fetches (and caches) the open drawer's model schema -- see
+  // drawerModelMeta's own comment. Keyed on the model name, not the whole
+  // selectedJob object, so this doesn't refetch on every progress poll.
+  useEffect(() => {
+    const model = selectedJob?.model;
+    if (!model) return;
+    if (schemaCache.current[model]) {
+      setDrawerModelMeta(schemaCache.current[model]);
+      return;
+    }
+    let cancelled = false;
+    fetchJson(`/v1/models/${model}/schema`)
+      .then((schema) => {
+        if (cancelled) return;
+        schemaCache.current[model] = schema;
+        setDrawerModelMeta(schema);
+      })
+      .catch(() => {
+        // Non-critical -- the Params row below just falls back to the
+        // raw summarizeParams() rendering if this never resolves.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedJob?.model]);
+
   function renderChart(job: RunJob) {
     const adapter = CHART_ADAPTERS[job.model];
     if (!adapter || !canvasRef.current) return;
@@ -222,7 +316,12 @@ export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps
       data: { labels, datasets: [{ label, data: values, borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4 }] },
       options: {
         animation: false,
-        aspectRatio: chartAspectRatio(),
+        // Deliberately NOT chartAspectRatio() -- that's tuned for the
+        // dashboard's own wide main-area chart (3.4), which made this
+        // chart tiny squeezed into the drawer's much narrower ~32rem
+        // panel (32rem / 3.4 is a sliver). A fixed, much taller ratio
+        // reads fine at this panel's width.
+        aspectRatio: 1.3,
         interaction: { mode: "nearest", intersect: false },
         scales: {
           x: { title: { display: true, text: "year" } },
@@ -241,12 +340,15 @@ export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps
     <div>
       <div className="panel-header">
         <h2 className="panel-title">Runs</h2>
+        <button type="button" className="primary-button" onClick={onNewRun}>
+          New Run
+        </button>
       </div>
 
       {loadErr && <p className="panel-error">{loadErr}</p>}
 
       <div className="table-toolbar">
-        <div className="run-controls">
+        <div className="run-controls runs-filter-row">
           <Dropdown options={modelOptions} value={filterModel} onChange={onFilterModelChange} ariaLabel="Filter by model" />
           <Dropdown options={scenarioOptions} value={filterScenario} onChange={setFilterScenario} ariaLabel="Filter by scenario" />
           <Dropdown options={STATUS_OPTIONS} value={filterStatus} onChange={setFilterStatus} ariaLabel="Filter by status" />
@@ -313,6 +415,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps
                   />
                 </th>
                 <th>Model</th>
+                <th>Version</th>
                 <th>Params</th>
                 <th>Status</th>
                 <th>Duration</th>
@@ -322,7 +425,7 @@ export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps
             <tbody>
               {filteredRuns.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="runs-table-empty">
+                  <td colSpan={7} className="runs-table-empty">
                     {runs.length === 0 ? 'No runs yet -- start one from "New Run".' : "No runs match these filters."}
                   </td>
                 </tr>
@@ -342,16 +445,25 @@ export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps
                     />
                   </td>
                   <td>{r.model}</td>
+                  <td className="mono">{r.model_version_number ?? "--"}</td>
                   <td className="mono">{summarizeParams(r.params)}</td>
                   <td>
                     <StatusBadge status={r.status} />
+                    {(r.status === "running" || r.status === "queued") &&
+                      r.progress &&
+                      typeof r.progress.percent === "number" && (
+                        <span className="progress-tag">{r.progress.percent}%</span>
+                      )}
                     {r.cached && <span className="cached-tag">cached</span>}
+                    {r.status === "failed" && r.error?.message && (
+                      <span className="error-tag" title={r.error.message}>
+                        {r.error.message}
+                      </span>
+                    )}
                   </td>
                   <td>
                     {r.status === "running" || r.status === "queued"
-                      ? r.progress && typeof r.progress.percent === "number"
-                        ? `${r.progress.percent}%`
-                        : "..."
+                      ? formatElapsed(r.started_at)
                       : typeof r.duration_seconds === "number"
                         ? `${r.duration_seconds.toFixed(1)}s`
                         : "--"}
@@ -370,27 +482,83 @@ export default function RunsPanel({ selectedRunId, onSelectRun }: RunsPanelProps
           {selectedJob && (
             <div className="drawer-meta">
               <div className="drawer-meta-row">
+                <span className="drawer-meta-label">Run ID</span>
+                <span className="mono">{selectedJob.run_id}</span>
+              </div>
+              <div className="drawer-meta-row">
                 <span className="drawer-meta-label">Model</span>
                 <span>{selectedJob.model}</span>
               </div>
               <div className="drawer-meta-row">
-                <span className="drawer-meta-label">Version</span>
-                <span className="mono">{selectedJob.model_version ?? "unknown (run predates version tracking)"}</span>
+                <span className="drawer-meta-label">Model version</span>
+                <span className="mono">{selectedJob.model_version_number ?? "unknown (run predates version tracking)"}</span>
               </div>
               <div className="drawer-meta-row">
-                <span className="drawer-meta-label">Params</span>
-                <span className="mono">{summarizeParams(selectedJob.params)}</span>
+                <span className="drawer-meta-label">Build</span>
+                <span className="mono">{selectedJob.model_version ?? "unknown (run predates version tracking)"}</span>
               </div>
-              {typeof selectedJob.duration_seconds === "number" && (
+              {drawerModelMeta ? (
+                <>
+                  <div className="drawer-meta-row">
+                    <span className="drawer-meta-label">Scenario</span>
+                    <span className="mono">
+                      {(() => {
+                        const native = nativeScenarioOf(selectedJob.params);
+                        return native ? canonicalScenario(native) : "(default)";
+                      })()}
+                    </span>
+                  </div>
+                  {(drawerModelMeta.parameters ?? []).map((spec) => (
+                    <div className="drawer-meta-row" key={spec.key}>
+                      <span className="drawer-meta-label">{spec.label}</span>
+                      <span className="mono">
+                        {Object.prototype.hasOwnProperty.call(selectedJob.params, spec.key)
+                          ? String((selectedJob.params as Record<string, unknown>)[spec.key])
+                          : "(default)"}
+                      </span>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div className="drawer-meta-row">
+                  <span className="drawer-meta-label">Params</span>
+                  <span className="mono">{summarizeParams(selectedJob.params)}</span>
+                </div>
+              )}
+              {(selectedJob.status === "running" || selectedJob.status === "queued") &&
+                selectedJob.progress &&
+                typeof selectedJob.progress.percent === "number" && (
+                  <div className="drawer-meta-row">
+                    <span className="drawer-meta-label">Progress</span>
+                    <span>{selectedJob.progress.percent}%</span>
+                  </div>
+                )}
+              {typeof selectedJob.duration_seconds === "number" ? (
                 <div className="drawer-meta-row">
                   <span className="drawer-meta-label">Duration</span>
                   <span>{selectedJob.duration_seconds.toFixed(1)}s</span>
                 </div>
+              ) : (
+                (selectedJob.status === "running" || selectedJob.status === "queued") &&
+                // RunJob (this detail response) doesn't carry started_at --
+                // reuse the already-fetched list row's copy of it instead
+                // of widening that response just for this. Ticks up in
+                // step with pollDetail's own 500ms poll while open, same
+                // as the table's version (see formatElapsed's comment).
+                (() => {
+                  const listRow = runs.find((r) => r.run_id === selectedJob.run_id);
+                  return listRow ? (
+                    <div className="drawer-meta-row">
+                      <span className="drawer-meta-label">Duration</span>
+                      <span>{formatElapsed(listRow.started_at)}</span>
+                    </div>
+                  ) : null;
+                })()
               )}
             </div>
           )}
           {selectedJob?.status === "succeeded" ? (
-            <canvas ref={canvasRef} height={220}></canvas>
+            <canvas ref={canvasRef} height={380}></canvas>
           ) : (
             <div className="chart-placeholder">
               {selectedJob

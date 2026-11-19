@@ -19,6 +19,9 @@ export interface ModelMeta {
   model: string;
   family: string;
   model_version: string;
+  // The official model version (e.g. "3.2", "2016", "9.1") -- distinct
+  // from model_version above, see lib/models.ts's own doc comment.
+  model_version_number: string;
   scenarios: string[];
   params_shape?: "scenario" | "scenarios";
   parameters?: ParameterSpec[];
@@ -32,6 +35,7 @@ export interface ModelListItem {
   model: string;
   family: string;
   model_version: string;
+  model_version_number: string;
   scenarios: string[];
   description: string;
   implementation: string;
@@ -55,6 +59,7 @@ export interface RunJob {
   run_id: string;
   model: string;
   model_version: string | null;
+  model_version_number: string | null;
   params: Record<string, unknown>;
   status: "queued" | "running" | "succeeded" | "failed";
   result: any;
@@ -68,8 +73,12 @@ export interface RunListItem {
   run_id: string;
   model: string;
   model_version: string | null;
+  model_version_number: string | null;
   params: Record<string, unknown>;
   status: "queued" | "running" | "succeeded" | "failed";
+  // {code, message} only (no stdout_tail) -- see lib/db.ts's RunListItem
+  // comment. Only ever present when status is "failed".
+  error: { code: string; message: string } | null;
   cached: boolean;
   progress: { percent: number } | null;
   duration_seconds: number | null;

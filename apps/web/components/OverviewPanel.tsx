@@ -335,7 +335,7 @@ export default function OverviewPanel() {
   return (
     <div>
       <div className="panel-header">
-        <h2 className="panel-title">Overview</h2>
+        <h2 className="panel-title">Charts</h2>
         <div className="run-controls">
           <button className="text-button" onClick={() => chartRef.current?.resetZoom()}>
             Reset zoom

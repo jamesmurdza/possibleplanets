@@ -15,10 +15,22 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import Chart from "chart.js/auto";
-import { alignSeriesByYear, modelColor, colorWithAlpha, averageSeries, nativeScenarioOf, canonicalScenario } from "../lib/clientApi";
+import {
+  alignSeriesByYear,
+  modelColor,
+  colorWithAlpha,
+  averageSeries,
+  nativeScenarioOf,
+  canonicalScenario,
+  isSspScenario,
+} from "../lib/clientApi";
 import type { ChartSeries } from "../lib/clientTypes";
 
-export type HoverFilter = { type: "model" | "scenario"; value: string } | null;
+// "ssp" (no `value`) is the home page's single "SSPs" legend item --
+// matches every line whose scenario is an SSP-framework name, regardless
+// of which model ran it (see isSspScenario), rather than one specific
+// model/scenario the way the other two variants do.
+export type HoverFilter = { type: "model" | "scenario"; value: string } | { type: "ssp" } | null;
 
 function scenarioOf(params: Record<string, unknown>): string | undefined {
   const native = nativeScenarioOf(params);
@@ -120,7 +132,13 @@ export default function TemperatureChart({
       const run = series[i];
       const model = run.model;
       const scenario = scenarioOf(run.params);
-      const isMatch = !!hovered && (hovered.type === "model" ? hovered.value === model : hovered.value === scenario);
+      const isMatch =
+        !!hovered &&
+        (hovered.type === "model"
+          ? hovered.value === model
+          : hovered.type === "scenario"
+            ? hovered.value === scenario
+            : !!scenario && isSspScenario(scenario));
       const dimmed = !!hovered && !isMatch;
       const label = colorBy === "scenario" ? scenario ?? "unknown" : model;
       const baseColor = colorBy === "scenario" ? scenarioColors.get(scenario ?? "unknown")! : modelColor(model);

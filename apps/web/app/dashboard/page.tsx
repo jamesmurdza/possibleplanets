@@ -16,14 +16,23 @@ import ComparePanel from "../../components/ComparePanel";
 // under /dashboard behind a login. The public site took over / (see
 // app/page.tsx) and has no sidebar at all.
 export default function DashboardPage() {
-  const [tab, setTab] = useState<Tab>("overview");
+  // "runs" is the default landing tab -- see Sidebar.tsx's own ordering
+  // comment for why it leads the nav list too.
+  const [tab, setTab] = useState<Tab>("runs");
   // Which run's drawer is open on the Runs tab -- lifted up here (not
-  // RunsPanel's own local state) so New Run can set it directly:
-  // submitting a run (or clicking "View cached") switches to the Runs
-  // tab AND opens that run's drawer in one move, see onRunSubmitted.
+  // RunsPanel's own local state) so New Run can set it directly: clicking
+  // "View cached" switches to the Runs tab AND opens that run's drawer in
+  // one move (see onViewCached). A plain submission does NOT open the
+  // drawer (see onRunSubmitted) -- it just switches to the Runs tab so the
+  // new run shows up in the list (including any shift-clicked batch
+  // extras, which never had a single drawer to open anyway).
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
-  function onRunSubmitted(runId: string) {
+  function onRunSubmitted() {
+    setTab("runs");
+  }
+
+  function onViewCached(runId: string) {
     setSelectedRunId(runId);
     setTab("runs");
   }
@@ -36,10 +45,10 @@ export default function DashboardPage() {
           <OverviewPanel />
         </div>
         <div style={{ display: tab === "new" ? "block" : "none" }}>
-          <NewRunPanel onRunSubmitted={onRunSubmitted} />
+          <NewRunPanel onRunSubmitted={onRunSubmitted} onViewCached={onViewCached} />
         </div>
         <div style={{ display: tab === "runs" ? "block" : "none" }}>
-          <RunsPanel selectedRunId={selectedRunId} onSelectRun={setSelectedRunId} />
+          <RunsPanel selectedRunId={selectedRunId} onSelectRun={setSelectedRunId} onNewRun={() => setTab("new")} />
         </div>
         <div style={{ display: tab === "compare" ? "block" : "none" }}>
           <ComparePanel />

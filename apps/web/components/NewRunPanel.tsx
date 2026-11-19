@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchJson, buildParams, scenarioDescription, canonicalScenario } from "../lib/clientApi";
 import { scenarioDriverSeries } from "../lib/scenarioDrivers";
-import { modelAssumptions, scenarioAssumptions, type AssumptionSection } from "../lib/assumptions";
+import { scenarioAssumptions, type AssumptionSection } from "../lib/assumptions";
+import { modelFullName } from "../lib/modelFullNames";
 import Sparkline from "./Sparkline";
 import Modal, { AssumptionsModalBody } from "./Modal";
 import InfoButton from "./InfoButton";
@@ -11,12 +12,27 @@ import ModelIcon from "./ModelIcon";
 import { sortByResourceUsage } from "../lib/modelOrder";
 import type { ModelMeta, ModelListItem, ModelDurationStats, CheckResult } from "../lib/clientTypes";
 
-export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId: string) => void }) {
+export default function NewRunPanel({
+  onRunSubmitted,
+  onViewCached,
+}: {
+  // Called after a successful (or cache-hit) submission -- just switches to
+  // the Runs tab, no drawer (see runModel's own comment: a submission can
+  // be a whole batch, which never had one single run to open anyway).
+  onRunSubmitted: () => void;
+  // Called by the "View cached" button -- switches to the Runs tab AND
+  // opens that exact run's drawer, since the whole point there is to look
+  // at one specific historical result.
+  onViewCached: (runId: string) => void;
+}) {
   const [models, setModels] = useState<ModelListItem[]>([]);
   const [modelName, setModelName] = useState("");
   const [modelMeta, setModelMeta] = useState<ModelMeta | null>(null);
   const [scenario, setScenario] = useState("");
-  const [status, setStatus] = useState("Loading models...");
+  // Transient only -- no persistent "Select a model and scenario, then
+  // click Run." idle message any more (see setStatusText's own comment).
+  // null means nothing's showing right now.
+  const [status, setStatus] = useState<string | null>(null);
   const [statusIsError, setStatusIsError] = useState(false);
   const [runDisabled, setRunDisabled] = useState(false);
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
@@ -59,11 +75,13 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
   // needs one), not up front, since most visits never touch multi-select at
   // all.
   const schemaCache = useRef<Record<string, ModelMeta>>({});
+  // Auto-dismisses the floating status toast a few seconds after it's
+  // set -- see setStatusText's own comment.
+  const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadModels().catch((err) => {
-      setStatus(`Failed to load models: ${err.message}`);
-      setStatusIsError(true);
+      setStatusText(`Failed to load models: ${err.message}`, true);
     });
     fetchJson("/v1/stats")
       .then((data) => {
@@ -75,6 +93,9 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
         // Non-critical -- the estimate just stays absent (never a
         // fabricated number) if this fails.
       });
+    return () => {
+      if (statusTimer.current) clearTimeout(statusTimer.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -187,7 +208,6 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
       setModelName(first);
       await loadSchema(first);
     }
-    setStatus("Select a model and scenario, then click Run.");
   }
 
   async function loadSchema(name: string) {
@@ -202,9 +222,17 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
     setParamValues({});
   }
 
+  // Floating, auto-dismissing status toast (Google-Docs-"Saving..."
+  // style) -- replaces the old always-visible footer line. Every call
+  // resets the dismiss timer, so a fast sequence of calls (e.g.
+  // "submitting..." immediately followed by a failure) just keeps
+  // extending how long the latest one shows rather than stacking/
+  // overlapping messages.
   function setStatusText(text: string, isError = false) {
     setStatus(text);
     setStatusIsError(isError);
+    if (statusTimer.current) clearTimeout(statusTimer.current);
+    statusTimer.current = setTimeout(() => setStatus(null), 4000);
   }
 
   // Every (model, scenario) combination the current selection implies --
@@ -260,12 +288,13 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
   }
 
   // Submitting no longer renders anything locally -- it either navigates to
-  // the Runs tab (via onRunSubmitted) with the new run's drawer open, or --
-  // on a genuine submission failure -- shows an inline error and stays on
-  // this form so the user can fix and retry. Clicking "Run" always forces a
-  // fresh run (refresh: true) -- showing a cached result on a "Run" click
-  // would be surprising; cached results are only ever surfaced through the
-  // explicit "View cached" button (see viewCachedRun/checkResult.cached).
+  // the Runs tab (via onRunSubmitted, no drawer -- see that prop's own
+  // comment) or -- on a genuine submission failure -- shows an inline error
+  // and stays on this form so the user can fix and retry. Clicking "Run"
+  // always forces a fresh run (refresh: true) -- showing a cached result on
+  // a "Run" click would be surprising; cached results are only ever
+  // surfaced through the explicit "View cached" button (see
+  // viewCachedRun/checkResult.cached).
   async function runModel() {
     setRunDisabled(true);
 
@@ -297,23 +326,13 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
       setRunDisabled(false);
       // refresh: true above means this normally won't be a cache hit (the
       // whole point of forcing a fresh run on "Run" -- see runModel's own
-      // comment). Keep this branch anyway as a defensive fallback: a cache
-      // hit still comes back as a finished job inline rather than a run_id
-      // to poll (see submitRun's module comment), and that inline run_id
-      // was never written to the `runs` table, so opening it in the drawer
-      // would 404 -- look up the real historical run_id behind the hit
-      // instead (the check we already ran has it, see checkResult).
-      if (submitted.status === "succeeded") {
-        const realRunId = checkResult?.cached_run_id;
-        if (realRunId) {
-          onRunSubmitted(realRunId);
-        } else {
-          setStatusText(`${modelName}: succeeded, but couldn't locate its run history -- see the Runs tab.`);
-        }
-      } else if (submitted.status === "failed") {
+      // comment) -- but either way, a plain "Run" submission never opens
+      // the drawer (see onRunSubmitted's own comment), so there's no need
+      // to look up a cache hit's real run_id here any more.
+      if (submitted.status === "failed") {
         setStatusText(`${modelName}: failed - ${submitted.error?.message || "unknown error"}`, true);
       } else {
-        onRunSubmitted(submitted.run_id);
+        onRunSubmitted();
       }
     } catch (err: any) {
       setRunDisabled(false);
@@ -326,7 +345,7 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
   // (model, params), without resubmitting anything.
   function viewCachedRun() {
     if (checkResult?.cached_run_id) {
-      onRunSubmitted(checkResult.cached_run_id);
+      onViewCached(checkResult.cached_run_id);
     } else {
       setStatusText(`${modelName}: couldn't locate the cached run's history -- see the Runs tab.`, true);
     }
@@ -418,18 +437,49 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
   // would be misleading about what's about to happen. Whether this exact
   // (model, params) happens to have a cached result is instead surfaced
   // only via the separate "View cached" button below.
-  function etaBadge(): { text: string; kind: "estimate" | "warn" } | null {
-    if (!checkResult) return null;
-    if (!checkResult.cacheable) {
-      return { text: "Won't be cached (see Advanced)", kind: "warn" };
-    }
-    const stats = statsByModel[modelName];
-    if (stats) {
-      return { text: `~${stats.median_seconds.toFixed(1)}s estimated`, kind: "estimate" };
-    }
-    return { text: "No run history yet", kind: "estimate" };
+  // "5.3s" under a minute, "1.3m" at or above one -- same cutoff/precision
+  // for every number this badge shows, whether it's a single estimate or
+  // the low/high end of a multi-model range.
+  function formatEtaSeconds(seconds: number): string {
+    return seconds < 60 ? `${seconds.toFixed(1)}s` : `${(seconds / 60).toFixed(1)}m`;
   }
-  const eta = etaBadge();
+
+  // Just the number(s) -- "2.8s" or a multi-model "2.1s–31.0m" range --
+  // for embedding straight into the Run button's own label (see the
+  // button below: "Start 2 runs (2.8s)"), not a full sentence. Null
+  // whenever there's nothing meaningful to show yet (no run history for
+  // any selected model) -- the button then just shows its plain
+  // "Run"/"Start N runs" label with nothing in parens.
+  function etaShort(): string | null {
+    const selectedModels = [modelName, ...extraModels];
+    // Multiple models selected (shift-click batch) -- each has its own
+    // real run time (a gcam run is ~1000x a hector run), so one single
+    // number would be misleading either way. Show the range spanning the
+    // fastest and slowest of the selected models' own median instead.
+    // Deliberately ignores the single primary model's own live
+    // cacheable/cached check here -- every extra model's own run is
+    // always submitted with refresh:true regardless (see
+    // submitExtraRuns), so there's no cache state to report for them.
+    if (selectedModels.length > 1) {
+      const medians = selectedModels
+        .map((m) => statsByModel[m]?.median_seconds)
+        .filter((v): v is number => typeof v === "number");
+      if (medians.length === 0) return null;
+      const min = Math.min(...medians);
+      const max = Math.max(...medians);
+      return min === max ? formatEtaSeconds(min) : `${formatEtaSeconds(min)}–${formatEtaSeconds(max)}`;
+    }
+
+    if (!checkResult || !checkResult.cacheable) return null;
+    const stats = statsByModel[modelName];
+    return stats ? formatEtaSeconds(stats.median_seconds) : null;
+  }
+  const eta = etaShort();
+  // Separate from the button label above -- this is specifically the
+  // "this run won't be cacheable" warning (see Advanced/nonDeterministicKey),
+  // not a timing estimate, so it stays its own small badge rather than
+  // being embeddable into the button text the way a duration is.
+  const uncacheableWarning = checkResult && !checkResult.cacheable ? "Won't be cached (see Advanced)" : null;
 
   const scenarios = multiModelScenarios ?? modelMeta?.scenarios ?? [];
   const parameters = (modelMeta?.parameters ?? []).filter((p) => multiModelParamKeys === null || multiModelParamKeys.has(p.key));
@@ -473,28 +523,12 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
                   </span>
                   <span className="model-card-name">{m.model}</span>
                 </div>
-                <p className="model-card-description">{m.description}</p>
-                {m.website && (
-                  <a
-                    className="model-card-link"
-                    href={m.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Model website &rarr;
-                  </a>
-                )}
-                {modelAssumptions(m.model) && (
-                  <InfoButton
-                    className="card-info-button"
-                    label={`${m.model} assumptions`}
-                    onClick={() => {
-                      const section = modelAssumptions(m.model);
-                      if (section) setInfoModal({ title: `${m.model}: assumptions`, section });
-                    }}
-                  />
-                )}
+                <p className="model-card-description">{modelFullName(m.model)}</p>
+                <InfoButton
+                  className="card-info-button"
+                  label={`${m.model} info`}
+                  onClick={() => window.open(`/models/${m.model}`, "_blank", "noopener,noreferrer")}
+                />
               </div>
             ))}
           </div>
@@ -576,21 +610,27 @@ export default function NewRunPanel({ onRunSubmitted }: { onRunSubmitted: (runId
 
         <div className="form-actions">
           <button type="submit" className="primary-button" disabled={runDisabled}>
-            {extraModels.size + extraScenarios.size > 0 ? `Run ${(1 + extraModels.size) * (1 + extraScenarios.size)}` : "Run"}
+            {(() => {
+              const count = (1 + extraModels.size) * (1 + extraScenarios.size);
+              const label = count > 1 ? `Start ${count} runs` : "Run";
+              return eta ? `${label} (${eta})` : label;
+            })()}
           </button>
-          {eta && <span className={`eta-badge eta-badge-${eta.kind}`}>{eta.text}</span>}
+          {uncacheableWarning && <span className="eta-badge eta-badge-warn">{uncacheableWarning}</span>}
           {checkResult?.cached && (
             <button type="button" className="text-button" onClick={viewCachedRun}>
               View cached
             </button>
           )}
-          <span className="form-hint">Shift-click a model or scenario to run it alongside the current selection.</span>
+          <span className="form-hint">Shift click to select multiple models/scenarios.</span>
         </div>
       </form>
 
-      <div className="panel-footer">
-        <span className={`status-text${statusIsError ? " error" : ""}`}>{status}</span>
-      </div>
+      {status && (
+        <div className={`floating-status${statusIsError ? " error" : ""}`} role="status">
+          {status}
+        </div>
+      )}
 
       {infoModal && (
         <Modal title={infoModal.title} onClose={() => setInfoModal(null)}>

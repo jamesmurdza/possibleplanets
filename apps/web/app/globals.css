@@ -174,11 +174,16 @@ body {
    read as acting on the table's current contents/selection. */
 .table-toolbar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
+  /* Filters + action icons both stay on this one row -- see
+     .runs-filter-row -- rather than wrapping onto a second line. On a
+     viewport too narrow for everything, the row scrolls horizontally
+     instead of wrapping (still one row, just pan to see the rest). */
+  overflow-x: auto;
 }
 
 .table-toolbar-actions {
@@ -186,6 +191,24 @@ body {
   align-items: center;
   gap: 0.375rem;
   flex-shrink: 0;
+}
+
+/* All of the Runs table's filter dropdowns in a single row, never
+   wrapping onto a second line -- each dropdown shrinks (down to
+   min-width) before the row itself wraps. */
+.runs-filter-row {
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+
+.runs-filter-row .dropdown {
+  flex: 1 1 6rem;
+  min-width: 4.5rem;
+}
+
+.runs-filter-row .text-button {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 button {
@@ -485,21 +508,32 @@ a.icon-button {
   margin: 0 0 0.75rem;
 }
 
-.panel-footer {
-  display: flex;
-  align-items: baseline;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  padding: 0.4rem 0.1rem;
-}
-
-.status-text {
+/* Floating, auto-dismissing status toast (NewRunPanel) -- replaces the
+   old always-visible footer line ("Select a model and scenario, then
+   click Run.") with a Google-Docs-"Saving..."-style pill that only
+   appears while there's something transient to report, centered near
+   the top of the viewport rather than pinned to the bottom of the page
+   content. */
+.floating-status {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1500;
+  max-width: calc(100vw - 2rem);
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  background: var(--color-text);
+  color: #fff;
   font-size: 0.8125rem;
-  color: var(--color-text-muted);
+  box-shadow: var(--shadow-md);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.status-text.error {
-  color: var(--color-error);
+.floating-status.error {
+  background: var(--color-error);
 }
 
 /* Exact params a just-finished run used. Monospace so a raw JSON object
@@ -605,6 +639,32 @@ a.icon-button {
   margin-left: 0.4rem;
   font-size: 0.7rem;
   color: var(--color-text-faint);
+}
+
+/* Live progress percent, shown right next to the status pill while a run
+   is running/queued -- not its own table column, and not folded into the
+   Duration cell (which should always just read as elapsed/total time). */
+.progress-tag {
+  margin-left: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+/* A failed run's error message, right next to its status pill -- full
+   text is on `title` (a native tooltip) since this is too narrow a
+   table cell to show a potentially long message in full; truncated with
+   an ellipsis here instead of wrapping and blowing up the row height. */
+.error-tag {
+  display: inline-block;
+  margin-left: 0.4rem;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  font-size: 0.7rem;
+  color: var(--color-error);
 }
 
 /* --- New Run form --- */
@@ -726,6 +786,11 @@ a.icon-button {
   padding: 0.55rem 0.7rem 1.4rem;
   cursor: pointer;
   transition: border-color 0.12s ease;
+  /* Shift-clicking (the batch-select gesture, see onModelCardClick) is
+     exactly the browser's own "extend a text selection" chord -- without
+     this, shift-clicking a second/third card selects everything in
+     between as text instead of just toggling it into the batch. */
+  user-select: none;
 }
 
 .model-card:focus-visible {
@@ -863,6 +928,9 @@ a.icon-button {
   padding: 0.55rem 0.7rem 1.4rem;
   cursor: pointer;
   transition: border-color 0.12s ease;
+  /* See .model-card's own comment -- same shift-click batch-select
+     gesture, same browser text-selection chord to suppress. */
+  user-select: none;
 }
 
 .scenario-card:focus-visible {
@@ -1413,6 +1481,76 @@ a.icon-button {
   text-decoration: underline;
 }
 
+/* "Models" nav item as a dropdown of every model's article page, for
+   quickly jumping between them without going back through the home page.
+   Deliberately its own small set of rules rather than reusing .dropdown/
+   .dropdown-menu (components/Dropdown.tsx) -- those are styled with the
+   dashboard's own --color-* theme variables, not this public site's
+   minima-derived --pp-* palette, and that dropdown models a <select>
+   (one active value) rather than a list of navigation links. */
+.site-nav-dropdown {
+  position: relative;
+}
+
+.site-nav-dropdown-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  color: var(--pp-text);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.site-nav-dropdown-toggle:hover,
+.site-nav-dropdown.open .site-nav-dropdown-toggle {
+  color: var(--pp-brand);
+}
+
+.site-nav-dropdown-chevron {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  transition: transform 0.12s ease;
+}
+
+.site-nav-dropdown.open .site-nav-dropdown-chevron {
+  transform: rotate(180deg);
+}
+
+.site-nav-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  left: 0;
+  margin: 0;
+  padding: 0.3rem;
+  list-style: none;
+  min-width: 11rem;
+  background: var(--pp-bg);
+  border: 1px solid var(--pp-grey-light);
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  z-index: 20;
+}
+
+.site-nav-dropdown-menu a {
+  display: block;
+  padding: 0.4rem 0.6rem;
+  border-radius: 3px;
+  color: var(--pp-text);
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+
+.site-nav-dropdown-menu a:hover,
+.site-nav-dropdown-menu a.active {
+  background: var(--pp-grey-light);
+  color: var(--pp-brand);
+}
+
 .public-main {
   max-width: var(--pp-content-width);
   margin: 0 auto;
@@ -1459,6 +1597,64 @@ a.icon-button {
 .public-chart-empty {
   color: var(--pp-grey);
   font-size: 0.9375rem;
+}
+
+/* --- Loading skeletons (home page) ---
+   Plain pulsing gray blocks shaped like the real content they stand in
+   for, in the exact same grid/flex containers the real content lands
+   in once it loads -- so nothing reflows when GET /v1/models (or the
+   chart's own useChartSeries) resolves, it just swaps in place. */
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.skeleton {
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-bar {
+  display: block;
+  height: 0.8rem;
+  border-radius: 3px;
+  background: var(--pp-grey-light);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+/* Same aspect ratios TemperatureChart itself uses (1.8 desktop / 1.1
+   narrow, see its own isNarrow logic) -- so the chart's real height
+   doesn't visibly jump once it swaps in. */
+.skeleton-chart {
+  width: 100%;
+  aspect-ratio: 1.8;
+  border-radius: 4px;
+  background: var(--pp-grey-light);
+}
+
+@media (max-width: 640px) {
+  .skeleton-chart {
+    aspect-ratio: 1.1;
+  }
+}
+
+/* Standing in for the legend's icon+acronym buttons -- a plain bar
+   rather than trying to fake an icon+text shape for something this
+   small. */
+.skeleton-legend-item {
+  width: 3.5rem;
+}
+
+/* Standing in for .public-model-card-icon inside a skeleton card's own
+   icon+acronym header row. */
+.skeleton-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
 }
 
 .public-cards-section {
@@ -1542,48 +1738,29 @@ a.icon-button {
   letter-spacing: 0.15em;
 }
 
-/* "Models" section: a single row, always -- no wrapping to a second row
-   and no truncation like .public-card-grid above. Each card is just an
-   icon + acronym (no description); cards divide the full row width
-   evenly (flex: 1 1 0, same approach .public-card-grid's old flex
-   version used before it switched to a fixed-column grid -- that
-   problem doesn't apply here since there's no "..." indicator card to
-   keep a consistent width against) and shrink together on narrow
-   viewports rather than wrapping. min-width + overflow-x is the
-   fallback once they'd shrink past legibility, so the row scrolls
-   horizontally instead of cramming. */
-.public-model-row {
-  display: flex;
-  gap: 0.5rem;
-  overflow-x: auto;
-  padding-bottom: 0.25rem;
-}
-
+/* "Models" section: same fixed 4-column wrapping grid as the scenario
+   cards above (.public-card-grid itself) -- was previously its own
+   single-row, horizontally-scrolling layout with just an icon+acronym
+   and no description; now a full card like a scenario's, with the
+   model's full name underneath the acronym. */
 .public-model-card {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 0.35rem;
-  flex: 1 1 0;
-  min-width: 4.5rem;
-  padding: 0.9rem 0.4rem;
-  border: 1px solid var(--pp-grey-light);
-  border-radius: 4px;
-  background: #fff;
-  text-decoration: none;
-  color: var(--pp-text);
-  transition: border-color 0.12s ease;
 }
 
-.public-model-card:hover {
-  border-color: var(--pp-brand);
+.public-model-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .public-model-card-icon {
   display: inline-flex;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   color: var(--pp-grey);
+  flex-shrink: 0;
 }
 
 .public-model-card:hover .public-model-card-icon {
@@ -1595,12 +1772,69 @@ a.icon-button {
   height: 100%;
 }
 
-.public-model-card-acronym {
-  font-weight: 600;
-  font-size: 0.8125rem;
+/* Overrides .public-card-title's own text-transform: capitalize --
+   acronyms (HECTOR, FAIR, ...) read as shouting caps, not Capitalized
+   Words. The combined selector (not just .public-model-card-acronym
+   alone) beats .public-card-title on specificity regardless of each
+   rule's position in this file. */
+.public-card-title.public-model-card-acronym {
   text-transform: uppercase;
-  text-align: center;
-  line-height: 1.25;
+  margin-bottom: 0;
+}
+
+/* --- Chart legend (below the home page's main chart) ---
+   Two groups: one colored entry per model (matching TemperatureChart's
+   own modelColor -- hovering highlights that model's lines), and a
+   single neutral "SSPs" entry standing for the whole SSP framework
+   across every model that uses it (hovering highlights every SSP line
+   at once, see TemperatureChart's hovered.type === "ssp"). Deliberately
+   NOT one entry per scenario -- with up to 8 SSPs that'd be a wall of
+   near-identically-colored text, not a useful legend. */
+.public-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--pp-grey-light);
+}
+
+.public-chart-legend-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.public-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  /* color set inline per item (modelColor(), or the neutral SSP color) */
+}
+
+.public-legend-item:hover {
+  opacity: 0.75;
+}
+
+.public-legend-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+}
+
+.public-legend-icon svg {
+  width: 100%;
+  height: 100%;
 }
 
 /* --- Article pages (one model or one scenario) --- */
@@ -1900,7 +2134,6 @@ a.icon-button {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  border-top: 1px solid var(--color-border);
 }
 
 .sidebar-footer-link {
@@ -1908,7 +2141,11 @@ a.icon-button {
   border: none;
   padding: 0;
   font-size: 0.8125rem;
-  color: var(--color-text-muted);
+  /* Was var(--color-text-muted) (#6b7280, tuned for the light main-area
+     surface) on the sidebar's own dark background -- low-contrast and
+     looked off. --color-sidebar-text matches the nav items' own
+     unselected color instead. */
+  color: var(--color-sidebar-text);
   text-decoration: none;
   cursor: pointer;
   text-align: left;

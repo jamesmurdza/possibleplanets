@@ -148,6 +148,18 @@ export function canonicalScenario(nativeScenario: string): string {
   return SSP_CANONICAL[nativeScenario] ?? nativeScenario;
 }
 
+/** Whether a CANONICAL scenario label (see canonicalScenario above) is
+ * one of the SSP-framework names ("SSP1-2.6" etc) rather than an RCP
+ * (magicc's "RCP26"...), DICE's own "base"/"optimal" policies, or gcam's
+ * single "Reference" -- a plain naming check (every real SSP canonical
+ * label starts with "SSP"), not a guess. Used by the home page's "SSPs"
+ * legend item (TemperatureChart's hovered.type === "ssp") to highlight
+ * every SSP-framework line on the chart at once, regardless of which
+ * model ran it. */
+export function isSspScenario(canonicalLabel: string): boolean {
+  return canonicalLabel.startsWith("SSP");
+}
+
 // Short, human descriptions for the scenario codes used across models --
 // best-effort documentation of well-known SSP/RCP identifiers (IPCC AR6's
 // own scenario naming), not something the gateway/sandboxes compute. Keyed

@@ -135,6 +135,17 @@ export interface ModelMeta {
   // whichever Daytona snapshot build happened to pull), it's only
   // re-building that snapshot later that could silently change it.
   model_version: string;
+  // The official model version itself -- the full version number, every
+  // decimal place the model's own upstream actually assigns it (e.g.
+  // "3.2.0", "2.2.5", "2016R2"), not truncated to major.minor. Distinct
+  // from model_version above, which is the exact package/commit pin that
+  // produced a given run (and can differ from this -- e.g. a wrapper
+  // library's own patch version isn't necessarily the same number as the
+  // underlying model's). Each one below was confirmed directly against
+  // the real installed snapshot (not read off a Dockerfile's pin, and
+  // not guessed from a wrapper package's own version number without
+  // checking) -- see each model's own comment for exactly how.
+  model_version_number: string;
   scenarios: string[];
   params_shape: ParamsShape;
   // Default is "python3 /app/run.py" (DEFAULT_RUN_COMMAND in lib/runs.ts);
@@ -180,6 +191,13 @@ export const MODELS: Record<string, ModelMeta> = {
     // Verified directly against the real snapshot (`pip show pyhector`,
     // confirmed 2026-11-18) -- matches the Dockerfile's pin exactly.
     model_version: "pyhector==3.2.0.0",
+    // Confirmed directly (not just assumed from pyhector's own version
+    // number): pyhector exposes the actual Hector core's version
+    // separately from its own wrapper version -- `pyhector.__hector_version__`
+    // reports "3.2.0" against this exact snapshot (2026-11-19), which
+    // happens to track pyhector's own version here but isn't guaranteed
+    // to in general (checked anyway rather than assumed).
+    model_version_number: "3.2.0",
     scenarios: ["ssp119", "ssp126", "ssp245", "ssp370", "ssp585"],
     params_shape: "scenario",
     exec_timeout_seconds: 60,
@@ -271,6 +289,10 @@ export const MODELS: Record<string, ModelMeta> = {
     // Verified directly against the real snapshot (`pip show fair`,
     // confirmed 2026-11-18) -- matches the Dockerfile's pin exactly.
     model_version: "fair==2.2.5",
+    // FaIR's own package version IS its model version -- confirmed via
+    // `fair.__version__` against this exact snapshot (2026-11-19),
+    // matching the Dockerfile's pin exactly.
+    model_version_number: "2.2.5",
     scenarios: [
       "ssp119",
       "ssp126",
@@ -348,6 +370,14 @@ export const MODELS: Record<string, ModelMeta> = {
     // Re-verify (and re-run the retroactive runs.model_version backfill)
     // if this snapshot is ever rebuilt from a different commit.
     model_version: "jamesmurdza/OSCAR@2200dfd30a86a2560edfc301493298680cbf85a9",
+    // Confirmed directly from OSCAR's own README.md Changelog at this
+    // exact pinned commit (2026-11-19): the most recent entry listed is
+    // "##### v3.3" -- OSCAR's real upstream versioning (distinct from
+    // this fork's own unpinned/uncommitted git history), not inferred
+    // from the commit date or guessed. "3.3" is already the full version
+    // -- unlike v3.1 (which got .1/.2 patch releases, v3.1.1/v3.1.2),
+    // OSCAR's own changelog never assigned v3.3 a third digit.
+    model_version_number: "3.3",
     scenarios: [
       "SSP1-1.9",
       "SSP1-2.6",
@@ -421,6 +451,14 @@ export const MODELS: Record<string, ModelMeta> = {
     // possibleplanets/DICE.jl#754e9ba -- matches the Dockerfile's full-sha
     // pin exactly.
     model_version: "possibleplanets/DICE.jl@754e9ba2",
+    // DICE is versioned by vintage year + revision, not major.minor --
+    // confirmed directly: run.jl itself calls `version = v2016R2()` (see
+    // sandboxes/dice/run.jl's own comment, "v2016R2 is the most recent
+    // version in DICE.jl, confirmed 1:1 with GAMS"), i.e. the DICE-2016R2
+    // revision, not a guess from the package's own "0.2.1" Pkg version
+    // (that's DICE.jl-the-Julia-port's own version, unrelated to which
+    // Nordhaus DICE vintage/revision it implements).
+    model_version_number: "2016R2",
     // Only base/optimal -- confirmed by testing that DICE.jl only implements
     // these two for the v2016R2 version run.jl uses.
     scenarios: ["base", "optimal"],
@@ -450,6 +488,14 @@ export const MODELS: Record<string, ModelMeta> = {
     // Verified directly against the real snapshot (`pip show pymagicc`,
     // confirmed 2026-11-18) -- matches the Dockerfile's pin exactly.
     model_version: "pymagicc==2.1.5",
+    // The bundled binary is literally named magicc6.exe, and pymagicc's
+    // own run() defaults to (and this project's run.py never overrides)
+    // `magicc_version=6`. The full version is baked into the binary
+    // itself -- confirmed by scanning magicc6.exe's own strings for its
+    // embedded banner (2026-11-19): "MAGICC6.8.01 BETA, 7th July 2012" --
+    // not inferred from the wrapper package's "2.1.5" version (that's
+    // pymagicc's own version, not MAGICC's).
+    model_version_number: "6.8.01",
     // pymagicc's own four RCP scenarios -- confirmed via
     // `pymagicc.rcps["scenario"].unique()`. A different, smaller taxonomy
     // than the SSP names hector/fair/oscar use; no cross-model mapping
@@ -502,6 +548,13 @@ export const MODELS: Record<string, ModelMeta> = {
     // openscm-twolayermodel`, confirmed 2026-11-18) -- matches the
     // Dockerfile's pin exactly.
     model_version: "openscm-twolayermodel==0.2.3",
+    // openscm-twolayermodel IS the reference implementation (Held et al.
+    // 2010 / Geoffroy et al. 2013's equations have no separate official
+    // version numbering of their own) -- its own package version is the
+    // model version here. Confirmed via `openscm_twolayermodel.__version__`
+    // against this exact snapshot (2026-11-19), matching the Dockerfile's
+    // pin exactly.
+    model_version_number: "0.2.3",
     // Same 8 SSPs sandboxes/fair exposes -- confirmed present as rows in
     // the bundled rcmip-erf.csv (RCMIP v4.0.0, trimmed). Unlike hector/
     // fair/oscar, this model has no scenario handling of its own: it's
@@ -572,6 +625,9 @@ export const MODELS: Record<string, ModelMeta> = {
     // Revision: gcam-v9.1". Re-verify (and re-run the retroactive
     // runs.model_version backfill) if this snapshot is ever rebuilt.
     model_version: "JGCRI/gcam-core@gcam-v9.1",
+    // Confirmed directly via `./gcam.exe --version` against this exact
+    // snapshot (2026-11-19): "GCAM version 9.1 Revision: gcam-v9.1".
+    model_version_number: "9.1",
     // Only "Reference" -- see sandboxes/gcam/run.py's module docstring and
     // docs/gcam/known-gaps.md ("Only configuration_ref.xml was actually
     // run-tested"). The other shipped configs reference additional input
