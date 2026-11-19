@@ -84,22 +84,62 @@ export default function RunsPanel({ selectedRunId, onSelectRun, onNewRun }: Runs
   const chartRef = useRef<Chart | null>(null);
   const listPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const detailPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advancePollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Mirrors `runs` for advanceInProgressRuns below -- that function is
+  // scheduled via setTimeout (not re-created every render), so it'd
+  // otherwise close over whatever `runs` was on the render that scheduled
+  // it, not the latest list.
+  const runsRef = useRef<RunListItem[]>([]);
 
   async function refreshList() {
     try {
       const data = await fetchJson("/v1/runs");
       setRuns(data.runs ?? []);
+      runsRef.current = data.runs ?? [];
       setLoadErr(null);
     } catch (err: any) {
       setLoadErr(err.message);
     }
   }
 
+  // GET /v1/runs (refreshList above) is a plain DB read -- see its own
+  // route comment -- it never itself checks a sandbox against Daytona, so
+  // a run's row only ever advances past "queued"/"running" via (a) that
+  // run's own webhook POST on completion, or (b) someone polling
+  // GET /v1/runs/{run_id} (advanceRun's fallback path), which this table
+  // previously only did for whichever single run's drawer happened to be
+  // open. A run nobody ever opened the drawer for could sit showing
+  // "running" forever even after it actually finished. Fixes that by
+  // polling every still-in-progress run's own detail endpoint in the
+  // background -- on load and on an interval -- whether or not its drawer
+  // is open, so this table's own status/duration stays honest for every
+  // row, not just the selected one.
+  async function advanceInProgressRuns() {
+    const inProgress = runsRef.current.filter((r) => r.status === "queued" || r.status === "running");
+    if (inProgress.length === 0) return;
+    await Promise.all(inProgress.map((r) => fetchJson(`/v1/runs/${r.run_id}`).catch(() => null)));
+    // advanceRun (behind that GET) may have just changed one or more
+    // statuses in the DB -- pull the fresh list right away rather than
+    // waiting for refreshList's own separate poll to eventually catch up.
+    await refreshList();
+  }
+
   useEffect(() => {
-    refreshList();
+    refreshList().then(advanceInProgressRuns);
+    // A plain setInterval, started once and never re-armed -- NOT keyed
+    // on `runs` the way listPollTimer below is. advanceInProgressRuns
+    // itself reads runsRef (always current) and no-ops immediately if
+    // nothing's in progress, so there's no need to start/stop this based
+    // on activity; keying it on `runs` instead (so it only runs "while
+    // active") would backfire: refreshList's own 1s poll changes `runs`
+    // every second whenever anything's active, which would clear and
+    // reschedule a runs-keyed 5s timer before it ever reached 5 seconds --
+    // it would never actually fire.
+    advancePollTimer.current = setInterval(advanceInProgressRuns, 5000);
     return () => {
       if (listPollTimer.current) clearTimeout(listPollTimer.current);
       if (detailPollTimer.current) clearTimeout(detailPollTimer.current);
+      if (advancePollTimer.current) clearInterval(advancePollTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
