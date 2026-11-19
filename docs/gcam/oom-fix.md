@@ -163,3 +163,48 @@ used instead:
 `gcam-production-v2` was left as-is (not deleted) -- same policy as
 the v1 -> v2 switch documented in `models.ts`'s own comment history,
 in case a rollback is ever needed.
+
+## Follow-up: v3 still had the CSV-parsing bug (fixed in v4)
+
+`v3` only patched `configuration_ref.xml` -- it kept v2's original
+`/app/run.py`, which still had the `csv.DictReader` bug described in
+this repo's "Stop parsing GCAM's CSV output in Python" commit (Hector's
+leading `# Output from hector version ...` comment line gets
+misread as the header, so every real row's `variable` column ends up
+missing). That fix had only ever been committed to
+`sandboxes/gcam/run.py` in this repo -- it was never actually deployed
+to a snapshot, so v3 runs kept returning this malformed shape even
+after the OOM fix, which is why a real v3 run showed "succeeded" in the
+dashboard with no chart (see the run drawer investigation that found
+this: `result.result.rows` full of `{"null": [...]}` junk instead of
+`result.result.csv`).
+
+Fixed the same way as the OOM fix -- no `gcamdata`/`gcam.exe` rebuild:
+
+1. Created a sandbox from `gcam-production-v3`.
+2. Overwrote `/app/run.py` with the repo's current `sandboxes/gcam/run.py`
+   (`sandbox.fs.uploadFile`); verified the upload byte-for-byte (`md5sum`
+   matched the local file exactly) and that it still compiles
+   (`python3 -m py_compile`).
+3. Ran a full real 21-period scenario on that sandbox end to end
+   (confirming the OOM fix still holds and the new `run.py` doesn't
+   break anything) -- completed successfully, `0` oom_kills, matching
+   the v3 numbers above.
+4. Before snapshotting, manually replayed the app's own
+   `advanceRun` -> `finalizeOutcome` -> `finishRunSucceeded` pipeline
+   against this sandbox's real output (same SQL, same download/parse
+   steps as `lib/runs.ts`/`lib/db.ts`) to confirm the whole
+   sandbox-to-postgres path actually works for the new result shape,
+   not just that the shape looks right in isolation. Persisted a real
+   row into production postgres as proof: `run_id
+   bc380140-64bd-4f5c-9ded-c2ffb934202d`, `result.result.csv` present
+   (4,445,590 bytes), 355 `global_tas` points parse out of it correctly
+   via the same logic `lib/clientApi.ts`'s `gcamSeries` uses.
+5. `sandbox.createSnapshot("gcam-production-v4", <timeout>)`, then
+   verified from a fresh sandbox: config patch present, `run.py`
+   `md5sum` matches the repo, `gcam.exe` size unchanged.
+6. Updated `apps/web/lib/models.ts`'s `daytona_snapshot` for gcam to
+   `"gcam-production-v4"`.
+
+`gcam-production-v2` and `v3` are both left in place, unused, as
+rollback options.

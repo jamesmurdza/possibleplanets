@@ -73,10 +73,12 @@ fixed. Short version: `gcam.exe`'s solver keeps a full per-thread
 scratch copy of its state, and `configuration_ref.xml`'s
 `max-parallelism=-1` (all 4 cores) was multiplying memory ~4x, hitting
 the plain 8GB sandbox's ceiling right at the final periods. Fixed by
-setting `max-parallelism` to `1`; deployed as `gcam-production-v3`.
-See `oom-fix.md` for the full live-measured diagnosis, the before/after
-numbers, the deploy process (no `gcamdata` re-run needed), and the
-speed/memory tradeoff.
+setting `max-parallelism` to `1`. A separate, previously-committed-but-
+never-deployed `run.py` fix (raw CSV text instead of a buggy
+`csv.DictReader` parse) is now deployed alongside it; both land in
+`gcam-production-v4`. See `oom-fix.md` for the full live-measured
+diagnosis, the before/after numbers, the deploy process (no `gcamdata`
+re-run needed for either fix), and the speed/memory tradeoff.
 
 `run.py` also now folds cgroup evidence (`memory.peak` / `memory.max` /
 `oom_kill` count) into its failure report on any `gcam.exe` non-zero
