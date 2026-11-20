@@ -1,224 +1,204 @@
-# Provenance: from upstream gcam-core source to the deployed image
+# Building this from scratch
 
-This is the audit trail. Every other doc in this folder explains *why*
-a particular decision was made; this one exists to answer a narrower
-question precisely: **starting from a clean checkout of
-`https://github.com/JGCRI/gcam-core`, what exact sequence of steps
-produces what's running in `gcam-production-v8` today, and which of
-those steps are reproducible from this repo's committed files alone
-versus requiring a one-time external artifact or a live-sandbox patch
-that was never captured as a Dockerfile `RUN` step?**
+The other docs in this folder explain *why* each decision was made, in
+the order it was actually discovered. This one is different on
+purpose: it's the plain recipe you'd follow **today**, starting from
+nothing but a clean checkout of upstream `gcam-core`, to end up with
+the exact same `gcam-production-v8` snapshot this project runs --
+Reference plus SSP1-5, all the fixes already applied, no detours. If
+you just want to confirm the committed files match what's deployed,
+skip to "Checking your work" at the end.
 
-Read this top to bottom for the full chain. Each stage names the exact
-file(s) involved and whether it's **(A) committed and deterministic**
-(running it again today reproduces the same bytes), **(B) committed
-recipe, external artifact** (the steps are committed, but the actual
-output is a gitignored multi-GB file that must exist locally before
-the next stage can run), or **(C) live-sandbox patch, not a Dockerfile
-step** (what actually happened to get from one snapshot version to the
-next was a direct patch to a running sandbox, not a `docker build` --
-flagged explicitly because this is the main way the deployed artifact
-can silently drift from what the committed files alone would produce).
-
-## Stage 0 -- known non-determinism in the starting point
-
-Both Dockerfiles that touch upstream source
-(`sandboxes/gcam/Dockerfile`'s `builder` stage,
-`sandboxes/gcam/gcamdata.Dockerfile`) do:
+## 1. Compile `gcam.exe`
 
 ```
 git clone --depth 1 https://github.com/JGCRI/gcam-core.git
+cd gcam-core
+git submodule update --init --depth 1 \
+  cvs/objects/climate/source/hector \
+  output/modelinterface/modelinterface
 ```
 
-**unpinned** -- no `git checkout <sha>` after the clone. This means
-re-running either Dockerfile today pulls whatever upstream's `main`
-branch currently is, not necessarily the same commit that originally
-produced `gcam-production-v8`. This was a conscious, confirmed gap
-(see `apps/web/lib/models.ts`'s `model_version` comment) -- the actual
-version baked into every snapshot so far was verified directly by
-running `./gcam.exe --version` against the live sandbox
-(`"GCAM version 9.1 Revision: gcam-v9.1"`, confirmed 2026-11-18,
-unchanged through v8), not by reading the Dockerfile. **If exact
-reproducibility is ever required, pin both Dockerfiles' `git clone` to
-a specific commit SHA before rebuilding** -- this hasn't been done yet.
+Don't use `--recursive` -- one submodule (`util/testing-framework`)
+points at an internal PNNL server you can't reach, and it isn't needed
+to build the executable.
 
-## Stage 1 -- generate the XML input database (`gcamdata`)
+Install `build-essential libboost-dev libeigen3-dev libtbb-dev
+default-jdk`, set `JARS_LIB` to this checkout's own `exe/` directory
+(undocumented upstream, but required), then:
 
-**(B) committed recipe, external artifact.**
+```
+cd cvs/objects/build/linux && make gcam -j4
+```
 
-- Recipe: `sandboxes/gcam/gcamdata.Dockerfile`, built and run once
-  inside a GPU-attached Daytona sandbox (GPU used only to unlock a
-  memory ceiling above this account's plain 8GB cap -- no GPU compute
-  involved; R's dplyr/tidyr joins are CPU-only).
-- Two real upstream R bugs patched as part of that Dockerfile's own
-  `RUN` steps (not external to it -- see `sandboxes/gcam/patches/README.md`
-  for the full explanation of each, `sandboxes/gcam/patch_population_hist.py`
-  for the exact byte-for-byte patch applied to
-  `zsocio_L100.Population_hist.R`, and an inline `sed` in the
-  Dockerfile itself for `zsocio_L100.Employment.R`):
-  - `zsocio_L100.Employment.R`: `left_join_error_no_match()` ->
-    `left_join()` + `filter(!is.na(iso))` (matches the pattern the next
-    block in the same file already uses).
-  - `zsocio_L100.Population_hist.R`: a `repeat_add_columns()` x2 chain
-    that squared an already-correct grid into hundreds of millions of
-    rows -> `tidyr::complete(iso, year)`.
-- Command run inside that sandbox once the image was built:
-  `devtools::load_all(); driver_drake(jobs=1,
-  memory_strategy="autoclean", garbage_collection=TRUE,
-  caching="worker")` -- took ~75 minutes, peaked at ~13.5GB.
-- **Output** (~221 XML files, 5.2GB uncompressed): downloaded out of
-  that sandbox and placed at
-  `sandboxes/gcam/runtime/input/gcamdata/xml/` locally. **This
-  directory is gitignored** -- too large for git, so the actual bytes
-  are not in version control. Only the recipe to regenerate them is.
-  Full step-by-step regeneration instructions:
-  `sandboxes/gcam/runtime/README.md`'s "Regenerating `input/gcamdata/xml/`"
-  section.
-- Confirmed not scenario-specific (see `architecture.md`): every
-  `configuration_*.xml`, including the 5 new SSP ones, reads from this
-  exact same database -- this stage runs once, not per scenario.
+~9 minutes on 4 cores. You now have a working `gcam.exe` (294MB) --
+it won't run yet, there's no input data.
 
-**Audit note**: because this directory is gitignored, verifying "the
-database currently baked into `gcam-production-v8` matches what this
-recipe would produce today" requires actually re-running Stage 1 and
-diffing -- there's no way to do it by inspecting git alone. The
-Dockerfile's own unpinned clone (Stage 0) means even a careful re-run
-isn't guaranteed to match without first pinning the commit.
+Full command list: `sandboxes/gcam/Dockerfile`'s `builder` stage.
 
-## Stage 2 -- compile `gcam.exe`
+## 2. Generate the input database
 
-**(A) committed and deterministic** (modulo Stage 0's unpinned clone).
+This is the one genuinely expensive step (~75 minutes), and the only
+one that needs a GPU-attached sandbox -- not for GPU compute, just to
+get a memory ceiling above 8GB (R's own joins are CPU-only).
 
-- Recipe: `sandboxes/gcam/Dockerfile`'s `builder` stage.
-- `git clone --depth 1` + `git submodule update --init --depth 1` for
-  exactly two submodules (`cvs/objects/climate/source/hector`,
-  `output/modelinterface/modelinterface`) -- NOT
-  `--recursive`, because one submodule
-  (`util/testing-framework`) points at an internal PNNL server
-  unreachable from outside their network and isn't needed to build the
-  executable itself.
-- `make gcam -j4` inside `cvs/objects/build/linux`, with `JARS_LIB`
-  pointed at the repo's own `exe/` directory (undocumented requirement,
-  found by testing) and the usual boost/eigen/tbb/JDK env vars set.
-- **Output**: `gcam.exe` (294MB) plus upstream's own default
-  `exe/` directory (jars, default `configuration_*.xml`/`batch_*.xml`
-  files, `log_conf.xml`) -- copied via `COPY --from=builder
-  /app/gcam-core/exe /app/gcam-core/exe` into the final image stage.
-  This is upstream's content, byte-for-byte, before any of this
-  project's own patches are applied in Stage 3.
-- `gcam.exe` itself is also gitignored locally
-  (`sandboxes/gcam/runtime/README.md` keeps a copy for the Docker Hub
-  backup build path, but it's not tracked in git) -- verify a rebuild
-  produced an equivalent binary via `./gcam.exe --version`, not a byte
-  diff (compiler/toolchain non-determinism is expected; behavior is
-  what's actually verified, same way every snapshot bump already does).
+1. Patch two real upstream bugs in `gcam-core/input/gcamdata/R/` before
+   running anything:
+   - `zsocio_L100.Employment.R`: change
+     `left_join_error_no_match(ILO_country_iso_mapping, by = "country")`
+     to `left_join(ILO_country_iso_mapping, by = "country") %>%
+     filter(!is.na(iso))`.
+   - `zsocio_L100.Population_hist.R`: replace the block that chains two
+     `repeat_add_columns()` calls onto `L100.Pop_thous_ctry_Yh` with
+     `tidyr::complete(iso, year)`.
+   (Exact patch commands: `sandboxes/gcam/gcamdata.Dockerfile`. Why
+   each is needed: `sandboxes/gcam/patches/README.md`.)
+2. In a sandbox with `memory: 24, gpu: 1`, run:
+   ```r
+   devtools::load_all()
+   driver_drake(jobs=1, memory_strategy="autoclean",
+                garbage_collection=TRUE, caching="worker")
+   ```
+   `jobs=1` + `autoclean` matters -- default parallelism keeps multiple
+   chunks resident in memory at once, which this pipeline can't afford.
+3. Output: ~221 XML files, 5.2GB, under `input/gcamdata/xml/`. Download
+   it, then delete the GPU sandbox -- it has no further use and costs
+   more than a plain one.
 
-## Stage 3 -- this project's own patches, layered on top
+This step is scenario-independent -- the same database serves
+Reference and every SSP. It only needs to run again if upstream's raw
+data changes or a new pipeline bug needs patching.
 
-**(A) committed and deterministic** -- this is the part that's
-entirely this project's own work, not upstream's, and it's the part
-most likely to need auditing after the fact.
+## 3. Fix two things in `configuration_ref.xml`, then build five more
 
-`sandboxes/gcam/Dockerfile`'s final stage does, in this exact order:
+Before packaging, upstream's `configuration_ref.xml` needs two values
+changed:
 
-```dockerfile
+```diff
+-<Value write-output="1" append-scenario-name="0" name="xmldb-location">...</Value>
++<Value write-output="0" append-scenario-name="0" name="xmldb-location">...</Value>
+```
+GCAM's BaseX XML-output writer needs jars this project doesn't ship --
+without this, writing it causes a JVM segfault. The restart file and
+CSV output still write fine without it.
+
+`max-parallelism` stays at upstream's own default, `-1` -- don't
+change it. (A per-sandbox-tier override used to live here; it's
+unnecessary now, see `config-overrides.md` if curious why.)
+
+That's the only edit `configuration_ref.xml` itself needs. Now build
+five more scenario files, one per SSP, **each a full standalone copy**
+of `configuration_ref.xml`'s `Files`/`Strings`/`Bools`/`Ints`/`Doubles`
+sections (same two fixes) with only `ScenarioComponents` different:
+
+1. Start from upstream's own `batch_SSP_REF.xml` -- NOT
+   `configuration_ref.xml`'s `ScenarioComponents` list. This matters:
+   the two lists differ (upstream's batch base omits two
+   Reference-only files, `protected_land_input_2/3.xml`, and includes
+   one Reference doesn't, `negative_emissions_budget.xml`). Using
+   `configuration_ref.xml`'s own list instead will build and run fine
+   for SSP1/2/5, then fail SSP3/4 immediately with a land-allocation
+   error, because those two use a pasture-reallocation file
+   (`pasture_ssp34.xml`) that's incompatible with the protected-land
+   files. Use `batch_SSP_REF.xml`'s `<FileSet name="GCAM_">` block
+   (its `base` `ComponentSet`) as the shared list for all five.
+2. For each SSP, append that SSP's own `<FileSet name="SSP{N}">` block
+   from the same `batch_SSP_REF.xml` (under its `"SSP Harmonized"`
+   `ComponentSet`) after the base list.
+3. Set `<Value name="scenarioName">` to `"SSP{N}"` (cosmetic, but it
+   feeds a couple of output filenames).
+4. Leave `BatchMode` at `0`. Don't try to set it to `1` and point
+   `BatchFileName` at `batch_SSP_REF.xml`/`batch_SSP_SPA*.xml` to get
+   GCAM to do this merge itself at run time -- that's the obvious
+   shortcut, and it doesn't work here: every real `batch_SSP_SPA*.xml`
+   bundles 5 policy-target reruns per SSP, and even the one that
+   doesn't (`batch_SSP_REF.xml` itself) still double-parses the shared
+   component list under `BatchMode`, OOMing this sandbox tier even
+   with the solver serialized. Building the five flat files by hand,
+   once, is the actual fix.
+5. Copy two small files upstream ships but this image doesn't yet --
+   `input/extra/renewable_shareweights_ssp1_32.xml` and
+   `supply_demand_curves.xml` (~160KB total, needed by SSP1's overlay)
+   -- into `input/extra/`.
+
+Validate each of the six configs (Reference + 5 SSPs) the same way:
+a short run (`stop-period: 2`) first to catch anything obviously
+broken, then a full 21-period run watching
+`/sys/fs/cgroup/memory.{current,peak,events}` for `oom_kill` -- this
+sandbox tier is genuinely tight (8GB), and a config that "looks right"
+can still fail in ways that only show up over the full run.
+
+## 4. Package it
+
+```
 COPY run.py .
-COPY --from=builder /app/gcam-core/exe /app/gcam-core/exe   # Stage 2's output, untouched
-COPY runtime/exe/ /app/gcam-core/exe/                       # <-- overlays/patches Stage 2's own configs
-COPY runtime/input/gcamdata/xml /app/gcam-core/input/gcamdata/xml   # Stage 1's output
+COPY --from=builder /app/gcam-core/exe /app/gcam-core/exe
+COPY runtime/exe/ /app/gcam-core/exe/           # the 6 fixed/new config files overlay the builder's defaults
+COPY runtime/input/gcamdata/xml /app/gcam-core/input/gcamdata/xml
 COPY runtime/input/solution /app/gcam-core/input/solution
 COPY runtime/input/policy /app/gcam-core/input/policy
 COPY runtime/input/climate /app/gcam-core/input/climate
-COPY runtime/input/extra /app/gcam-core/input/extra         # added in v7, see below
+COPY runtime/input/extra /app/gcam-core/input/extra
 ```
 
-Every file inside `sandboxes/gcam/runtime/exe/` and
-`sandboxes/gcam/runtime/input/{solution,policy,climate,extra}/` **is
-committed to git** (unlike Stage 1's `gcamdata/xml/`) -- this is the
-one part of the whole pipeline where "clone this repo and look" is
-sufficient, no external artifact needed. The table below is the
-complete list of what's different from upstream, and why.
+`run.py` needs one thing beyond the usual params-in/result-out
+contract every model here follows: a `scenario` name mapped to a
+config filename:
 
-### File-by-file provenance
+```python
+SUPPORTED_SCENARIOS = {
+    "Reference": "configuration_ref.xml",
+    "SSP1": "configuration_ssp1.xml",
+    "SSP2": "configuration_ssp2.xml",
+    "SSP3": "configuration_ssp3.xml",
+    "SSP4": "configuration_ssp4.xml",
+    "SSP5": "configuration_ssp5.xml",
+}
+```
 
-| File | Origin | What changed, and why |
+Build `sandboxes/gcam/Dockerfile` (the real runtime image, not
+`gcamdata.Dockerfile`) in a plain CPU sandbox (`cpu: 4, memory: 8,
+disk: 12` -- no GPU here, this stage is pure CPU). `createSnapshot()`
+to persist it.
+
+## 5. Register it in the app
+
+`apps/web/lib/models.ts`'s gcam entry needs:
+- `daytona_snapshot` pointed at the new snapshot's name.
+- `scenarios: ["Reference", "SSP1", "SSP2", "SSP3", "SSP4", "SSP5"]` --
+  this one array is what drives the scenario dropdown for every model,
+  so nothing else in the dashboard needs to change.
+- `supportsConfigOverrides: true` and `defaultConfigOverrides:
+  {"max-parallelism": 2}` if you want the app (not the image) to
+  default to 2 cores per run -- optional, see `config-overrides.md`
+  for why this lives at the app layer instead of baked into the image.
+
+That's the whole thing, start to finish.
+
+## File-by-file: what's upstream vs. what this project changed
+
+| File | Upstream, unmodified | This project's change |
 |---|---|---|
-| `runtime/exe/configuration_ref.xml` | Upstream, patched | `xmldb-location`'s `write-output` `"1"` -> `"0"` (GCAM's BaseX output needs jars this image doesn't ship -- JVM segfault otherwise; see `known-gaps.md`). `max-parallelism`: `-1` -> `1` (v3, OOM fix) -> back to `-1` (v6, once the app-level default made the image-level override redundant; see `config-overrides.md`). |
-| `runtime/exe/configuration_ssp1.xml` through `configuration_ssp5.xml` | **New, authored by this project** (v7) | Not from upstream at all as standalone files -- each is `configuration_ref.xml`'s own `Files`/`Strings`/`Bools`/`Ints`/`Doubles` sections (same patches as above) plus a `ScenarioComponents` list built by concatenating upstream `batch_SSP_REF.xml`'s own `base` `FileSet` with that SSP's own overlay `FileSet`, pre-merged once instead of using `BatchMode` at run time. See `ssp-scenarios.md` for the exact bug found (an earlier version used `configuration_ref.xml`'s own component list instead of the batch file's base, which silently differs) and the live-tested fix. The source batch files these were derived from (`batch_SSP_REF.xml`, `batch_SSP_SPA{1,23,4,5}.xml`) are themselves unmodified upstream files, still present in the image for reference but not used by `run.py`. |
-| `runtime/exe/configuration_ssp.xml`, `configuration_policy.xml`, `configuration_usa.xml`, `batch_SSP_*.xml`, `log_conf.xml`, `XMLDBDriver.jar`/`.properties` | Upstream, **unmodified** | Shipped as-is for completeness/reference. Not individually run-tested or exposed through `run.py` -- see `known-gaps.md`. |
-| `runtime/input/solution/*`, `runtime/input/policy/*`, `runtime/input/climate/*` | Upstream, unmodified | Small supporting config dirs `configuration_ref.xml` (and now the SSP configs) reference -- solver config, policy-target files, Hector's own ini. |
-| `runtime/input/extra/renewable_shareweights_ssp1_32.xml`, `supply_demand_curves.xml` | Upstream, unmodified, but **newly added to this image in v7** | Real upstream files (checked into `gcam-core`'s own repo, not generated by `gcamdata`) that SSP1's overlay references. Missing from every version through v6 because `configuration_ref.xml`'s `Reference` scenario never needed them -- confirmed missing by checking all 59 unique file paths the 5 SSP overlays reference against a live v6 sandbox before adding anything. |
-| `runtime/input/gcamdata/xml/*` | Stage 1's output | Gitignored, see Stage 1 above. |
-| `run.py` | **New, authored by this project** | Not an upstream file at all -- this project's fixed entrypoint convention (reads `SCENARIO_PARAMS`, shells out to `gcam.exe`, parses its Hector-output CSV, reports progress, applies `config_overrides`). See its own module docstring for the full behavior writeup. |
+| `gcam.exe` | -- | Compiled as-is, no source changes |
+| `input/gcamdata/xml/*` | -- | Generated as-is (just the 2 R pipeline bug fixes above) |
+| `exe/configuration_ref.xml` | | `write-output` 0, otherwise untouched |
+| `exe/configuration_ssp{1-5}.xml` | | New files, built from `batch_SSP_REF.xml`'s base + per-SSP overlay (step 3) |
+| `exe/configuration_ssp.xml`, `configuration_policy.xml`, `configuration_usa.xml`, `batch_*.xml`, `log_conf.xml`, `XMLDBDriver.*` | yes | Shipped for reference, not used by `run.py` |
+| `input/solution/*`, `input/policy/*`, `input/climate/*` | yes | -- |
+| `input/extra/*` | yes | Just newly copied in (step 3.5) -- content itself is unmodified upstream |
+| `run.py` | -- | New file, this project's entrypoint |
 
-## Stage 4 -- the running Daytona snapshot
+## Checking your work
 
-**This is the stage where (C) live-sandbox patches, not Dockerfile
-rebuilds, start to matter.**
-
-`gcam-production-v1`/`v2` were built by actually running
-`sandboxes/gcam/Dockerfile` (via `Image.fromDockerfile`) against a
-populated `runtime/` directory, the normal way. **Every version since
-(`v3` through the current `v8`) was built differently**: create a
-sandbox *from the previous snapshot*, upload just the specific
-changed file(s) directly into the running sandbox's filesystem
-(`sandbox.fs.uploadFile`), verify live, then
-`sandbox.createSnapshot("gcam-production-vN")`. This is a deliberate,
-repeatedly-used shortcut (see `oom-fix.md`'s "Deploying the fix"
-section for the original reasoning) -- it avoids re-running Stage 1/2
-(the gcamdata pipeline and C++ compile, both expensive) for a change
-that only touches a handful of small files, but it also means **the
-Dockerfile text alone no longer fully describes what's running** --
-the true history is the chain of live patches below, each of which
-IS fully captured by what's committed in `runtime/` (so re-running the
-Dockerfile fresh against today's `runtime/` directory *should*
-produce an equivalent result to `v8`), but the two paths (fresh build
-vs. incremental live patches) have never been diffed against each
-other to confirm byte-for-byte equivalence.
-
-| Version | What changed from the previous one | Source doc |
-|---|---|---|
-| v1 | First working build (not production-named `gcam-production-v1` until later) | `setup-guide.md`, `trial-log.md` |
-| v2 | First build actually promoted to `gcam-production-*` naming | `trial-log.md` |
-| v3 | `configuration_ref.xml`: `max-parallelism` `-1` -> `1` (serialize the solver -- fixes an intermittent OOM at the final periods) | `oom-fix.md` |
-| v4 | `run.py`: stopped parsing GCAM's CSV output with a buggy `csv.DictReader` (Hector's leading comment line was misread as the header) -- a fix that existed in the repo but had never actually been deployed to a snapshot until this version | `oom-fix.md` |
-| v5 | `run.py`: added `apply_config_overrides` -- the general `config_overrides` mechanism (override any existing `<Value name="X">` in any section, no snapshot rebuild needed per knob) | `config-overrides.md` |
-| v6 | `configuration_ref.xml`: `max-parallelism` `1` -> `-1` (back to upstream's own default -- redundant once the app-level default covered every real request; keeps the image itself general-purpose) | `config-overrides.md` |
-| v7 | Added `configuration_ssp1.xml` through `configuration_ssp5.xml`, `input/extra/`'s 2 files, and the matching Dockerfile `COPY` line; `run.py`: `SUPPORTED_SCENARIOS` extended | `ssp-scenarios.md` |
-| v8 | `run.py`: comment-only correction (no functional change, md5-verified against v7) | `ssp-scenarios.md` |
-
-`gcam-production-v1` through `v7` are all left in place, unused, as
-rollback options -- same policy at every version bump.
-
-## How to audit or reproduce this from scratch
-
-1. **Verify Stage 3's claims directly**: every file this project
-   patched or added is committed and small -- `git log -p` on
-   `sandboxes/gcam/runtime/exe/configuration_ref.xml`,
-   `sandboxes/gcam/run.py`, and the 5 `configuration_sspN.xml` files
-   gives the exact diff history. This is the fastest, most reliable
-   audit path and needs no sandbox at all.
-2. **Verify the live snapshot matches the committed files**: create a
-   sandbox from `gcam-production-v8`, `md5sum` every file under
-   `/app/gcam-core/exe/*.xml` and `/app/run.py`, and diff against the
-   local `sandboxes/gcam/runtime/exe/` + `run.py` -- this is exactly
-   the check done after every version bump so far (see each stage's
-   source doc for the specific hashes recorded at the time).
-3. **Reproduce Stage 1 (the XML database)**: follow
-   `runtime/README.md`'s regeneration steps. Needs a GPU-attached
-   sandbox; ~75 minutes; compare file count/sizes against the existing
-   ~221 files, 5.2GB as a sanity check, not a byte-for-byte diff (R's
-   own output isn't guaranteed byte-stable run to run even with
-   identical input).
-4. **Reproduce Stage 2 (the compile)**: follow the `builder` stage in
-   `sandboxes/gcam/Dockerfile` directly, or build the whole Dockerfile
-   with a populated `runtime/` directory from step 3. Verify via
-   `./gcam.exe --version` and a real end-to-end run, not a binary diff
-   (compiler output isn't guaranteed byte-stable either).
-5. **If exact byte-for-byte reproducibility is ever required** (not
-   just "behaves the same"): pin both Dockerfiles' `git clone` calls to
-   the specific upstream commit first (Stage 0's gap) -- this has never
-   been done, so right now "rebuild the Dockerfile" and "what's
-   actually running in v8" are only known to match in *behavior*
-   (confirmed live, repeatedly, via the version string and real
-   21-period runs), not confirmed to match in exact source commit.
+- `./gcam.exe --version` should print `GCAM version 9.1 Revision:
+  gcam-v9.1` -- if it doesn't, upstream's `main` has moved since this
+  was last built (the `git clone` above isn't pinned to a commit; pin
+  it if you need byte-for-byte reproducibility, not just the same
+  behavior).
+- Each of the 6 scenarios should run all 21 periods, exit 0, 0
+  `oom_kills`.
+- Pick two SSPs and confirm their outputs actually differ (e.g. year-
+  2100 `gmst` from the Hector CSV) -- a scenario that "runs successfully"
+  but produces output identical to Reference means the config
+  override silently didn't do anything, which is a real failure mode
+  worth checking for, not a hypothetical one.
