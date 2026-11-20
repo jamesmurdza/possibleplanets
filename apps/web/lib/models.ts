@@ -691,7 +691,40 @@ export const MODELS: Record<string, ModelMeta> = {
     // a bad key (config_overrides: {"totally-not-a-real-key": 1}) failed
     // immediately with a clear "no matching <Value> found" error,
     // before gcam.exe ever launched.
-    daytona_snapshot: "gcam-production-v5",
+    //
+    // v6, not v5 -- only configuration_ref.xml's own max-parallelism
+    // changed, back to upstream's default (-1) now that this app's own
+    // max-parallelism=2 default (defaultConfigOverrides below) covers
+    // every real request; the image-level override was redundant and
+    // only mattered for someone running the image directly, outside
+    // this app (see docs/gcam/config-overrides.md's "Reverting the
+    // image-level default"). No gcamdata/gcam.exe rebuild, same
+    // overlay-and-resnapshot process as v3/v4/v5. Verified from a
+    // fresh sandbox off this exact snapshot: configuration_ref.xml
+    // reads max-parallelism=-1, gcam.exe's md5 and run.py's md5 both
+    // unchanged from v5.
+    //
+    // v7, not v6 -- adds SSP1-5 scenario support: five new
+    // configuration_sspN.xml files in exe/, two small new input files
+    // in input/extra/ (the Dockerfile's COPY list gained a line for
+    // that directory), and run.py's SUPPORTED_SCENARIOS extended to
+    // match (see docs/gcam/ssp-scenarios.md). No gcamdata/gcam.exe
+    // rebuild -- same overlay-and-resnapshot process as every prior
+    // version. Verified from a fresh sandbox off this exact snapshot
+    // (file md5s, XML validity) plus a full real run through it
+    // (SSP2, default params, exit 0) before this scenarios list below
+    // was turned on.
+    //
+    // v8, not v7 -- run.py-comment-only fix (SUPPORTED_SCENARIOS'
+    // comment wrongly said the SSP base list came from
+    // configuration_ref.xml; corrected to say upstream's own
+    // batch_SSP_REF.xml base FileSet, matching what v7 actually
+    // shipped -- see ssp-scenarios.md's land-allocation bug writeup).
+    // No functional change: SUPPORTED_SCENARIOS itself, every
+    // configuration_sspN.xml, and gcam.exe are all byte-identical to
+    // v7 (md5-verified). Re-verified with one more live smoke test
+    // (SSP3, stop-period=2, exit 0) before switching this field over.
+    daytona_snapshot: "gcam-production-v8",
     // Dockerfile clones JGCRI/gcam-core@main unpinned, so the Dockerfile
     // text alone doesn't tell you which release that resolved to -- verified
     // directly instead by spinning up the real snapshot and running
@@ -702,14 +735,22 @@ export const MODELS: Record<string, ModelMeta> = {
     // Confirmed directly via `./gcam.exe --version` against this exact
     // snapshot (2026-11-19): "GCAM version 9.1 Revision: gcam-v9.1".
     model_version_number: "9.1",
-    // Only "Reference" -- see sandboxes/gcam/run.py's module docstring and
-    // docs/gcam/known-gaps.md ("Only configuration_ref.xml was actually
-    // run-tested"). The other shipped configs reference additional input
-    // files not yet confirmed present here and still have GCAM's own
-    // BaseX output database enabled (a separate, unsolved JVM-segfault
-    // problem configuration_ref.xml's patch works around) -- not exposed
-    // until validated the same way Reference was.
-    scenarios: ["Reference"],
+    // "Reference" plus SSP1-5 -- see sandboxes/gcam/run.py's module
+    // docstring and docs/gcam/ssp-scenarios.md for how the SSP configs
+    // were built and validated (each is a flat, BatchMode=0 copy of the
+    // SSP base file list from upstream's batch_SSP_REF.xml, with that
+    // SSP's own overlay appended -- NOT configuration_ref.xml's own
+    // ScenarioComponents list, which turned out to silently include two
+    // Reference-only files incompatible with SSP3/4's land-reallocation
+    // overlay; see ssp-scenarios.md for the live-tested bug and fix).
+    // All 5 were run end-to-end (21 periods, max-parallelism=2) against
+    // the real gcam-production-v7 snapshot: exit 0, 0 oom_kills each,
+    // and genuinely different results (2100 global mean surface temp
+    // 2.72degC for SSP1 up to 3.49degC for SSP5 -- confirms the overlays
+    // actually changed model behavior, not just filenames).
+    // configuration_policy.xml and configuration_usa.xml are still not
+    // exposed -- see the module docstring in run.py.
+    scenarios: ["Reference", "SSP1", "SSP2", "SSP3", "SSP4", "SSP5"],
     params_shape: "scenario",
     // Default run_command (python3 -u /app/run.py) applies -- gcam's own
     // run.py is Python, same as every model except dice's Julia entrypoint.
@@ -762,11 +803,15 @@ export const MODELS: Record<string, ModelMeta> = {
     // try from here on is just a request parameter, no further snapshot
     // rebuild needed.
     supportsConfigOverrides: true,
-    // App-level default, NOT a snapshot change -- the snapshot's own
-    // baked-in configuration_ref.xml still ships max-parallelism=1
-    // (serial, maximally safe). This is lib/runs.ts applying
-    // {"max-parallelism": 2} to every gcam request that doesn't already
-    // set that key itself, regardless of caller.
+    // App-level default, NOT a snapshot change -- this is lib/runs.ts
+    // applying {"max-parallelism": 2} to every gcam request that
+    // doesn't already set that key itself, regardless of caller. The
+    // snapshot's own baked-in configuration_ref.xml went back to
+    // upstream's default (-1) as of v6 above, since this app-level
+    // default makes the image-level override redundant for every
+    // request that goes through this app -- the image-level value
+    // only ever mattered for someone running it directly, outside
+    // this app.
     //
     // Measured live (2026-11-19, config_overrides against the real
     // gcam-production-v5 snapshot, same memory-sampling method used

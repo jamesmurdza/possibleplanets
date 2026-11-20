@@ -215,3 +215,15 @@ Fixed the same way as the OOM fix -- no `gcamdata`/`gcam.exe` rebuild:
 
 `gcam-production-v2` and `v3` are both left in place, unused, as
 rollback options.
+
+## Later: the image-level fix itself got reverted
+
+Once `config_overrides` and an app-level `max-parallelism` default
+existed (see `config-overrides.md`), this file's `max-parallelism=1`
+stopped doing anything for requests that go through this app --
+`withDefaultParams` always supplies `2` before `gcam.exe` ever sees
+the file. Keeping `1` baked into the image stopped being useful and
+started being a general-purpose-image concern instead: see
+`config-overrides.md`'s "Reverting the image-level default" section
+for why `configuration_ref.xml` was changed back to upstream's own
+`-1` default. Shipped as `gcam-production-v6`.

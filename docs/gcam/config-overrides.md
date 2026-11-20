@@ -153,10 +153,14 @@ The real implementation lives entirely in `apps/web/lib/runs.ts`:
   set" and "explicitly set to the same default" are genuinely the same
   effective request -- same cache key, same validation -- for every
   caller, dashboard or raw API alike.
-- `configuration_ref.xml`'s own baked-in default is untouched (still
-  `max-parallelism=1`, same as `gcam-production-v5`) -- it only matters
-  for requests that somehow bypass this app layer entirely (there
-  currently are none).
+- `configuration_ref.xml`'s own baked-in default was left untouched at
+  first (still `max-parallelism=1`, same as `gcam-production-v5`) --
+  it only mattered for requests that somehow bypassed this app layer
+  entirely (there currently are none). Since the app-level default
+  above now covers every real request, that image-level override was
+  later judged redundant and reverted back to upstream's own default
+  (`-1`) in the repo, shipped as `gcam-production-v6` (see "Reverting
+  the image-level default" below).
 
 Verified live (2026-11-19) against the real `gcam-production-v5`
 snapshot (no new snapshot involved at all): a caller params object with
@@ -172,3 +176,29 @@ Changing this default again in the future -- a different core count, a
 different default value for some other config key -- is purely a
 `models.ts` edit, deployed the same way as any other web app change,
 with no Daytona snapshot involved.
+
+## Reverting the image-level default
+
+Once the app-level default existed, the earlier image-level
+`max-parallelism=1` fix (see `oom-fix.md`) was no longer doing
+anything for requests that go through this app -- `withDefaultParams`
+always supplies `2` first. Keeping the image pinned to `1` only made
+sense as a general-purpose-image concern: someone pulling
+`possibleplanets/gcam` from Docker Hub and running it directly, with
+no app in front of it, gets upstream's own default back (`-1`, use
+all available cores) rather than this app's own sandbox-tier tuning
+baked permanently into the file.
+
+`sandboxes/gcam/runtime/exe/configuration_ref.xml` was changed back to
+`max-parallelism=-1` to match, then shipped the same lightweight way
+as v3/v4/v5 (no `gcamdata`/`gcam.exe` rebuild): create a sandbox from
+`gcam-production-v5`, overlay just the patched `configuration_ref.xml`
+(`sandbox.fs.uploadFile`), verify it live (file parses, `max-parallelism`
+reads `-1`, `gcam.exe`'s md5 and `run.py`'s md5 both unchanged from
+v5), then `sandbox.createSnapshot("gcam-production-v6")`. Verified
+again from a brand-new sandbox created straight from
+`gcam-production-v6`, same checks. `apps/web/lib/models.ts`'s
+`daytona_snapshot` for gcam updated from `v5` to `v6`. The app's own
+`max-parallelism=2` default is unaffected either way, since it's
+applied per-request regardless of what the image ships. `v2`-`v5` are
+all left in place, unused, as rollback options.

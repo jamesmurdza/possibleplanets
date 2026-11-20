@@ -10,21 +10,26 @@ SCENARIO_PARAMS env var or /input/params.json, native result to stdout and
 "shell out to a binary and read its output files" instead of "call a
 Python function".
 
-SCENARIO: only "Reference" is supported right now, not a full SSP
-taxonomy. This is deliberate, not an oversight -- see
-docs/gcam/known-gaps.md ("Only configuration_ref.xml was actually
-run-tested"): `configuration_ref.xml` is the one config file that was
-actually verified end-to-end (all 21 periods, exit 0). The other shipped
-configs (configuration_ssp.xml, _policy.xml, _usa.xml) reference
-additional input files not confirmed present in this image's runtime/
-directory and still have GCAM's own BaseX XML-output database enabled
-(the JVM-segfault problem configuration_ref.xml's write-output="0" patch
-works around) -- using them here without the same validation would risk
-a run that looks successful but silently fails or returns garbage. See
-docs/gcam/architecture.md for why adding real SSP scenario support later
-is cheap (it's just swapping in configuration_ssp.xml plus its own
-batch_SSP_*.xml file once that config is validated the same way ref was),
-not a re-run of the expensive gcamdata step.
+SCENARIO: "Reference" plus "SSP1".."SSP5" (see docs/gcam/ssp-scenarios.md
+for the full writeup). Each SSP has its own configuration_sspN.xml --
+NOT upstream's configuration_ssp.xml/batch_SSP_*.xml BatchMode mechanism,
+which was tried first and found to double-parse the shared component
+list under this sandbox's 8GB ceiling (OOM'd even serialized, at
+max-parallelism=1 -- a different failure mode than the solver-thread
+duplication max-parallelism otherwise fixes). Each configuration_sspN.xml
+is instead a flat, BatchMode=0 file: upstream's batch_SSP_REF.xml's own
+"base" FileSet (NOT configuration_ref.xml's own ScenarioComponents list
+-- an earlier attempt reused that instead and live-tested as a real
+bug: SSP3/SSP4 failed with a land-allocation consistency error, because
+configuration_ref.xml's list includes two Reference-only files
+upstream's own SSP base deliberately omits) plus that SSP's own overlay,
+pre-merged once instead of re-parsed by GCAM's BatchRunner at run time,
+so parsing cost and memory profile match the already-validated
+Reference run. GCAM's own BaseX XML-output database is still disabled
+the same way as Reference (write-output="0" on xmldb-location) --
+unrelated to BatchMode, see docs/gcam/known-gaps.md.
+configuration_policy.xml and configuration_usa.xml are still not
+exposed.
 
 PARAMETERS: "config_overrides" -- an arbitrary {name: value} map applied
 to configuration_ref.xml's own <Value name="...">...</Value> tags before
@@ -73,15 +78,27 @@ import sys
 
 DEFAULT_PARAMS = {"scenario": "Reference"}
 
-# Only "Reference" -- see module docstring for why the other shipped
-# configuration_*.xml files aren't exposed yet.
+# "Reference" plus SSP1-5 -- see module docstring and
+# docs/gcam/ssp-scenarios.md for how the SSP configs were built
+# (upstream batch_SSP_REF.xml's own base file list plus each SSP's
+# overlay, pre-merged into a flat, non-BatchMode file instead of
+# reusing GCAM's own BatchRunner -- that was tried first and found to
+# double-parse the shared component list, OOMing even at
+# max-parallelism=1). configuration_policy.xml and configuration_usa.xml
+# are still not exposed; see the module docstring.
 SUPPORTED_SCENARIOS = {
     "Reference": "configuration_ref.xml",
+    "SSP1": "configuration_ssp1.xml",
+    "SSP2": "configuration_ssp2.xml",
+    "SSP3": "configuration_ssp3.xml",
+    "SSP4": "configuration_ssp4.xml",
+    "SSP5": "configuration_ssp5.xml",
 }
 
-# configuration_ref.xml always runs the full 1975-2100 reference scenario
-# in 5-year steps -- a fixed, known total, not something to compute from
-# the config at run time (it doesn't vary by anything this script exposes).
+# Every SUPPORTED_SCENARIOS config shares configuration_ref.xml's own
+# Ints section (stop-period/stop-year both -1, i.e. unset) -- all of them
+# run the full 1975-2100 horizon in 5-year steps, a fixed, known total,
+# not something to compute from the config at run time.
 TOTAL_PERIODS = 21
 
 GCAM_DIR = "/app/gcam-core/exe"

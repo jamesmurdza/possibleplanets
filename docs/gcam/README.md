@@ -12,16 +12,30 @@ documentation set instead of a couple of lines in
 
 **Status: wired into the app.** GCAM builds, runs a full 21-period
 scenario (1975-2100) to completion, is packaged into a reusable Daytona
-snapshot (`gcam-production-v5`) and a public Docker Hub backup
+snapshot (`gcam-production-v8`) and a public Docker Hub backup
 (`possibleplanets/gcam:v1`), and is now registered in
 `apps/web/lib/models.ts` with a real `sandboxes/gcam/run.py` entrypoint,
-the same way every other model is. Only one scenario (`"Reference"`) is
-exposed so far -- see `known-gaps.md` for why, and what's left to widen
-that. See `oom-fix.md` for why the snapshot is on v5, not v1/v2/v3/v4,
-and `config-overrides.md` for v5's own general config-override feature.
+the same way every other model is. Six scenarios are exposed:
+`"Reference"` plus `"SSP1"`-`"SSP5"` -- see `ssp-scenarios.md` for how
+the SSP configs were built, a real bug found and fixed along the way,
+and the full live validation (`known-gaps.md` for what's still not
+exposed: `configuration_policy.xml`/`configuration_usa.xml`). See
+`oom-fix.md` for why the snapshot is on v5, not v1/v2/v3/v4, and
+`config-overrides.md` for v5's own general config-override feature
+(plus why v6 reverted the image's own `max-parallelism` default). See
+`provenance.md` for the plain from-scratch recipe -- what you'd
+actually run today, start to finish, to get the same result.
 
 ## Files in this folder
 
+- **`provenance.md`** -- the plain recipe: starting from nothing but a
+  clean upstream `gcam-core` checkout, the exact steps to end up with
+  today's `gcam-production-v8` (Reference + SSP1-5, every fix already
+  applied), plus a short file-by-file table of what's upstream vs.
+  what this project changed. Written as "what you'd do today," not as
+  a history of what actually happened across 8 snapshot versions --
+  start here if you need to verify or rebuild the image, rather than
+  understand why any individual decision was made.
 - **`architecture.md`** -- how GCAM is actually structured (the two-stage
   split between `gcamdata` and `gcam.exe`), and why that split matters for
   how this project uses it.
@@ -45,7 +59,12 @@ and `config-overrides.md` for v5's own general config-override feature.
   `gcamdata` step.
 - **`config-overrides.md`** -- the general `config_overrides` mechanism
   (v5): override ANY existing value in `configuration_ref.xml` per
-  request, no new snapshot needed per knob.
+  request, no new snapshot needed per knob. Also covers v6's revert of
+  the image's own `max-parallelism` default.
+- **`ssp-scenarios.md`** -- adding `SSP1`-`SSP5` as real scenarios
+  (v7): why GCAM's own BatchMode mechanism isn't viable here, the flat
+  pre-merged config approach used instead, a real land-allocation bug
+  found and fixed along the way, and the full live validation.
 
 ## Quick orientation
 
