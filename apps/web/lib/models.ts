@@ -762,11 +762,17 @@ export const MODELS: Record<string, ModelMeta> = {
     // try from here on is just a request parameter, no further snapshot
     // rebuild needed.
     supportsConfigOverrides: true,
-    // App-level default, NOT a snapshot change -- the snapshot's own
-    // baked-in configuration_ref.xml still ships max-parallelism=1
-    // (serial, maximally safe). This is lib/runs.ts applying
-    // {"max-parallelism": 2} to every gcam request that doesn't already
-    // set that key itself, regardless of caller.
+    // App-level default, NOT a snapshot change -- this is lib/runs.ts
+    // applying {"max-parallelism": 2} to every gcam request that
+    // doesn't already set that key itself, regardless of caller. The
+    // currently-live gcam-production-v5 snapshot's own baked-in
+    // configuration_ref.xml still ships max-parallelism=1 (the earlier
+    // image-level safety fix); the repo's own copy of that file has
+    // since been reverted back to upstream's own default (-1) since
+    // this app-level default makes the image-level one redundant for
+    // every request that goes through this app -- pending the next
+    // snapshot deploy to actually take effect for anyone running the
+    // image directly.
     //
     // Measured live (2026-11-19, config_overrides against the real
     // gcam-production-v5 snapshot, same memory-sampling method used
