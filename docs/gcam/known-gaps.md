@@ -3,25 +3,18 @@
 Things left unsolved or unintegrated on purpose, so nobody re-discovers
 the same dead end or re-does already-settled work.
 
-## Integrated, but only one scenario exposed
+## Integrated, six scenarios exposed
 
 GCAM is now registered in `apps/web/lib/models.ts` and has a real
 `sandboxes/gcam/run.py` entrypoint (reads `SCENARIO_PARAMS`, shells out
-to `gcam.exe`, parses its Hector-output CSV, reports progress). But only
-`"Reference"` is exposed as a scenario -- not the fuller SSP taxonomy
-other models here expose. That's because only `configuration_ref.xml`
-was ever run-tested end-to-end (see "Only configuration_ref.xml was
-actually run-tested" below); using `configuration_ssp.xml` to add real
-SSP scenario selection would need its own validation pass first
-(confirming its additional referenced input files exist in
-`runtime/input/`, and either shipping BaseX's jars or patching its
-`write-output` flag the same way `configuration_ref.xml` was patched).
-
-Once that validation is done, adding more scenarios is cheap -- it's
-just mapping a scenario name to one of the already-shipped
-`batch_SSP_*.xml` files (see `sandboxes/gcam/runtime/exe/`), not a
-repeat of the expensive `gcamdata` generation step (per
-`architecture.md`'s scenario-independence finding).
+to `gcam.exe`, parses its Hector-output CSV, reports progress).
+`"Reference"` plus `"SSP1"`-`"SSP5"` are all exposed and live-validated
+end-to-end -- see `ssp-scenarios.md` for how the SSP configs were
+built (NOT by reusing `configuration_ssp.xml`/`batch_SSP_*.xml`'s
+BatchMode mechanism directly -- that was tried and found to OOM via
+double-parsing, independent of `max-parallelism`) and the full
+validation (all 5 ran the complete 21-period horizon, exit 0, 0
+`oom_kills`, genuinely divergent results).
 
 No curated ParameterSpec sliders (like every other model's `parameters`
 array) are exposed -- but a general `config_overrides` escape hatch now
@@ -57,14 +50,20 @@ this project currently needs. If BaseX output is ever actually required,
 this needs real investigation (finding/bundling the right jars), not
 just re-flipping the flag back on.
 
-## Only `configuration_ref.xml` was actually run-tested
+## Only `configuration_ref.xml`, `configuration_ssp1-5.xml` were actually run-tested
 
-The full 21-period validated run used `configuration_ref.xml`
-specifically. The other `configuration_*.xml`/`batch_*.xml` files ship as-is
-from upstream gcam-core but were **not individually run-tested** the same
-way. They're presumed to work (same underlying XML database, same
-`gcam.exe` binary, per `architecture.md`'s scenario-independence finding)
-but this hasn't been directly verified for each one.
+The full 21-period validated runs used `configuration_ref.xml` and the
+5 new `configuration_sspN.xml` files (see `ssp-scenarios.md`) --
+all 6 individually confirmed end-to-end. Upstream's own
+`configuration_policy.xml`, `configuration_usa.xml`, and the
+`batch_SSP_*.xml`/`configuration_ssp.xml` BatchMode mechanism itself
+ship as-is but are **not** run-tested or exposed. They're presumed to
+work in the same general sense (same underlying XML database, same
+`gcam.exe` binary) but this hasn't been directly verified, and the SSP
+work above found a real, non-obvious bug (a land-allocation
+inconsistency) in the naive version of exactly this kind of "just
+reuse the shipped config" assumption -- so "presumed to work" should
+not be read as "verified."
 
 ## Production-snapshot run: 8GB was marginal -- intermittent OOM at the final periods (fixed, see `oom-fix.md`)
 
