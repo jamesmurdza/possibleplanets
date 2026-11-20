@@ -159,8 +159,8 @@ The real implementation lives entirely in `apps/web/lib/runs.ts`:
   entirely (there currently are none). Since the app-level default
   above now covers every real request, that image-level override was
   later judged redundant and reverted back to upstream's own default
-  (`-1`) in the repo (see "Reverting the image-level default" below) --
-  pending the next snapshot deploy to actually ship.
+  (`-1`) in the repo, shipped as `gcam-production-v6` (see "Reverting
+  the image-level default" below).
 
 Verified live (2026-11-19) against the real `gcam-production-v5`
 snapshot (no new snapshot involved at all): a caller params object with
@@ -190,8 +190,15 @@ all available cores) rather than this app's own sandbox-tier tuning
 baked permanently into the file.
 
 `sandboxes/gcam/runtime/exe/configuration_ref.xml` was changed back to
-`max-parallelism=-1` to match. This needs a new snapshot build to
-actually take effect (same lightweight overlay-and-resnapshot process
-as v3/v4/v5, no `gcamdata`/`gcam.exe` rebuild) -- the app's own
+`max-parallelism=-1` to match, then shipped the same lightweight way
+as v3/v4/v5 (no `gcamdata`/`gcam.exe` rebuild): create a sandbox from
+`gcam-production-v5`, overlay just the patched `configuration_ref.xml`
+(`sandbox.fs.uploadFile`), verify it live (file parses, `max-parallelism`
+reads `-1`, `gcam.exe`'s md5 and `run.py`'s md5 both unchanged from
+v5), then `sandbox.createSnapshot("gcam-production-v6")`. Verified
+again from a brand-new sandbox created straight from
+`gcam-production-v6`, same checks. `apps/web/lib/models.ts`'s
+`daytona_snapshot` for gcam updated from `v5` to `v6`. The app's own
 `max-parallelism=2` default is unaffected either way, since it's
-applied per-request regardless of what the image ships.
+applied per-request regardless of what the image ships. `v2`-`v5` are
+all left in place, unused, as rollback options.

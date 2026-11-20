@@ -226,5 +226,4 @@ the file. Keeping `1` baked into the image stopped being useful and
 started being a general-purpose-image concern instead: see
 `config-overrides.md`'s "Reverting the image-level default" section
 for why `configuration_ref.xml` was changed back to upstream's own
-`-1` default, and that this still needs a new snapshot build to take
-effect.
+`-1` default. Shipped as `gcam-production-v6`.

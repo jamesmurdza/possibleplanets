@@ -4,7 +4,7 @@ If you just want to **use** GCAM as it stands today, nothing in
 `setup-guide.md` or `trial-log.md` needs to happen again. Here's what
 already exists and how to use it directly.
 
-## 1. Daytona snapshot: `gcam-production-v5`
+## 1. Daytona snapshot: `gcam-production-v6`
 
 The primary artifact. Originally built from `sandboxes/gcam/Dockerfile`
 (v1/v2), with:
@@ -19,15 +19,19 @@ v3 is v2 with only `exe/configuration_ref.xml` patched in place
 (`max-parallelism` `-1` -> `1`, fixing an intermittent OOM at the final
 periods, plus a later fix to `run.py`'s CSV output parsing -- see
 `oom-fix.md`, plus the general `config_overrides` mechanism in v5 --
-see `config-overrides.md`) and re-snapshotted directly from live
-sandboxes each time, without rebuilding `gcam.exe` or regenerating the
-input database. `gcam-production-v2`, `v3`, and `v4` are all left in
-place, unused, as rollback options.
+see `config-overrides.md`). v6 reverted that same file's
+`max-parallelism` back to `-1` (upstream's own default) now that an
+app-level default (`max-parallelism=2`, via `config_overrides`) covers
+every request that goes through this app -- see `config-overrides.md`'s
+"Reverting the image-level default". Every version was re-snapshotted
+directly from a live sandbox, without rebuilding `gcam.exe` or
+regenerating the input database. `gcam-production-v2` through `v5` are
+all left in place, unused, as rollback options.
 
 Create a sandbox from it:
 ```js
 const sandbox = await daytona.create(
-  { snapshot: 'gcam-production-v5', autoDeleteInterval: <minutes> },
+  { snapshot: 'gcam-production-v6', autoDeleteInterval: <minutes> },
   { timeout: 120 },
 )
 ```

@@ -691,7 +691,19 @@ export const MODELS: Record<string, ModelMeta> = {
     // a bad key (config_overrides: {"totally-not-a-real-key": 1}) failed
     // immediately with a clear "no matching <Value> found" error,
     // before gcam.exe ever launched.
-    daytona_snapshot: "gcam-production-v5",
+    //
+    // v6, not v5 -- only configuration_ref.xml's own max-parallelism
+    // changed, back to upstream's default (-1) now that this app's own
+    // max-parallelism=2 default (defaultConfigOverrides below) covers
+    // every real request; the image-level override was redundant and
+    // only mattered for someone running the image directly, outside
+    // this app (see docs/gcam/config-overrides.md's "Reverting the
+    // image-level default"). No gcamdata/gcam.exe rebuild, same
+    // overlay-and-resnapshot process as v3/v4/v5. Verified from a
+    // fresh sandbox off this exact snapshot: configuration_ref.xml
+    // reads max-parallelism=-1, gcam.exe's md5 and run.py's md5 both
+    // unchanged from v5.
+    daytona_snapshot: "gcam-production-v6",
     // Dockerfile clones JGCRI/gcam-core@main unpinned, so the Dockerfile
     // text alone doesn't tell you which release that resolved to -- verified
     // directly instead by spinning up the real snapshot and running
@@ -765,14 +777,12 @@ export const MODELS: Record<string, ModelMeta> = {
     // App-level default, NOT a snapshot change -- this is lib/runs.ts
     // applying {"max-parallelism": 2} to every gcam request that
     // doesn't already set that key itself, regardless of caller. The
-    // currently-live gcam-production-v5 snapshot's own baked-in
-    // configuration_ref.xml still ships max-parallelism=1 (the earlier
-    // image-level safety fix); the repo's own copy of that file has
-    // since been reverted back to upstream's own default (-1) since
-    // this app-level default makes the image-level one redundant for
-    // every request that goes through this app -- pending the next
-    // snapshot deploy to actually take effect for anyone running the
-    // image directly.
+    // snapshot's own baked-in configuration_ref.xml went back to
+    // upstream's default (-1) as of v6 above, since this app-level
+    // default makes the image-level override redundant for every
+    // request that goes through this app -- the image-level value
+    // only ever mattered for someone running it directly, outside
+    // this app.
     //
     // Measured live (2026-11-19, config_overrides against the real
     // gcam-production-v5 snapshot, same memory-sampling method used
