@@ -22,10 +22,21 @@ and the full live validation (`known-gaps.md` for what's still not
 exposed: `configuration_policy.xml`/`configuration_usa.xml`). See
 `oom-fix.md` for why the snapshot is on v5, not v1/v2/v3/v4, and
 `config-overrides.md` for v5's own general config-override feature
-(plus why v6 reverted the image's own `max-parallelism` default).
+(plus why v6 reverted the image's own `max-parallelism` default). See
+`provenance.md` for the full audit trail from upstream source to this
+exact deployed snapshot.
 
 ## Files in this folder
 
+- **`provenance.md`** -- the audit trail: starting from a clean
+  upstream `gcam-core` checkout, the exact numbered sequence of steps
+  (what's committed and deterministic, what's a one-time external
+  artifact, what was a live-sandbox patch rather than a Dockerfile
+  step) that produces what's actually running in
+  `gcam-production-v8` today, plus a file-by-file table of everything
+  this project changed from upstream. Start here if you need to verify
+  or reproduce how the image was built, rather than understand why any
+  individual decision was made.
 - **`architecture.md`** -- how GCAM is actually structured (the two-stage
   split between `gcamdata` and `gcam.exe`), and why that split matters for
   how this project uses it.

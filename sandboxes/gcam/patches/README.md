@@ -11,10 +11,14 @@ column being "added". Each patch below replaces the buggy block with an
 equivalent, correctly-sized version -- same inputs, same output columns,
 same NA-filled grid, just without the accidental blow-up.
 
-These are not applied anywhere automatically yet (GCAM isn't wired into
-`sandboxes/` or `lib/models.ts`). If GCAM is picked back up, apply both
-patches to a fresh `gcam-core` checkout's `input/gcamdata/R/` before
-running `driver()`/`driver_drake()`.
+These patches are applied automatically by `sandboxes/gcam/gcamdata.Dockerfile`
+(an inline `sed` for the Employment fix, `patch_population_hist.py` for
+the Population_hist fix) every time that image builds and runs
+`driver_drake()` -- the `.patch` files below are for human reading, not
+executed directly. See `docs/gcam/provenance.md`'s Stage 1 for how this
+fits into the full source-to-image pipeline, and
+`sandboxes/gcam/runtime/README.md` for how to re-run this whole stage
+if it's ever needed again.
 
 ## `employment.patch`
 
