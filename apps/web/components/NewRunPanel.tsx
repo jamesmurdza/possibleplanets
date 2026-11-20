@@ -74,11 +74,6 @@ export default function NewRunPanel({
   // comment for why this is a free-form field instead of a curated
   // ParameterSpec slider.
   const [configOverridesText, setConfigOverridesText] = useState("");
-  // Plain number field, same Advanced section as Max run time -- a
-  // structured shortcut for config_overrides["max-parallelism"] (see
-  // buildParams), not a separate mechanism. Only rendered alongside the
-  // raw config-overrides textarea, for the same models.
-  const [coresText, setCoresText] = useState("");
 
   const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const checkSeq = useRef(0);
@@ -132,7 +127,7 @@ export default function NewRunPanel({
     const mySeq = ++checkSeq.current;
     checkTimer.current = setTimeout(async () => {
       try {
-        const params = buildParams(modelMeta, scenario, paramValues, configOverridesText, coresText);
+        const params = buildParams(modelMeta, scenario, paramValues, configOverridesText);
         const result = await fetchJson(`/v1/models/${modelName}/check`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -147,7 +142,7 @@ export default function NewRunPanel({
       if (checkTimer.current) clearTimeout(checkTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelName, modelMeta, scenario, paramValues, configOverridesText, coresText]);
+  }, [modelName, modelMeta, scenario, paramValues, configOverridesText]);
 
   // When more than one model is selected (primary + shift-clicked extras),
   // narrow the shown scenarios/params to the intersection across all of
@@ -298,7 +293,7 @@ export default function NewRunPanel({
             skipped++;
             return;
           }
-          const params = buildParams(meta, nativeScenario, m === modelName ? paramValues : {}, configOverridesText, coresText);
+          const params = buildParams(meta, nativeScenario, m === modelName ? paramValues : {}, configOverridesText);
           // Always force a fresh run here too -- clicking "Run" never shows
           // a cached result, for the batch combos any more than the
           // primary one. See runModel's own comment. The Advanced max-run-
@@ -350,7 +345,7 @@ export default function NewRunPanel({
     try {
       const totalCount = combos.length;
       setStatusText(totalCount > 1 ? `Submitting ${totalCount} runs...` : `${modelName}: submitting...`);
-      const params = buildParams(modelMeta, scenario, paramValues, configOverridesText, coresText);
+      const params = buildParams(modelMeta, scenario, paramValues, configOverridesText);
       const submitted = await fetchJson(`/v1/models/${modelName}/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -677,31 +672,7 @@ export default function NewRunPanel({
                   />
                   <span className="form-field-unit">seconds</span>
                 </label>
-                {modelMeta.supports_config_overrides && (
-                  <label className="param-field-row" htmlFor="advanced-cores">
-                    <span className="form-field-label">Cores</span>
-                    <input
-                      id="advanced-cores"
-                      type="number"
-                      placeholder="2"
-                      min={1}
-                      max={4}
-                      step={1}
-                      value={coresText}
-                      onChange={(e) => setCoresText(e.target.value)}
-                    />
-                    <span className="form-field-unit">of 4</span>
-                  </label>
-                )}
               </div>
-            )}
-            {advancedOpen && modelMeta.supports_config_overrides && (
-              <p className="advanced-note">
-                More cores run faster but use more memory -- measured on this sandbox&apos;s 8GB ceiling: 1 core
-                ~50min and never hits the ceiling, 2 cores (the app&apos;s own default, left blank) ~32min and peaks
-                around 7.9GB, 4 cores ~20-24min but can intermittently hit the ceiling and fail. This default
-                lives in the app, not the image -- the Daytona snapshot itself still ships 1 core.
-              </p>
             )}
             {advancedOpen && modelMeta.supports_config_overrides && (
               <div className="config-overrides-field">
@@ -720,7 +691,8 @@ export default function NewRunPanel({
                   Raw JSON object of {"{name: value}"} -- overrides ANY existing{" "}
                   <code>&lt;Value name=&quot;...&quot;&gt;</code> in the model&apos;s own native config file, no
                   validation beyond checking the name exists. A bad override fails visibly (see this run&apos;s
-                  error/output in the drawer) rather than being pre-checked here.
+                  error/output in the drawer) rather than being pre-checked here. The app already defaults{" "}
+                  <code>max-parallelism</code> to 2 when left unset here.
                 </p>
               </div>
             )}
