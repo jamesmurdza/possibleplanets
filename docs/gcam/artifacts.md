@@ -4,7 +4,7 @@ If you just want to **use** GCAM as it stands today, nothing in
 `setup-guide.md` or `trial-log.md` needs to happen again. Here's what
 already exists and how to use it directly.
 
-## 1. Daytona snapshot: `gcam-production-v8`
+## 1. Daytona snapshot: `gcam-production-v9`
 
 The primary artifact. Originally built from `sandboxes/gcam/Dockerfile`
 (v1/v2), with:
@@ -29,13 +29,16 @@ files in a new `input/extra/` dir -- see `ssp-scenarios.md`. v8 is a
 `run.py`-comment-only fix on top of v7 (no functional change, verified
 by md5). Every version was re-snapshotted directly from a live
 sandbox, without rebuilding `gcam.exe` or regenerating the input
-database. `gcam-production-v2` through `v7` are all left in place,
-unused, as rollback options.
+database. v9 renames those 5 `configuration_sspN.xml` files/scenario
+names to canonical `ssp126`/`ssp245`/`ssp370`/`ssp460`/`ssp585` codes
+(and tried, then reverted, real forcing-target enforcement on 3 of
+them) -- see `ssp-constraints.md`. `gcam-production-v2` through `v8`
+are all left in place, unused, as rollback options.
 
 Create a sandbox from it:
 ```js
 const sandbox = await daytona.create(
-  { snapshot: 'gcam-production-v8', autoDeleteInterval: <minutes> },
+  { snapshot: 'gcam-production-v9', autoDeleteInterval: <minutes> },
   { timeout: 120 },
 )
 ```

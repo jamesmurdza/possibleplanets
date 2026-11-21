@@ -99,8 +99,12 @@ A successful run prints `"All model periods solved correctly."` /
 Done -- `apps/web/lib/models.ts` registers `gcam`, and
 `sandboxes/gcam/run.py` is the real entrypoint (reads `SCENARIO_PARAMS`,
 shells out to `gcam.exe -C <config file>`, parses its output, reports
-progress). Six scenarios are exposed: `"Reference"` plus `"SSP1"`
-through `"SSP5"` -- see `provenance.md` for exactly how the 5 SSP
-config files get built on top of step 4 above, and `known-gaps.md` for
-what's still not exposed (`configuration_policy.xml`,
-`configuration_usa.xml`).
+progress). Six scenarios are exposed: `"Reference"` plus
+`"ssp126"`/`"ssp245"`/`"ssp370"`/`"ssp460"`/`"ssp585"` (canonical SSP
+codes matching the other models' legend, not GCAM's own native
+`"SSP1"`-`"SSP5"` strings -- see `ssp-constraints.md`) -- see
+`provenance.md` for exactly how the 5 SSP config files get built on
+top of step 4 above (still describes the pre-rename `SSP1`-`SSP5`
+names; only the filenames/scenarioName values changed, not the build
+steps), and `known-gaps.md` for what's still not exposed
+(`configuration_policy.xml`, `configuration_usa.xml`).
