@@ -54,12 +54,25 @@ function isDefaultParams(model: string, params: Record<string, unknown>): boolea
  *
  * Cache-Control is safe to set short-but-nonzero: this only changes when
  * a run finishes, which is rare and not latency-sensitive by a minute.
+ *
+ * `r.chart_series` (lib/db.ts's getLatestSucceededRuns) is already exactly
+ * {labels, values, label} for the normal case -- computed once at finalize
+ * time (lib/runs.ts's finalizeOutcomeInner) instead of by running
+ * CHART_ADAPTERS again on every request. Only a row without it (written
+ * before that column existed, or whose adapter threw at finalize time)
+ * falls back to running the adapter here, inline, same as this route
+ * always used to -- getLatestSucceededRuns only fetched that row's
+ * `result` in the first place because chart_series was missing.
  */
 export async function GET() {
   try {
     const runs = await getLatestSucceededRuns();
     const series = runs.flatMap((r) => {
       if (!isDefaultParams(r.model, (r.params as Record<string, unknown>) ?? {})) return [];
+      if (r.chart_series) {
+        const { labels, values } = r.chart_series as { labels: unknown[]; values: unknown[] };
+        return [{ run_id: r.run_id, model: r.model, params: r.params, started_at: r.started_at, labels, values }];
+      }
       const adapter = CHART_ADAPTERS[r.model];
       if (!adapter) return [];
       try {

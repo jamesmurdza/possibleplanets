@@ -133,6 +133,23 @@ ALTER TABLE runs ADD COLUMN IF NOT EXISTS model_version_number TEXT;
 -- exactly the case where a user debugging "I don't know what's
 -- happening" has nothing in-app to look at.
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS stdout_tail TEXT;
+-- Pre-reduced {labels, values, label} for GET /v1/runs/latest's home-page
+-- chart, computed once at finalize time (see lib/runs.ts's
+-- finalizeOutcomeInner) instead of on every single request. Added after
+-- gcam made the home page chart noticeably slower to load: its result
+-- column can run multi-megabytes (a full Hector outputstream.csv as raw
+-- text -- see CHART_ADAPTERS.gcam's own comment in lib/clientApi.ts), and
+-- getLatestSucceededRuns was unconditionally selecting that whole result
+-- value, for every model's latest run, on every request, just so
+-- /v1/runs/latest could immediately throw away everything except a few
+-- hundred chart points. This column holds exactly those already-reduced
+-- points, so getLatestSucceededRuns can select THIS instead of result
+-- and Postgres never has to read/detoast/transmit the big blob at all for
+-- any row that already has it. NULL for rows written before this column
+-- existed, or for a model with no CHART_ADAPTERS entry -- the route falls
+-- back to the old "read result, run the adapter inline" path for those
+-- specific rows only, not for every row.
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS chart_series JSONB;
 `;
 
 // ensureDb() is called at the top of every exported function below rather
@@ -338,6 +355,12 @@ export interface LatestRunItem {
   run_id: string;
   model: string;
   params: unknown;
+  // Present (non-null) whenever this row was written after the
+  // chart_series column existed and the model had a CHART_ADAPTERS entry
+  // that didn't throw -- see that column's own migration comment. `result`
+  // is only ever populated as a fallback, for the (increasingly rare) rows
+  // that don't have chart_series yet.
+  chart_series: unknown;
   result: unknown;
   started_at: string;
 }
@@ -355,16 +378,41 @@ export interface LatestRunItem {
  * is true, since JSONB storage normalizes object key order -- unlike a
  * plain TEXT/JSON column, which would compare byte-for-byte), so this
  * doesn't need the client's own sortKeysDeep() normalization first.
+ *
+ * Two queries, not one, and deliberately so: the first never selects
+ * `result` at all, so Postgres never has to read/detoast/transmit it for
+ * the (now typical) row that already has `chart_series` populated -- for
+ * gcam specifically, `result` can run multi-megabytes (see chart_series's
+ * own migration comment), and selecting it unconditionally here used to
+ * be exactly why the home page chart got slower to load after gcam was
+ * added. The second query only runs at all if some row in this result set
+ * is still missing chart_series (an old row from before this column
+ * existed, or a model with no adapter), and only fetches `result` for
+ * those specific run_ids -- not every row, every time.
  */
 export async function getLatestSucceededRuns(): Promise<LatestRunItem[]> {
   await ensureDb();
   const { rows } = await getPool().query(
-    `SELECT DISTINCT ON (model, params) run_id, model, params, result, started_at
+    `SELECT DISTINCT ON (model, params) run_id, model, params, chart_series, started_at
      FROM runs
      WHERE status = 'succeeded'
      ORDER BY model, params, started_at DESC`,
   );
-  return rows as LatestRunItem[];
+  const items = rows as LatestRunItem[];
+
+  const missingIds = items.filter((r) => r.chart_series == null).map((r) => r.run_id);
+  if (missingIds.length > 0) {
+    const { rows: fallbackRows } = await getPool().query(
+      `SELECT run_id, result FROM runs WHERE run_id = ANY($1::text[])`,
+      [missingIds],
+    );
+    const resultById = new Map(fallbackRows.map((r) => [r.run_id as string, r.result]));
+    for (const item of items) {
+      if (item.chart_series == null) item.result = resultById.get(item.run_id) ?? null;
+    }
+  }
+
+  return items;
 }
 
 /**
@@ -445,12 +493,28 @@ export async function finishRunSucceeded(
   durationSeconds: number,
   cached: boolean,
   stdoutTail?: string | null,
+  // See the `chart_series` column's own migration comment above --
+  // computed once here (by the caller, which already has the adapter and
+  // the parsed result in hand) instead of recomputed on every
+  // /v1/runs/latest request. Optional/nullable: a model with no
+  // CHART_ADAPTERS entry, or an adapter that threw on this particular
+  // result, has nothing to store here, and that's fine -- the route falls
+  // back to reading `result` directly for those rows.
+  chartSeries?: unknown,
 ): Promise<void> {
   await ensureDb();
   await getPool().query(
     `UPDATE runs SET status = 'succeeded', result = $1, progress = $2, cached = $3,
-       duration_seconds = $4, stdout_tail = $5, updated_at = now() WHERE run_id = $6`,
-    [JSON.stringify(result), JSON.stringify({ percent: 100 }), cached, durationSeconds, stdoutTail ?? null, runId],
+       duration_seconds = $4, stdout_tail = $5, chart_series = $6, updated_at = now() WHERE run_id = $7`,
+    [
+      JSON.stringify(result),
+      JSON.stringify({ percent: 100 }),
+      cached,
+      durationSeconds,
+      stdoutTail ?? null,
+      chartSeries === undefined ? null : JSON.stringify(chartSeries),
+      runId,
+    ],
   );
 }
 
