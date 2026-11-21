@@ -12,19 +12,25 @@ documentation set instead of a couple of lines in
 
 **Status: wired into the app.** GCAM builds, runs a full 21-period
 scenario (1975-2100) to completion, is packaged into a reusable Daytona
-snapshot (`gcam-production-v8`) and a public Docker Hub backup
+snapshot (`gcam-production-v9`) and a public Docker Hub backup
 (`possibleplanets/gcam:v1`), and is now registered in
 `apps/web/lib/models.ts` with a real `sandboxes/gcam/run.py` entrypoint,
 the same way every other model is. Six scenarios are exposed:
-`"Reference"` plus `"SSP1"`-`"SSP5"` -- see `ssp-scenarios.md` for how
-the SSP configs were built, a real bug found and fixed along the way,
-and the full live validation (`known-gaps.md` for what's still not
+`"Reference"` plus `"ssp126"`/`"ssp245"`/`"ssp370"`/`"ssp460"`/`"ssp585"`
+-- named to match the canonical SSP codes the other models use (see
+`ssp-constraints.md`), not GCAM's own native `"SSP1"`-`"SSP5"` strings
+used before v9. See `ssp-scenarios.md` for how the underlying SSP configs
+were built, a real bug found and fixed along the way, and the full live
+validation; `ssp-constraints.md` for why the rename happened and why all
+5 remain unconstrained narrative baselines rather than true forcing-
+target-constrained scenarios (`known-gaps.md` for what's still not
 exposed: `configuration_policy.xml`/`configuration_usa.xml`). See
-`oom-fix.md` for why the snapshot is on v5, not v1/v2/v3/v4, and
+`oom-fix.md` for why the snapshot is on v5+, not v1/v2/v3/v4, and
 `config-overrides.md` for v5's own general config-override feature
 (plus why v6 reverted the image's own `max-parallelism` default). See
 `provenance.md` for the plain from-scratch recipe -- what you'd
-actually run today, start to finish, to get the same result.
+actually run today, start to finish, to get the same result (note:
+written before the v9 rename, still describes `SSP1`-`SSP5` naming).
 
 ## Files in this folder
 
@@ -64,7 +70,15 @@ actually run today, start to finish, to get the same result.
 - **`ssp-scenarios.md`** -- adding `SSP1`-`SSP5` as real scenarios
   (v7): why GCAM's own BatchMode mechanism isn't viable here, the flat
   pre-merged config approach used instead, a real land-allocation bug
-  found and fixed along the way, and the full live validation.
+  found and fixed along the way, and the full live validation. (Written
+  before the v9 rename below -- the underlying config-building steps it
+  describes are unchanged, just the scenario names/filenames.)
+- **`ssp-constraints.md`** -- renaming those 5 scenarios to canonical
+  `ssp126`/`ssp245`/`ssp370`/`ssp460`/`ssp585` codes (v9) so they group
+  correctly with the other models' SSP legend, and why an attempt to
+  also add real forcing-target enforcement (`find-path=1`) was tried
+  live and reverted after GCAM's own Policy Target Runner reliably
+  failed to converge.
 
 ## Quick orientation
 

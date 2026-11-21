@@ -92,34 +92,30 @@
 		<Value name = "wind_update">../input/gcamdata/xml/onshore_wind.xml</Value>
 		<Value name = "gas_trade">../input/gcamdata/xml/gas_trade.xml</Value>
 		<Value name = "solver">../input/solution/cal_broyden_config.xml</Value>
-		<!-- SSP1 overlay (from batch_SSP_REF.xml's "SSP Harmonized" ComponentSet,
-		FileSet name="SSP1"), appended after the base list above so these
-		later entries are the ones gcam.exe's sequential component-merge
-		actually applies last. See docs/gcam/ssp-scenarios.md for how this
-		file was built. -->
-		<Value name="socioeconomics">../input/gcamdata/xml/socioeconomics_SSP1.xml</Value>
-		<Value name = "socioeconomics_income_elas">../input/gcamdata/xml/socioeconomics_incelas_ssp1.xml</Value>
-		<Value name="trn">../input/gcamdata/xml/transportation_UCD_SSP1.xml</Value>
-		<Value name="bld">../input/gcamdata/xml/building_SSP1.xml</Value>
-		<Value name="aglu">../input/gcamdata/xml/food_SSP1.xml</Value>
-		<Value name="aglu">../input/gcamdata/xml/ag_land_prodchange_ssp1_IRR_MGMT.xml</Value>
-		<Value name="wind">../input/gcamdata/xml/wind_adv.xml</Value>
-		<Value name="solar">../input/gcamdata/xml/solar_adv.xml</Value>
-		<Value name="geothermal">../input/gcamdata/xml/geo_adv.xml</Value>
-		<Value name="geothermal">../input/gcamdata/xml/geo_tech_adv.xml</Value>
+		<!-- SSP3 overlay (from batch_SSP_REF.xml's "SSP Harmonized" ComponentSet,
+		FileSet name="SSP3"), see docs/gcam/ssp-scenarios.md. -->
+		<Value name="socioeconomics">../input/gcamdata/xml/socioeconomics_SSP3.xml</Value>
+		<Value name = "socioeconomics_income_elas">../input/gcamdata/xml/socioeconomics_incelas_ssp3.xml</Value>
+		<Value name="trn">../input/gcamdata/xml/transportation_UCD_SSP3.xml</Value>
+		<Value name="bld">../input/gcamdata/xml/building_SSP3.xml</Value>
+		<Value name="aglu">../input/gcamdata/xml/ag_land_prodchange_ssp3_IRR_MGMT.xml</Value>
+		<Value name="aglu">../input/gcamdata/xml/pasture_ssp34.xml</Value>
+		<Value name="wind">../input/gcamdata/xml/wind_low.xml</Value>
+		<Value name="solar">../input/gcamdata/xml/solar_low.xml</Value>
+		<Value name="geothermal">../input/gcamdata/xml/geo_low.xml</Value>
 		<Value name="nuclear">../input/gcamdata/xml/nuclear_low.xml</Value>
-		<Value name="ccs">../input/gcamdata/xml/ccs_supply_lowest.xml</Value>
+		<Value name="bio">../input/gcamdata/xml/elec_bio_low.xml</Value>
+		<Value name="resource_extraction">../input/gcamdata/xml/resources_SSP3.xml</Value>
+		<Value name="bio_trade">../input/gcamdata/xml/ssp3_bio_trade.xml</Value>
+		<Value name="ccs">../input/gcamdata/xml/ccs_supply_low.xml</Value>
 		<Value name="ccs">../input/gcamdata/xml/no_offshore_ccs.xml</Value>
-		<Value name="resource_extraction">../input/gcamdata/xml/resources_SSP1.xml</Value>
-		<Value name="share_weights">../input/extra/renewable_shareweights_ssp1_32.xml</Value>
 		<Value name="nonco2">../input/gcamdata/xml/delete_gdp_control.xml</Value>
-		<Value name="nonco2">../input/gcamdata/xml/ssp15_emissions_factors.xml</Value>
-		<Value name="nonco2">../input/gcamdata/xml/MACC_TC_SSP1.xml</Value>
-		<Value name="wwtrt">../input/gcamdata/xml/EFW_WWtrt_coefs_SSP1.xml</Value>
+		<Value name="nonco2">../input/gcamdata/xml/ssp34_emissions_factors.xml</Value>
+		<Value name="wwtrt">../input/gcamdata/xml/EFW_WWtrt_coefs_SSP3.xml</Value>
 		<Value name = "prune_ag">../input/gcamdata/xml/prune_empty_ag.xml</Value>
 	</ScenarioComponents>
 	<Strings>
-		<Value name="scenarioName">SSP1</Value>
+		<Value name="scenarioName">ssp370</Value>
 		<Value name="debug-region">USA</Value>
 		<Value name="AbatedGasForCostCurves">CO2</Value>
 	</Strings>
@@ -128,6 +124,11 @@
 		<!-- Fixed GDP will calibrate to exogenous path -->
 		<Value name="FixedGDP-Path">1</Value>
 		<Value name="BatchMode">0</Value>
+		<!-- find-path stays 0 (unlike ssp126/ssp245/ssp460): ssp370
+		is SSP3's own unconstrained baseline, "no additional climate
+		policy" IS the actual definition of the 7.0 W/m2 marker for
+		this narrative in ScenarioMIP, not an approximation, so no
+		path-finding/policy-target-file is needed to represent it. -->
 		<Value name="find-path">0</Value>
 		<Value name="createCostCurve">0</Value>
 		<Value name="debugChecking">0</Value>
