@@ -41,7 +41,6 @@ import { randomUUID } from "crypto";
 
 import { getDaytonaClient } from "./daytona";
 import { getModelOrNull, ModelMeta } from "./models";
-import { CHART_ADAPTERS } from "./clientApi";
 import {
   getCachedRun,
   insertRun,
@@ -1076,29 +1075,19 @@ async function finalizeOutcomeInner(runId: string, row: RunRow, exitCode: number
   // own stdout_tail above) -- enough to debug a confusing-but-"succeeded"
   // result (what did the model actually print/log) without storing a
   // potentially huge log in full.
-  // Reduce to {labels, values, label} here, once, at finalize time, and
-  // store it alongside `result` -- see lib/db.ts's chart_series column
-  // comment and app/v1/runs/latest/route.ts for why: that route used to
-  // re-run this exact adapter on EVERY request, after first making
-  // getLatestSucceededRuns read this row's full `result` just to do it,
-  // which for gcam's multi-megabyte result was the real cost behind "the
-  // home page chart got slower after gcam was added." Same adapter,
-  // same input shape (`parsed`, not `parsed.result`) the route itself
-  // always called it with. A model with no adapter, or one that throws on
-  // this particular result, just leaves chart_series null -- the route
-  // falls back to its old inline-adapter path for that one row.
-  let chartSeries: unknown = null;
-  const adapter = CHART_ADAPTERS[row.model];
-  if (adapter) {
-    try {
-      chartSeries = adapter(parsed);
-    } catch {
-      chartSeries = null;
-    }
-  }
-
+  //
+  // Deliberately does NOT precompute/store a chart series here -- that
+  // was tried (a `chart_series` column written unconditionally on every
+  // finalize) and reverted: it coupled this write path to CHART_ADAPTERS
+  // (lib/clientApi.ts), a read-side concern, and baked in a value that
+  // would go stale forever if that adapter logic ever changed, since
+  // `runs` is the source of truth and nothing here re-derives it. See
+  // lib/db.ts's run_chart_series table comment -- that's a lazy
+  // read-through cache instead, filled by app/v1/runs/latest/route.ts the
+  // first time a run's series is actually asked for, not by this
+  // function.
   log("writing finishRunSucceeded (the runs row's own result column)");
-  await finishRunSucceeded(runId, parsed, runSeconds, false, stdout.slice(-2000), chartSeries);
+  await finishRunSucceeded(runId, parsed, runSeconds, false, stdout.slice(-2000));
   log("finishRunSucceeded done -- finalize complete");
 }
 

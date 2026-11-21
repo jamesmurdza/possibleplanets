@@ -1,4 +1,4 @@
-import { getLatestSucceededRuns } from "../../../../lib/db";
+import { getLatestSucceededRuns, cacheChartSeries } from "../../../../lib/db";
 import { corsJson, corsOptions, corsGatewayError } from "../../../../lib/cors";
 import { CHART_ADAPTERS } from "../../../../lib/clientApi";
 import { MODELS } from "../../../../lib/models";
@@ -55,18 +55,21 @@ function isDefaultParams(model: string, params: Record<string, unknown>): boolea
  * Cache-Control is safe to set short-but-nonzero: this only changes when
  * a run finishes, which is rare and not latency-sensitive by a minute.
  *
- * `r.chart_series` (lib/db.ts's getLatestSucceededRuns) is already exactly
- * {labels, values, label} for the normal case -- computed once at finalize
- * time (lib/runs.ts's finalizeOutcomeInner) instead of by running
- * CHART_ADAPTERS again on every request. Only a row without it (written
- * before that column existed, or whose adapter threw at finalize time)
- * falls back to running the adapter here, inline, same as this route
- * always used to -- getLatestSucceededRuns only fetched that row's
- * `result` in the first place because chart_series was missing.
+ * `r.chart_series` (lib/db.ts's getLatestSucceededRuns, via its LEFT JOIN
+ * onto run_chart_series) is already exactly {labels, values, label} on a
+ * cache hit -- this route is the only thing that ever runs CHART_ADAPTERS
+ * at all now, and only on a miss; a hit skips straight past `result`
+ * (which getLatestSucceededRuns never even fetched for that row). A miss
+ * runs the adapter here, inline, same as this route always used to, and
+ * then writes the result into run_chart_series (lib/db.ts's
+ * cacheChartSeries) so the next request for this exact run is a hit --
+ * see that table's own migration comment for why this is a lazy
+ * read-through cache rather than something precomputed at finalize time.
  */
 export async function GET() {
   try {
     const runs = await getLatestSucceededRuns();
+    const toCache: Promise<void>[] = [];
     const series = runs.flatMap((r) => {
       if (!isDefaultParams(r.model, (r.params as Record<string, unknown>) ?? {})) return [];
       if (r.chart_series) {
@@ -76,12 +79,19 @@ export async function GET() {
       const adapter = CHART_ADAPTERS[r.model];
       if (!adapter) return [];
       try {
-        const { labels, values } = adapter(r.result);
+        const { labels, values, label } = adapter(r.result);
+        toCache.push(cacheChartSeries(r.run_id, { labels, values, label }).catch(() => {}));
         return [{ run_id: r.run_id, model: r.model, params: r.params, started_at: r.started_at, labels, values }];
       } catch {
         return [];
       }
     });
+    // Best-effort: awaited so a serverless invocation doesn't get torn
+    // down mid-write, but a failure here (e.g. a transient DB hiccup)
+    // doesn't fail the request -- same series this request already
+    // computed is returned either way; a cache write failure just means
+    // the NEXT request recomputes it instead of hitting the cache.
+    await Promise.allSettled(toCache);
     return corsJson({ series }, { headers: { "Cache-Control": "s-maxage=60, stale-while-revalidate=300" } });
   } catch (err) {
     return corsGatewayError(err, "GET /v1/runs/latest");

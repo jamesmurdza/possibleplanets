@@ -133,23 +133,39 @@ ALTER TABLE runs ADD COLUMN IF NOT EXISTS model_version_number TEXT;
 -- exactly the case where a user debugging "I don't know what's
 -- happening" has nothing in-app to look at.
 ALTER TABLE runs ADD COLUMN IF NOT EXISTS stdout_tail TEXT;
--- Pre-reduced {labels, values, label} for GET /v1/runs/latest's home-page
--- chart, computed once at finalize time (see lib/runs.ts's
--- finalizeOutcomeInner) instead of on every single request. Added after
--- gcam made the home page chart noticeably slower to load: its result
--- column can run multi-megabytes (a full Hector outputstream.csv as raw
--- text -- see CHART_ADAPTERS.gcam's own comment in lib/clientApi.ts), and
--- getLatestSucceededRuns was unconditionally selecting that whole result
--- value, for every model's latest run, on every request, just so
--- /v1/runs/latest could immediately throw away everything except a few
--- hundred chart points. This column holds exactly those already-reduced
--- points, so getLatestSucceededRuns can select THIS instead of result
--- and Postgres never has to read/detoast/transmit the big blob at all for
--- any row that already has it. NULL for rows written before this column
--- existed, or for a model with no CHART_ADAPTERS entry -- the route falls
--- back to the old "read result, run the adapter inline" path for those
--- specific rows only, not for every row.
-ALTER TABLE runs ADD COLUMN IF NOT EXISTS chart_series JSONB;
+-- A short-lived chart_series column (written unconditionally at finalize
+-- time, in lib/runs.ts) briefly lived here instead of the run_chart_series
+-- table below -- reverted because it coupled the write path to
+-- CHART_ADAPTERS (lib/clientApi.ts) for a value only the read path ever
+-- needs, and because a precomputed value baked into runs at write time
+-- goes stale forever if CHART_ADAPTERS logic ever changes, with no fix
+-- short of a hand-run backfill across the one table that must never be
+-- wrong. run_chart_series below is a real cache instead: populated lazily
+-- on first read (app/v1/runs/latest/route.ts), trivially safe to truncate
+-- or drop rows from if it's ever stale (self-heals on the next read), and
+-- never touches runs at all.
+ALTER TABLE runs DROP COLUMN IF EXISTS chart_series;
+
+-- Read-through cache for GET /v1/runs/latest's home-page chart: one row
+-- per run whose {labels, values, label} has actually been requested at
+-- least once, populated lazily by that route on a cache miss (see its own
+-- comment), not written as part of a run's normal finalize path. Added
+-- after gcam made the home page chart noticeably slower to load:
+-- getLatestSucceededRuns used to unconditionally select the full result
+-- column for every model's latest run on every request, and gcam's result
+-- is a full Hector outputstream.csv as raw text, multi-megabytes. This
+-- table holds just the few hundred points a chart actually draws, so a
+-- cache hit never touches result at all.
+--
+-- ON DELETE CASCADE: this row has no reason to outlive the run it's
+-- derived from -- deleting a run (Runs tab's delete button) should delete
+-- its cached chart series automatically, same as any other value that's
+-- entirely a function of that run, with no app-level cleanup needed.
+CREATE TABLE IF NOT EXISTS run_chart_series (
+    run_id TEXT PRIMARY KEY REFERENCES runs(run_id) ON DELETE CASCADE,
+    chart_series JSONB NOT NULL,
+    computed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `;
 
 // ensureDb() is called at the top of every exported function below rather
@@ -355,11 +371,10 @@ export interface LatestRunItem {
   run_id: string;
   model: string;
   params: unknown;
-  // Present (non-null) whenever this row was written after the
-  // chart_series column existed and the model had a CHART_ADAPTERS entry
-  // that didn't throw -- see that column's own migration comment. `result`
-  // is only ever populated as a fallback, for the (increasingly rare) rows
-  // that don't have chart_series yet.
+  // From run_chart_series, via LEFT JOIN -- present (non-null) exactly
+  // when some earlier request already computed and cached this run's
+  // chart series (see that table's own migration comment). `result` is
+  // only ever populated as a fallback, for a cache miss.
   chart_series: unknown;
   result: unknown;
   started_at: string;
@@ -379,24 +394,28 @@ export interface LatestRunItem {
  * plain TEXT/JSON column, which would compare byte-for-byte), so this
  * doesn't need the client's own sortKeysDeep() normalization first.
  *
- * Two queries, not one, and deliberately so: the first never selects
- * `result` at all, so Postgres never has to read/detoast/transmit it for
- * the (now typical) row that already has `chart_series` populated -- for
- * gcam specifically, `result` can run multi-megabytes (see chart_series's
- * own migration comment), and selecting it unconditionally here used to
- * be exactly why the home page chart got slower to load after gcam was
- * added. The second query only runs at all if some row in this result set
- * is still missing chart_series (an old row from before this column
- * existed, or a model with no adapter), and only fetches `result` for
- * those specific run_ids -- not every row, every time.
+ * Two queries, not one, and deliberately so: the first LEFT JOINs
+ * run_chart_series and never selects `result` at all, so Postgres never
+ * has to read/detoast/transmit it for the (now typical) row that's
+ * already cached -- for gcam specifically, `result` can run
+ * multi-megabytes (see run_chart_series's own migration comment), and
+ * selecting it unconditionally here used to be exactly why the home page
+ * chart got slower to load after gcam was added. The second query only
+ * runs at all if some row in this result set is still a cache miss, and
+ * only fetches `result` for those specific run_ids -- not every row,
+ * every time. app/v1/runs/latest/route.ts is the one that actually fills
+ * the cache (via cacheChartSeries) once it's computed the miss's series;
+ * this function only ever reads.
  */
 export async function getLatestSucceededRuns(): Promise<LatestRunItem[]> {
   await ensureDb();
   const { rows } = await getPool().query(
-    `SELECT DISTINCT ON (model, params) run_id, model, params, chart_series, started_at
+    `SELECT DISTINCT ON (runs.model, runs.params) runs.run_id, runs.model, runs.params,
+            rcs.chart_series, runs.started_at
      FROM runs
-     WHERE status = 'succeeded'
-     ORDER BY model, params, started_at DESC`,
+     LEFT JOIN run_chart_series rcs ON rcs.run_id = runs.run_id
+     WHERE runs.status = 'succeeded'
+     ORDER BY runs.model, runs.params, runs.started_at DESC`,
   );
   const items = rows as LatestRunItem[];
 
@@ -493,28 +512,30 @@ export async function finishRunSucceeded(
   durationSeconds: number,
   cached: boolean,
   stdoutTail?: string | null,
-  // See the `chart_series` column's own migration comment above --
-  // computed once here (by the caller, which already has the adapter and
-  // the parsed result in hand) instead of recomputed on every
-  // /v1/runs/latest request. Optional/nullable: a model with no
-  // CHART_ADAPTERS entry, or an adapter that threw on this particular
-  // result, has nothing to store here, and that's fine -- the route falls
-  // back to reading `result` directly for those rows.
-  chartSeries?: unknown,
 ): Promise<void> {
   await ensureDb();
   await getPool().query(
     `UPDATE runs SET status = 'succeeded', result = $1, progress = $2, cached = $3,
-       duration_seconds = $4, stdout_tail = $5, chart_series = $6, updated_at = now() WHERE run_id = $7`,
-    [
-      JSON.stringify(result),
-      JSON.stringify({ percent: 100 }),
-      cached,
-      durationSeconds,
-      stdoutTail ?? null,
-      chartSeries === undefined ? null : JSON.stringify(chartSeries),
-      runId,
-    ],
+       duration_seconds = $4, stdout_tail = $5, updated_at = now() WHERE run_id = $6`,
+    [JSON.stringify(result), JSON.stringify({ percent: 100 }), cached, durationSeconds, stdoutTail ?? null, runId],
+  );
+}
+
+/**
+ * Read-through cache write for run_chart_series (see that table's own
+ * migration comment) -- called by app/v1/runs/latest/route.ts right after
+ * it computes a cache miss's {labels, values, label} via CHART_ADAPTERS,
+ * so the next request for this same run is a hit. `ON CONFLICT DO
+ * NOTHING`, not DO UPDATE: a succeeded run's `result` never changes once
+ * written, so two concurrent cache-miss requests racing to fill the same
+ * run_id would just compute the identical value twice -- whichever insert
+ * loses the race is a harmless no-op, not a bug.
+ */
+export async function cacheChartSeries(runId: string, chartSeries: unknown): Promise<void> {
+  await ensureDb();
+  await getPool().query(
+    `INSERT INTO run_chart_series (run_id, chart_series) VALUES ($1, $2) ON CONFLICT (run_id) DO NOTHING`,
+    [runId, JSON.stringify(chartSeries)],
   );
 }
 
