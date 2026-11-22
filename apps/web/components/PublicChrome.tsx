@@ -61,15 +61,22 @@ function ModelsNavDropdown() {
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
-      <button
-        type="button"
-        className="site-nav-dropdown-toggle page-link"
-        aria-haspopup="true"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
+      <Link href="/" className="site-nav-dropdown-toggle page-link" aria-haspopup="true" aria-expanded={open}>
         Models
-        <svg className="site-nav-dropdown-chevron" viewBox="0 0 16 16" aria-hidden="true">
+        <svg
+          className="site-nav-dropdown-chevron"
+          viewBox="0 0 16 16"
+          aria-hidden="true"
+          // Chevron still toggles the dropdown open/closed on click
+          // (e.g. for touch devices without hover) without navigating --
+          // stopPropagation keeps the click from also triggering the
+          // parent Link's navigation to "/".
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setOpen((o) => !o);
+          }}
+        >
           <path
             d="M4 6l4 4 4-4"
             fill="none"
@@ -79,7 +86,7 @@ function ModelsNavDropdown() {
             strokeLinejoin="round"
           />
         </svg>
-      </button>
+      </Link>
       {open && (
         <ul className="site-nav-dropdown-menu" role="menu">
           <li>
