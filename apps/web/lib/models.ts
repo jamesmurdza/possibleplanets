@@ -746,6 +746,23 @@ export const MODELS: Record<string, ModelMeta> = {
     // only scenarioName/filename changed) were live smoke-tested
     // (stop-period=2, exit 0) on this exact snapshot before switching
     // this field over.
+    // STILL v9 as of this change -- the parameters array and
+    // _patch_hector_ini run_name fix above are only live in this repo's
+    // sandboxes/gcam/run.py, NOT yet in a deployed snapshot. GCAM isn't
+    // rebuilt from the Dockerfile per-request (the 5.2GB gcamdata XML
+    // database and gcam.exe binary are gitignored, baked in once); a
+    // run.py-only change needs: spin up a sandbox from this snapshot,
+    // overlay the new run.py, smoke-test (confirm result.csv's run_name
+    // matches the requested scenario and a climate_sensitivity override
+    // actually changes global_tas), then sandbox.createSnapshot(
+    // "gcam-production-v10", ...) and flip this field to that name --
+    // same process documented for v2 through v9 above. Until that
+    // happens, requests that set these new parameter keys or rely on
+    // the run_name fix will run against v9's unpatched run.py and
+    // hector-gcam.ini (params silently ignored, run_name still
+    // ssp119-labeled) -- ParameterSpec entries and run.py source always
+    // land in this repo first, snapshot promotion is a separate,
+    // manual step.
     daytona_snapshot: "gcam-production-v9",
     // Dockerfile clones JGCRI/gcam-core@main unpinned, so the Dockerfile
     // text alone doesn't tell you which release that resolved to -- verified
@@ -822,9 +839,69 @@ export const MODELS: Record<string, ModelMeta> = {
     // because the image bakes in the full 5.2GB generated XML database
     // plus the 294MB binary.
     resources: { cpu: 4, memory: 8, disk: 12 },
-    // No curated ParameterSpec sliders exposed yet -- but see
-    // supportsConfigOverrides just below for a general escape hatch that
-    // doesn't need one of these added per knob.
+    // Same five tunables sandboxes/hector/run.py exposes for the
+    // standalone hector model (identical keys/defaults/ranges) -- GCAM
+    // runs the same Hector v3.2.0 internally as its climate component,
+    // configured by the same ini-based format (hector-gcam.ini), and
+    // these keys were confirmed present there at these exact defaults
+    // (S=3.0, diff=2.38, alpha=1.0, beta=0.53, q10_rh=1.76). Applied by
+    // sandboxes/gcam/run.py's _patch_hector_ini before gcam.exe runs,
+    // only for whatever keys a request actually supplies (never
+    // synthesizes a value for an omitted one, same as hector's own
+    // run.py) -- requires gcam-production-v10 (see daytona_snapshot's
+    // own doc comment once that snapshot exists).
+    parameters: [
+      {
+        key: "climate_sensitivity",
+        label: "Climate sensitivity",
+        unit: "°C per CO2 doubling",
+        type: "number",
+        default: 3.0,
+        min: 1.5,
+        max: 6.0,
+        step: 0.1,
+      },
+      {
+        key: "ocean_diffusivity",
+        label: "Ocean heat diffusivity",
+        type: "number",
+        default: 2.38,
+        min: 0.5,
+        max: 5.0,
+        step: 0.01,
+      },
+      {
+        key: "aerosol_scaling",
+        label: "Aerosol forcing scaling",
+        type: "number",
+        default: 1.0,
+        min: 0.0,
+        max: 2.0,
+        step: 0.05,
+      },
+      {
+        key: "co2_fertilization",
+        label: "CO2 fertilization strength",
+        type: "number",
+        default: 0.53,
+        min: 0.0,
+        max: 1.0,
+        step: 0.01,
+      },
+      {
+        key: "respiration_q10",
+        label: "Soil respiration temperature sensitivity (Q10)",
+        type: "number",
+        default: 1.76,
+        min: 1.0,
+        max: 4.0,
+        step: 0.1,
+      },
+    ],
+    // supportsConfigOverrides below is a SEPARATE, general escape hatch
+    // for any other <Value name="..."> in configuration_ref.xml --
+    // unrelated to the curated parameters above, which target
+    // hector-gcam.ini instead.
     //
     // config_overrides lets a request override ANY existing
     // <Value name="...">...</Value> in configuration_ref.xml (any

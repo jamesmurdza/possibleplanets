@@ -54,7 +54,17 @@ as Reference (write-output="0" on xmldb-location) -- unrelated to any
 of the above, see docs/gcam/known-gaps.md. configuration_policy.xml
 and configuration_usa.xml are still not exposed.
 
-PARAMETERS: "config_overrides" -- an arbitrary {name: value} map applied
+PARAMETERS: climate_sensitivity/ocean_diffusivity/aerosol_scaling/
+co2_fertilization/respiration_q10 -- the same five tunables
+sandboxes/hector/run.py exposes for the standalone hector model, passed
+through here to GCAM's embedded Hector v3.2.0 via hector-gcam.ini (see
+_patch_hector_ini and HECTOR_PARAM_INI_KEYS). This also unconditionally
+patches that ini's run_name to the real scenario name, fixing a label-only
+bug where every run's output CSV claimed run_name=ssp119 regardless of
+scenario (GCAM itself always solved the correct scenario; only the label
+was wrong).
+
+"config_overrides" -- a SEPARATE, arbitrary {name: value} map applied
 to configuration_ref.xml's own <Value name="...">...</Value> tags before
 gcam.exe ever runs (see apply_config_overrides below). This is the
 general answer to "GCAM has no equivalent of hector's config-dict
@@ -133,7 +143,23 @@ PROGRESS_FILE = "/tmp/progress.json"
 HECTOR_INI_PATH = "/app/gcam-core/input/climate/hector-gcam.ini"
 
 PERIOD_RE = re.compile(r"Period (\d+):\s*\d{4}")
-HECTOR_RUN_NAME_RE = re.compile(r"^run_name\s*=.*$", re.MULTILINE)
+
+# Maps the same optional tunable params exposed by sandboxes/hector/run.py
+# (climate_sensitivity/ocean_diffusivity/aerosol_scaling/co2_fertilization/
+# respiration_q10) to the ini keys GCAM's embedded Hector v3.2.0 reads from
+# hector-gcam.ini -- confirmed identical key names/sections to pyhector's own
+# config override dict (temperature.S/diff/alpha, simpleNbox.beta/q10_rh),
+# since it's the same ini-based Hector config format in both sandboxes. Each
+# key is unique to its section in this ini (no other section defines S/diff/
+# alpha/beta/q10_rh), so a plain "^key=" match is unambiguous without needing
+# to scope the regex to a specific [section] block.
+HECTOR_PARAM_INI_KEYS = {
+    "climate_sensitivity": "S",
+    "ocean_diffusivity": "diff",
+    "aerosol_scaling": "alpha",
+    "co2_fertilization": "beta",
+    "respiration_q10": "q10_rh",
+}
 
 
 def load_params():
@@ -278,39 +304,68 @@ def apply_config_overrides(xml_text, overrides):
     return xml_text, errors
 
 
-def _patch_hector_run_name(scenario_name):
+def _patch_hector_ini(patches):
     """
     GCAM runs Hector internally as its climate component, configured by
     input/climate/hector-gcam.ini (shared, byte-identical, across every
     SUPPORTED_SCENARIOS config -- it's a static supporting file, not
-    something configuration_sspN.xml varies per scenario). That ini's
-    own [core] run_name=ssp119 is just a label Hector stamps into its
-    output CSV's run_name column -- committed to git as-is from upstream,
-    never actually tied to which GCAM scenario was solved (confirmed by
-    diffing configuration_ref.xml vs configuration_sspN.xml: the Value
-    tags that point at this ini are identical). Left unpatched, every
-    run's output CSV claims run_name=ssp119 regardless of the real
-    scenario, which is misleading to anyone reading the raw CSV (GCAM
-    itself still solves the correct scenario either way -- this is a
-    labeling bug, not a solver bug).
+    something configuration_sspN.xml varies per scenario). This applies an
+    arbitrary {ini_key: value} map to that file's "key=value" lines before
+    gcam.exe ever runs, same "patch in place, best-effort" shape as
+    _patch_hector_run_name used to be (now folded into this general
+    version) -- each key is matched anywhere in the file via a plain
+    "^key\\s*=.*$" regex, which is safe here because every key this is
+    actually called with (run_name, S, diff, alpha, beta, q10_rh) is
+    unique to its own ini section; this does NOT scope to a [section]
+    block, so it would be the wrong tool for a key that's repeated across
+    multiple sections.
+
+    Two callers feed this:
+    - run_name is always patched to the real scenario name. That key's
+      own [core] run_name=ssp119 is just a label Hector stamps into its
+      output CSV's run_name column -- committed to git as-is from
+      upstream, never actually tied to which GCAM scenario was solved
+      (confirmed by diffing configuration_ref.xml vs
+      configuration_sspN.xml: the Value tags that point at this ini are
+      identical). Left unpatched, every run's output CSV claims
+      run_name=ssp119 regardless of the real scenario, which is
+      misleading to anyone reading the raw CSV (GCAM itself still solves
+      the correct scenario either way -- this is a labeling bug, not a
+      solver bug).
+    - S/diff/alpha/beta/q10_rh are the same climate_sensitivity/
+      ocean_diffusivity/aerosol_scaling/co2_fertilization/respiration_q10
+      knobs sandboxes/hector/run.py exposes for the standalone hector
+      model, passed through here only when the caller actually supplied
+      them (see main()'s HECTOR_PARAM_INI_KEYS loop) -- unlike run_name,
+      these materially change GCAM's solved climate outcome, not just a
+      label.
+
     Patches the file at its baked-in sandbox path in place: this process
     only ever sees one fresh container per run (built from the shared
     snapshot), so there's no cross-run interference, and the committed
     git source under sandboxes/gcam/runtime/ is untouched by this.
     Best-effort -- if the ini is missing or unreadable for any reason,
-    this silently does nothing rather than failing the run over a label.
+    this silently does nothing rather than failing the run over it.
     """
+    if not patches:
+        return
     try:
         with open(HECTOR_INI_PATH) as f:
             ini_text = f.read()
     except OSError:
         return
-    patched, count = HECTOR_RUN_NAME_RE.subn(f"run_name={scenario_name}", ini_text, count=1)
-    if count == 0:
+    changed = False
+    for key, value in patches.items():
+        pattern = re.compile(r"^" + re.escape(key) + r"\s*=.*$", re.MULTILINE)
+        patched, count = pattern.subn(f"{key}={value}", ini_text, count=1)
+        if count:
+            ini_text = patched
+            changed = True
+    if not changed:
         return
     try:
         with open(HECTOR_INI_PATH, "w") as f:
-            f.write(patched)
+            f.write(ini_text)
     except OSError:
         pass
 
@@ -380,7 +435,17 @@ def main():
         with open(config_path, "w") as f:
             f.write(patched_xml)
 
-    _patch_hector_run_name(scenario_name)
+    # Build the hector-gcam.ini patch set from only whatever keys were
+    # actually supplied -- never synthesize a value for an omitted key,
+    # same "omitted != explicit default" distinction sandboxes/hector/
+    # run.py's own config dict already relies on (see its module
+    # docstring). run_name is unconditional -- there's no "omit" case for
+    # fixing the mislabeling bug.
+    hector_ini_patches = {"run_name": scenario_name}
+    for param_key, ini_key in HECTOR_PARAM_INI_KEYS.items():
+        if param_key in params:
+            hector_ini_patches[ini_key] = float(params[param_key])
+    _patch_hector_ini(hector_ini_patches)
 
     proc = subprocess.Popen(
         ["./gcam.exe", "-C", config_path],
