@@ -38,10 +38,18 @@ async function fetchMarkdown(url: string): Promise<string | null> {
     const res = await fetch(url, { next: { revalidate: 3600 } });
     if (!res.ok) return null;
     const text = await res.text();
-    return text;
+    return stripLeadingTitle(text);
   } catch {
     return null;
   }
+}
+
+// The source markdown starts with its own "# Title" (and often a leading
+// blank line/front matter before it) -- we already render that title
+// ourselves as the page's <h1 className="article-title">, so drop the
+// first H1 here to avoid rendering the same title twice.
+function stripLeadingTitle(markdown: string): string {
+  return markdown.replace(/^\s*(?:#\s+.*\n+)/, "");
 }
 
 export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
