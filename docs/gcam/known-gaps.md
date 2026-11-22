@@ -104,3 +104,34 @@ Docker Hub backup image locally without Daytona -- the fix used
 (reusing the already-compiled binary rather than recompiling) is a
 one-time workaround, not a permanent fix; a true local rebuild still
 needs a machine with more than 3GB available to the build process.
+
+## Never checked whether a pre-built input database already existed upstream
+
+The entire "Generate the input database" ordeal -- the GPU-attached
+sandbox purely for 24GB of RAM (see `oom-fix.md`'s sibling problem and
+`provenance.md`'s step 2), the ~75-minute `driver_drake()` run, and
+patching two real `gcamdata` bugs (`Employment`, `Population_hist`, see
+`sandboxes/gcam/patches/README.md`) just to get it to complete -- was
+all based on the assumption that running `gcamdata` ourselves was the
+only way to get the XML input database. Nobody checked whether JGCRI
+already publishes it.
+
+They do. Confirmed 2026-11-22: every versioned tag on
+https://github.com/JGCRI/gcam-core/releases (including `gcam-v9.1`,
+exactly the revision this project targets) has a
+`gcam-vX.Y-Mac-Release-Package.zip` (and Windows equivalent) attached,
+no registration needed. Downloaded and inspected the v9.1 one directly:
+its `input/gcamdata/xml/` folder has exactly 221 files, and every
+filename `configuration_ref.xml` actually references is present in it
+under the same name. That's gcamdata's own output, pre-built, free to
+grab -- the entire GPU-sandbox/patch/75-minute dance in `provenance.md`
+step 2 and `trial-log.md` was very likely unnecessary.
+
+Deliberately NOT retroactively redone: the current `gcam-production-v8`
+snapshot already works and is deployed, and content-identity between
+the release zip's XML and this project's own `gcamdata` output was only
+checked by filename/count, not a full byte-for-byte diff -- so this
+isn't "redo the deployed image," it's "check the release zip first next
+time," which `provenance.md`'s step 2 now says explicitly. If GCAM is
+ever rebuilt from scratch again (a version bump, a fresh snapshot), try
+the release zip before running `gcamdata` at all.

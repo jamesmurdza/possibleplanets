@@ -38,9 +38,32 @@ Full command list: `sandboxes/gcam/Dockerfile`'s `builder` stage.
 
 ## 2. Generate the input database
 
-This is the one genuinely expensive step (~75 minutes), and the only
-one that needs a GPU-attached sandbox -- not for GPU compute, just to
-get a memory ceiling above 8GB (R's own joins are CPU-only).
+**Check for a pre-built release first -- this whole step may be
+skippable.** Confirmed 2026-11-22: JGCRI attaches a
+`gcam-vX.Y-Mac-Release-Package.zip` (and Windows equivalent) to each
+versioned tag on https://github.com/JGCRI/gcam-core/releases --
+`gcam-v9.1`'s zip (328MB) contains an `input/gcamdata/xml/` folder with
+exactly 221 files, and every filename this project's
+`configuration_ref.xml` actually references is present in it
+byte-identically named. That's gcamdata's own output, already built,
+free to download, no registration. This project never checked for this
+before running `gcamdata` itself the hard way (see below and
+`known-gaps.md`) -- if you're doing this today, download that zip,
+pull out `input/gcamdata/xml/`, and skip straight to step 3. The rest
+of this section (and the whole GPU-sandbox dance) is the fallback for
+when a release zip doesn't exist yet for the version you need, or you
+specifically need to regenerate the database yourself (e.g. testing an
+upstream data change before the next release is cut).
+
+Content-identity with our own from-scratch `gcamdata` run was NOT
+independently verified byte-for-byte -- only filenames/count and one
+file's structural validity were checked. Worth a real diff before
+fully trusting it as a drop-in replacement for a production rebuild.
+
+If a release zip genuinely isn't an option, generating it yourself is
+the one genuinely expensive step (~75 minutes), and the only one that
+needs a GPU-attached sandbox -- not for GPU compute, just to get a
+memory ceiling above 8GB (R's own joins are CPU-only).
 
 1. Patch two real upstream bugs in `gcam-core/input/gcamdata/R/` before
    running anything:
