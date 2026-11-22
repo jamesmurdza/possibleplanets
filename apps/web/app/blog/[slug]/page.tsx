@@ -90,7 +90,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         <p className="blog-post-source-footer">
           Read the original on{" "}
           <a href={post.originalUrl} target="_blank" rel="noopener noreferrer">
-            writing.jamesmurdza.com &rarr;
+            {new URL(post.originalUrl).hostname} &rarr;
           </a>
         </p>
       </main>
