@@ -27,6 +27,10 @@ export default function BlogPage() {
                   month: "long",
                   day: "numeric",
                 })}
+                . Published on{" "}
+                <a href={post.originalUrl} target="_blank" rel="noopener noreferrer">
+                  jamesmurdza.com
+                </a>
               </p>
               <p className="blog-post-card-excerpt">{post.excerpt}</p>
               <Link href={`/blog/${post.slug}`} className="blog-post-card-readmore">

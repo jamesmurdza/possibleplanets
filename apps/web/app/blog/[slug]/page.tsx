@@ -58,11 +58,10 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
       <main className="public-main article">
         <h1 className="article-title">{post.title}</h1>
         <p className="blog-post-card-meta">
-          {new Date(post.date).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
-          {" -- "}
-          Originally published on{" "}
+          {new Date(post.date).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}.
+          Published on{" "}
           <a href={post.originalUrl} target="_blank" rel="noopener noreferrer">
-            writing.jamesmurdza.com
+            jamesmurdza.com
           </a>
         </p>
 
