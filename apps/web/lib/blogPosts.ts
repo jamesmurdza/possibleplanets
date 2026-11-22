@@ -39,7 +39,7 @@ export const BLOG_POSTS: BlogPost[] = [
     slug: "how-to-forecast-the-climate",
     title: "How to forecast the climate",
     excerpt:
-      "An introduction to the models and methods behind long-range climate forecasting, and what it actually takes to produce one.",
+      "An introduction to the models and methods behind long-range climate forecasting.",
     originalUrl: "https://blog.jamesmurdza.com/how-to-forecast-the-climate",
     markdownUrl: "https://blog.jamesmurdza.com/how-to-forecast-the-climate.md",
     date: "2022-05-06",
