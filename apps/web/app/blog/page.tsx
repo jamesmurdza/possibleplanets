@@ -14,13 +14,6 @@ export default function BlogPage() {
       <PublicHeader />
       <main className="public-main article">
         <h1 className="article-title">Blog</h1>
-        <p className="blog-intro">
-          Posts on climate modeling and forecasting, written by the team and mirrored here from{" "}
-          <a href="https://writing.jamesmurdza.com" target="_blank" rel="noopener noreferrer">
-            writing.jamesmurdza.com
-          </a>
-          .
-        </p>
 
         <div className="blog-post-list">
           {BLOG_POSTS.map((post) => (
