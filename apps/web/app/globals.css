@@ -2639,3 +2639,148 @@ th.runs-table-checkbox-col {
 .sidebar-footer-link:hover {
   color: var(--color-accent);
 }
+
+/* Blog index + post pages (app/blog/page.tsx, app/blog/[slug]/page.tsx) */
+
+.blog-intro {
+  color: var(--pp-grey-dark);
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+.blog-intro a {
+  color: var(--pp-brand);
+  text-decoration: none;
+}
+
+.blog-intro a:hover {
+  text-decoration: underline;
+}
+
+.blog-post-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.blog-post-card {
+  border: 1px solid var(--pp-grey-light, #e8e8e8);
+  border-radius: 8px;
+  padding: 1.5rem;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.blog-post-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.blog-post-card-title {
+  font-size: 1.375rem;
+  font-weight: 400;
+  margin: 0 0 0.375rem;
+}
+
+.blog-post-card-title a {
+  color: var(--pp-text, #444);
+  text-decoration: none;
+}
+
+.blog-post-card-title a:hover {
+  color: var(--pp-brand);
+}
+
+.blog-post-card-meta {
+  color: var(--pp-grey-dark);
+  font-size: 0.8125rem;
+  margin: 0 0 0.75rem;
+}
+
+.blog-post-card-meta a {
+  color: var(--pp-brand);
+  text-decoration: none;
+}
+
+.blog-post-card-meta a:hover {
+  text-decoration: underline;
+}
+
+.blog-post-card-excerpt {
+  color: var(--pp-grey-dark);
+  line-height: 1.6;
+  margin: 0 0 1rem;
+}
+
+.blog-post-card-readmore {
+  color: var(--pp-brand);
+  text-decoration: none;
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.blog-post-card-readmore:hover {
+  text-decoration: underline;
+}
+
+/* Rendered markdown body on an individual post page -- scoped so the
+   source blog's own HTML (headings, links, code, images) inherits the
+   site's article typography instead of unstyled browser defaults. */
+.blog-post-body {
+  line-height: 1.7;
+  margin-top: 1.5rem;
+}
+
+.blog-post-body h1,
+.blog-post-body h2,
+.blog-post-body h3 {
+  font-weight: 400;
+  margin: 2rem 0 0.75rem;
+}
+
+.blog-post-body p {
+  margin: 0 0 1.25rem;
+}
+
+.blog-post-body a {
+  color: var(--pp-brand);
+  text-decoration: none;
+}
+
+.blog-post-body a:hover {
+  text-decoration: underline;
+}
+
+.blog-post-body img {
+  max-width: 100%;
+  border-radius: 6px;
+}
+
+.blog-post-body pre {
+  background: #f6f6f6;
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.blog-post-body blockquote {
+  border-left: 3px solid var(--pp-brand);
+  margin: 0 0 1.25rem;
+  padding-left: 1rem;
+  color: var(--pp-grey-dark);
+}
+
+.blog-post-source-footer {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--pp-grey-light, #e8e8e8);
+  color: var(--pp-grey-dark);
+}
+
+.blog-post-source-footer a {
+  color: var(--pp-brand);
+  text-decoration: none;
+}
+
+.blog-post-source-footer a:hover {
+  text-decoration: underline;
+}
