@@ -120,6 +120,9 @@ export function PublicHeader() {
               missing, so an already-logged-in visitor goes straight to
               the dashboard in one click instead of landing on the login
               page again. */}
+          <Link href="/blog" className="page-link">
+            Blog
+          </Link>
           <Link href="/dashboard" className="page-link">
             Dashboard
           </Link>
