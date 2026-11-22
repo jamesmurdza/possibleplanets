@@ -130,8 +130,10 @@ TOTAL_PERIODS = 21
 GCAM_DIR = "/app/gcam-core/exe"
 OUTPUT_CSV = "/app/gcam-core/output/gcam-hector-outputstream.csv"
 PROGRESS_FILE = "/tmp/progress.json"
+HECTOR_INI_PATH = "/app/gcam-core/input/climate/hector-gcam.ini"
 
 PERIOD_RE = re.compile(r"Period (\d+):\s*\d{4}")
+HECTOR_RUN_NAME_RE = re.compile(r"^run_name\s*=.*$", re.MULTILINE)
 
 
 def load_params():
@@ -276,6 +278,43 @@ def apply_config_overrides(xml_text, overrides):
     return xml_text, errors
 
 
+def _patch_hector_run_name(scenario_name):
+    """
+    GCAM runs Hector internally as its climate component, configured by
+    input/climate/hector-gcam.ini (shared, byte-identical, across every
+    SUPPORTED_SCENARIOS config -- it's a static supporting file, not
+    something configuration_sspN.xml varies per scenario). That ini's
+    own [core] run_name=ssp119 is just a label Hector stamps into its
+    output CSV's run_name column -- committed to git as-is from upstream,
+    never actually tied to which GCAM scenario was solved (confirmed by
+    diffing configuration_ref.xml vs configuration_sspN.xml: the Value
+    tags that point at this ini are identical). Left unpatched, every
+    run's output CSV claims run_name=ssp119 regardless of the real
+    scenario, which is misleading to anyone reading the raw CSV (GCAM
+    itself still solves the correct scenario either way -- this is a
+    labeling bug, not a solver bug).
+    Patches the file at its baked-in sandbox path in place: this process
+    only ever sees one fresh container per run (built from the shared
+    snapshot), so there's no cross-run interference, and the committed
+    git source under sandboxes/gcam/runtime/ is untouched by this.
+    Best-effort -- if the ini is missing or unreadable for any reason,
+    this silently does nothing rather than failing the run over a label.
+    """
+    try:
+        with open(HECTOR_INI_PATH) as f:
+            ini_text = f.read()
+    except OSError:
+        return
+    patched, count = HECTOR_RUN_NAME_RE.subn(f"run_name={scenario_name}", ini_text, count=1)
+    if count == 0:
+        return
+    try:
+        with open(HECTOR_INI_PATH, "w") as f:
+            f.write(patched)
+    except OSError:
+        pass
+
+
 def _fmt_bytes(value):
     if value is None:
         return "unknown"
@@ -340,6 +379,8 @@ def main():
         config_path = "/tmp/configuration_run.xml"
         with open(config_path, "w") as f:
             f.write(patched_xml)
+
+    _patch_hector_run_name(scenario_name)
 
     proc = subprocess.Popen(
         ["./gcam.exe", "-C", config_path],
