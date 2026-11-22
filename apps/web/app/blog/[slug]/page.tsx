@@ -19,11 +19,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     description: post.excerpt,
     // SEO-critical: this page mirrors someone else's content, so it must
     // never be treated as the canonical copy. Pointing this at
-    // post.originalUrl (the source's own declared canonical, currently
-    // writing.jamesmurdza.com -- see lib/blogPosts.ts) tells search
-    // engines all ranking signal belongs to the original, so this mirror
-    // can't dilute or compete with it. Do not remove this when editing
-    // this page.
+    // post.originalUrl (blog.jamesmurdza.com -- see lib/blogPosts.ts)
+    // tells search engines all ranking signal belongs to the original, so
+    // this mirror can't dilute or compete with it. Do not remove this
+    // when editing this page.
     alternates: {
       canonical: post.originalUrl,
     },

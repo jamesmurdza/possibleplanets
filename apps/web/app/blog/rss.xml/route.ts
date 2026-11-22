@@ -7,7 +7,7 @@ import { BLOG_POSTS } from "../../../lib/blogPosts";
  * publishes.
  *
  * Each <link>/<guid> points at the post's real canonical URL
- * (writing.jamesmurdza.com), not our /blog/<slug> mirror, so this feed
+ * (blog.jamesmurdza.com), not our /blog/<slug> mirror, so this feed
  * never asserts our pages as the authoritative source -- consistent with
  * the <link rel="canonical"> set in app/blog/[slug]/page.tsx.
  */

@@ -6,13 +6,11 @@
  * explicit choice (not everything the source blog publishes is relevant
  * to Possible Planets). To add a post, add an entry here.
  *
- * `originalUrl` is the actual canonical home of the content (as declared
- * by the source site's own <link rel="canonical">, which currently points
- * at writing.jamesmurdza.com, not the blog.jamesmurdza.com alias we fetch
- * markdown from). Every mirrored page and every RSS <link> must point
- * here, not at our own /blog/<slug> URL, so we never compete with the
- * original in search results (see /blog/[slug]/page.tsx's generateMetadata
- * and app/blog/rss.xml/route.ts).
+ * `originalUrl` is the canonical home of the content: blog.jamesmurdza.com.
+ * Every mirrored page and every RSS <link> must point here, not at our own
+ * /blog/<slug> URL, so we never compete with the original in search
+ * results (see /blog/[slug]/page.tsx's generateMetadata and
+ * app/blog/rss.xml/route.ts).
  */
 export interface BlogPost {
   slug: string;
@@ -30,7 +28,7 @@ export const BLOG_POSTS: BlogPost[] = [
     title: "Running integrated assessment models in cloud sandboxes",
     excerpt:
       "How to run large, long-running climate/economic integrated assessment models (like GCAM) inside isolated cloud sandboxes instead of on a local machine.",
-    originalUrl: "https://writing.jamesmurdza.com/running-integrated-assessment-models-in-cloud-sandboxes",
+    originalUrl: "https://blog.jamesmurdza.com/running-integrated-assessment-models-in-cloud-sandboxes",
     markdownUrl: "https://blog.jamesmurdza.com/running-integrated-assessment-models-in-cloud-sandboxes.md",
     date: "2026-10-01",
   },
@@ -39,7 +37,7 @@ export const BLOG_POSTS: BlogPost[] = [
     title: "How to forecast the climate",
     excerpt:
       "An introduction to the models and methods behind long-range climate forecasting, and what it actually takes to produce one.",
-    originalUrl: "https://writing.jamesmurdza.com/how-to-forecast-the-climate",
+    originalUrl: "https://blog.jamesmurdza.com/how-to-forecast-the-climate",
     markdownUrl: "https://blog.jamesmurdza.com/how-to-forecast-the-climate.md",
     date: "2026-09-10",
   },
