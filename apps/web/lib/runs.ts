@@ -1075,6 +1075,17 @@ async function finalizeOutcomeInner(runId: string, row: RunRow, exitCode: number
   // own stdout_tail above) -- enough to debug a confusing-but-"succeeded"
   // result (what did the model actually print/log) without storing a
   // potentially huge log in full.
+  //
+  // Deliberately does NOT precompute/store a chart series here -- that
+  // was tried (a `chart_series` column written unconditionally on every
+  // finalize) and reverted: it coupled this write path to CHART_ADAPTERS
+  // (lib/clientApi.ts), a read-side concern, and baked in a value that
+  // would go stale forever if that adapter logic ever changed, since
+  // `runs` is the source of truth and nothing here re-derives it. See
+  // lib/db.ts's run_chart_series table comment -- that's a lazy
+  // read-through cache instead, filled by app/v1/runs/latest/route.ts the
+  // first time a run's series is actually asked for, not by this
+  // function.
   log("writing finishRunSucceeded (the runs row's own result column)");
   await finishRunSucceeded(runId, parsed, runSeconds, false, stdout.slice(-2000));
   log("finishRunSucceeded done -- finalize complete");
