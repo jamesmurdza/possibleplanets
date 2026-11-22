@@ -19,7 +19,10 @@ export interface BlogPost {
   originalUrl: string;
   /** Where we fetch the raw markdown from. */
   markdownUrl: string;
-  date: string; // ISO date, used for RSS pubDate and display
+  /** ISO date, used for RSS pubDate and display. Taken from the source
+   *  page's own article:published_time/datePublished meta tags -- check
+   *  those on the live post if a date here ever looks wrong. */
+  date: string;
 }
 
 export const BLOG_POSTS: BlogPost[] = [
@@ -30,7 +33,7 @@ export const BLOG_POSTS: BlogPost[] = [
       "How to run large, long-running climate/economic integrated assessment models (like GCAM) inside isolated cloud sandboxes instead of on a local machine.",
     originalUrl: "https://blog.jamesmurdza.com/running-integrated-assessment-models-in-cloud-sandboxes",
     markdownUrl: "https://blog.jamesmurdza.com/running-integrated-assessment-models-in-cloud-sandboxes.md",
-    date: "2026-10-01",
+    date: "2026-11-22",
   },
   {
     slug: "how-to-forecast-the-climate",
@@ -39,7 +42,7 @@ export const BLOG_POSTS: BlogPost[] = [
       "An introduction to the models and methods behind long-range climate forecasting, and what it actually takes to produce one.",
     originalUrl: "https://blog.jamesmurdza.com/how-to-forecast-the-climate",
     markdownUrl: "https://blog.jamesmurdza.com/how-to-forecast-the-climate.md",
-    date: "2026-09-10",
+    date: "2022-05-06",
   },
 ];
 
